@@ -24,8 +24,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,13 +42,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.blugaemand.hid.HidStatus
-import kotlinx.coroutines.launch
 
 /** A paired host the user can reconnect to. */
 data class HostOption(val name: String, val address: String)
 
 /** How long the pill must be held before the panel opens. */
 private const val HOLD_TO_OPEN_MS = 600
+
+/** How quickly the bar empties again once the hold ends, however it ended. */
+private const val BAR_DRAIN_MS = 180
 
 /**
  * Compact status pill pinned to the top of the pad. It stays small so it does not eat into the
@@ -154,8 +159,23 @@ private fun StatusPill(
     onExpandedChange: (Boolean) -> Unit,
 ) {
     val progress = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
+    var pressed by remember { mutableStateOf(false) }
+
+    // The bar is driven from here rather than from inside the gesture, because the gesture
+    // coroutine does not survive long enough to clean up after itself: triggering flips `expanded`,
+    // which re-keys the pointerInput below and cancels the gesture mid-suspension. Anything after
+    // the await would never run, which is what previously left the bar stuck full after closing.
+    LaunchedEffect(pressed, expanded) {
+        if (pressed && !expanded) {
+            progress.animateTo(1f, tween(HOLD_TO_OPEN_MS, easing = LinearEasing))
+            // Reaching full is the trigger; the buzz confirms it without looking.
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            onExpandedChange(true)
+        } else {
+            progress.animateTo(0f, tween(BAR_DRAIN_MS))
+        }
+    }
 
     Row(
         modifier = Modifier
@@ -170,30 +190,26 @@ private fun StatusPill(
                 }
             }
             .pointerInput(expanded) {
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
+                try {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
 
-                    if (expanded) {
-                        // Closing needs no ceremony; a plain tap will do.
-                        if (waitForUpOrCancellation() != null) onExpandedChange(false)
-                        return@awaitEachGesture
+                        if (expanded) {
+                            // Closing needs no ceremony; a plain tap will do.
+                            if (waitForUpOrCancellation() != null) onExpandedChange(false)
+                            return@awaitEachGesture
+                        }
+
+                        pressed = true
+                        // Null means cancelled rather than lifted; either way the hold is over.
+                        waitForUpOrCancellation()
+                        pressed = false
                     }
-
-                    val fill = scope.launch {
-                        progress.animateTo(
-                            targetValue = 1f,
-                            animationSpec = tween(HOLD_TO_OPEN_MS, easing = LinearEasing),
-                        )
-                        // Reaching full is the trigger; the buzz confirms it without looking.
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onExpandedChange(true)
-                    }
-
-                    // Null means the gesture was cancelled rather than lifted; either way the
-                    // hold is over and the bar should drain back to empty.
-                    waitForUpOrCancellation()
-                    fill.cancel()
-                    scope.launch { progress.animateTo(0f, tween(180)) }
+                } finally {
+                    // Triggering cancels this coroutine before the line above can run, so without
+                    // this the flag would stay set and the bar would start refilling by itself the
+                    // moment the panel closed.
+                    pressed = false
                 }
             }
             .padding(horizontal = 12.dp, vertical = 6.dp),
