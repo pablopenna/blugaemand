@@ -9,3 +9,4 @@ captures/
 .cxx/
 *.apk
 *.aab
+local_only/
