@@ -20,7 +20,7 @@ turns up along the way.
       creates `js0`; all 13 buttons and all 8 axes land on the intended evdev codes (see below)
 - [ ] **Verify on Windows** — pair, then check every control in `joy.cpl` → Properties
 - [ ] Tune the default layout against a real thumb once it has been held in landscape
-- [ ] Decide whether to dodge the trailing descriptor byte (see Known constraints)
+- [x] Investigated the trailing descriptor byte — unavoidable, see Known constraints
 
 ## Iteration 2 — Configurable layouts
 
@@ -85,7 +85,7 @@ Not bugs, and not fixable — recorded so they do not get rediscovered.
   encoding or by BlueZ — not by us. Linux decodes it as a Main item with tag 0, logs
   `unknown main item tag 0x0`, skips it, and parses everything else correctly.
 
-  Harmless on Linux, but worth resolving before trusting Windows, whose HID parser is stricter.
-  Plausible cause is padding an odd-length descriptor to an even one (93 → 94). If so, making the
-  descriptor 94 bytes would dodge it — e.g. encoding `Logical Maximum (7)` as the two-byte
-  `0x26 0x07 0x00` instead of `0x25 0x07`, which is semantically identical. Untested.
+  Tested and unavoidable. The even-length theory was wrong: padding the descriptor to 94 bytes and
+  re-pairing produced a 95-byte descriptor on the host, still with one trailing zero. It is an
+  unconditional terminator, independent of our length, so the app cannot influence it. Since it
+  applies to every app using `BluetoothHidDevice`, hosts in practice cope. Nothing to do.

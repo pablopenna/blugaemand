@@ -44,19 +44,21 @@ object GenericHidProfile : GamepadProfile {
      */
     private const val TRIGGER_DIGITAL_THRESHOLD = 32
 
-    /**
-     * The descriptor is padded to an even number of bytes on purpose.
+    /*
+     * A note on what hosts actually receive, because it looks alarming in kernel logs.
      *
-     * At 93 bytes, the descriptor that reached a Linux host was 94 — ours byte-for-byte, plus a
-     * trailing `0x00` added somewhere in Android's SDP encoding or BlueZ. A lone `0x00` decodes as
-     * a Main item with tag 0, so the kernel logged `unknown main item tag 0x0`. It skipped the
-     * item and everything worked, but Windows' HID parser is stricter and a stray malformed item
-     * at the end is not worth gambling on.
+     * Whatever this descriptor's length, one trailing `0x00` is appended before it reaches the
+     * host. Measured against a Linux host by diffing the `report_descriptor` file the kernel
+     * exposes under `/sys/bus/hid/devices` against these bytes: 93 arrived as 94, and after
+     * padding this to 94 it arrived as 95 — always our exact
+     * bytes plus one zero. So it is an unconditional terminator added by Android's SDP encoding or
+     * the host stack, not something the descriptor's own length can influence.
      *
-     * The theory is that an odd-length descriptor gets padded to an even one, so the descriptor is
-     * kept even and the padding never appears. [GenericHidProfileTest] enforces the length.
+     * A lone `0x00` decodes as a Main item with tag 0, which is why Linux logs
+     * `unknown main item tag 0x0`. It skips the item and parses everything else correctly. Since
+     * this affects every app using BluetoothHidDevice rather than anything specific here, hosts in
+     * practice cope with it.
      */
-    const val KEEP_DESCRIPTOR_LENGTH_EVEN = true
 
     override val descriptor: ByteArray = byteArrayOf(
         0x05.b, 0x01.b, //  Usage Page (Generic Desktop)
@@ -93,9 +95,7 @@ object GenericHidProfile : GamepadProfile {
         0x05.b, 0x01.b, //      Usage Page (Generic Desktop)
         0x09.b, 0x39.b, //      Usage (Hat switch)
         0x15.b, 0x00.b, //      Logical Minimum (0)
-        //  Logical Maximum (7), written as a two-byte value where one would do. This is the
-        //  padding byte from KEEP_DESCRIPTOR_LENGTH_EVEN below; see that comment for why.
-        0x26.b, 0x07.b, 0x00.b,
+        0x25.b, 0x07.b, //      Logical Maximum (7)
         0x35.b, 0x00.b, //      Physical Minimum (0)
         0x46.b, 0x3B.b, 0x01.b, // Physical Maximum (315 degrees)
         0x65.b, 0x14.b, //      Unit (English Rotation: Degrees)
