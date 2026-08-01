@@ -69,6 +69,22 @@ class LayoutStore(context: Context) {
     }
 
     /**
+     * Stores the library and the choice of layout **in one transaction**.
+     *
+     * Not a convenience over calling [save] and [select] in turn: each `edit` is its own transaction
+     * and emits on its own, so in between the two the library has changed and the selection has not.
+     * Anything reading both at once sees a moment where they disagree — and the guard that closes
+     * the editor when the selected layout stops being editable read exactly that moment, closing the
+     * editor the instant a layout was created from a built-in.
+     */
+    suspend fun saveAndSelect(library: LayoutLibrary, layout: GamepadLayout) {
+        preferences.edit {
+            it[USER_LAYOUTS] = encodeLayouts(library.user)
+            it[SELECTED_LAYOUT_ID] = layout.id
+        }
+    }
+
+    /**
      * The stored preferences, with a read failure treated as "nothing stored yet" rather than as a
      * crash. DataStore surfaces a corrupt or unreadable file as an [IOException] on the flow, and
      * taking the app down over it would make the pad unusable rather than merely forgetful.

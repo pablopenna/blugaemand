@@ -143,15 +143,18 @@ class MainActivity : ComponentActivity() {
 
                 /** Creates [new], selects it, and opens the editor on it. */
                 fun startEditing(new: GamepadLayout) {
-                    scope.launch {
-                        layoutStore.save(library.with(new))
-                        layoutStore.select(new)
-                    }
-                    selectedControl = null
-                    editing = true
                     // The pad is about to stop being a pad. Anything held is unreachable from here
                     // on, so do not leave it asserted on the host.
                     service?.updateState(GamepadState.NEUTRAL)
+                    scope.launch {
+                        // Stored before the editor opens, and in one transaction, so that the
+                        // editor never opens on a layout the store has not caught up with -- and
+                        // never opens onto the moment where the new layout exists but the selection
+                        // still names the old one. See LayoutStore.saveAndSelect.
+                        layoutStore.saveAndSelect(library.with(new), new)
+                        selectedControl = null
+                        editing = true
+                    }
                 }
 
                 // A layout can stop being editable underneath the editor -- deleting it is the way
@@ -197,9 +200,14 @@ class MainActivity : ComponentActivity() {
                                 selectedControl = null
                             },
                             onDeleteLayout = {
+                                // One transaction again: separately, the library would lose the
+                                // layout while the selection still named it, and the pad would
+                                // flicker through its fallback on the way out.
                                 scope.launch {
-                                    layoutStore.save(library.without(layout.id))
-                                    layoutStore.select(DEFAULT_LAYOUT)
+                                    layoutStore.saveAndSelect(
+                                        library.without(layout.id),
+                                        DEFAULT_LAYOUT,
+                                    )
                                 }
                             },
                             onDone = { editing = false },
