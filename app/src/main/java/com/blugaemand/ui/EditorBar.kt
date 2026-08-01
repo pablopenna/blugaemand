@@ -1,15 +1,18 @@
 package com.blugaemand.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -18,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -37,21 +41,26 @@ import com.blugaemand.ui.theme.OverlayColors
 private enum class EditorPage { Root, Add, AddGroup, Colours, Rename, ConfirmDelete }
 
 /**
- * The editor's controls, on the same card every other panel uses.
+ * The editor's controls: a pill, and its panel when opened.
  *
- * Deliberately **not** a [HoldPill]: the hold exists so that a stray tap cannot throw a panel up
- * mid-game, and in here there is no game to protect — nothing being edited is connected to
- * anything. Plain taps are right.
+ * **Collapsed by default**, because the panel covers the middle of the top edge — which is where
+ * the centre cluster sits, and where anything else may be put. A permanently open panel makes those
+ * controls unselectable, and an editor that cannot reach part of the pad is not much of an editor.
+ *
+ * The pill opens on a plain tap rather than [HoldPill]'s 600 ms hold; see [TapPill] for why the
+ * hold has nothing to buy in here.
  *
  * Everything destructive is one step away from where a thumb rests. *Delete layout* asks first,
  * because a layout is the only copy of work someone did and there is no undo for it; removing a
- * single control does not, because adding it back puts it exactly where it was.
+ * single control does not, because adding it back is one tap and a place to put it.
  */
 @Composable
 fun EditorBar(
     layout: GamepadLayout,
     /** Index of the control being edited, in [GamepadLayout.controls]. */
     selected: Int?,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     snapToGrid: Boolean,
     onSnapToGridChange: (Boolean) -> Unit,
     onLayoutChange: (GamepadLayout) -> Unit,
@@ -64,18 +73,77 @@ fun EditorBar(
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var page by remember { mutableStateOf(EditorPage.Root) }
-
-    // While something is waiting to be dropped the panel gets out of the way and says only what it
-    // has to. The pad underneath is the thing being aimed at, and a full menu over it would be
-    // covering the place most people want to put something.
-    if (pending != null) {
-        PanelCard(modifier = modifier) {
-            PanelCaption("Tap the pad to place ${pending.name.lowercase()}.")
-            PanelEntry(label = "Cancel", leading = "✕", onClick = onCancelPlacing)
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // While something is waiting to be dropped the pill says so and offers the way out, because
+        // the pad underneath is what is being aimed at and the menu would only be in the way of it.
+        if (pending != null) {
+            TapPill(onClick = onCancelPlacing) {
+                Text("✕", color = OverlayColors.Label, fontSize = 12.sp)
+                Text(
+                    text = "Tap the pad to place ${pending.name.lowercase()}",
+                    color = OverlayColors.Label,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                )
+            }
+            return@Column
         }
-        return
+
+        TapPill(onClick = { onExpandedChange(!expanded) }) {
+            Text("☰", color = OverlayColors.Label, fontSize = 12.sp)
+            Text(
+                text = if (expanded) "Close" else "Edit",
+                color = OverlayColors.Label,
+                fontSize = 12.sp,
+                maxLines = 1,
+            )
+        }
+
+        AnimatedVisibility(
+            visible = expanded,
+            // Weighted for the same reason the top bar's panels are: a Column measures an
+            // unweighted child with an unbounded main axis, so a long page -- and the add-control
+            // page is twenty-two rows -- would be measured full height and silently clipped.
+            modifier = Modifier.weight(1f, fill = false),
+        ) {
+            EditorPanel(
+                layout = layout,
+                selected = selected,
+                snapToGrid = snapToGrid,
+                onSnapToGridChange = onSnapToGridChange,
+                onLayoutChange = onLayoutChange,
+                onStartPlacing = onStartPlacing,
+                onRemoveSelected = onRemoveSelected,
+                onDeleteLayout = onDeleteLayout,
+                onDone = onDone,
+                modifier = Modifier.width(240.dp),
+            )
+        }
     }
+}
+
+/**
+ * The pages themselves. Split from the pill so that its state lives in a composable that only
+ * exists while open — the panel therefore reopens on its root page by itself, without a reset that
+ * would visibly flip pages during the closing animation. Same trick as `MenuPanel`.
+ */
+@Composable
+private fun EditorPanel(
+    layout: GamepadLayout,
+    selected: Int?,
+    snapToGrid: Boolean,
+    onSnapToGridChange: (Boolean) -> Unit,
+    onLayoutChange: (GamepadLayout) -> Unit,
+    onStartPlacing: (Placement) -> Unit,
+    onRemoveSelected: () -> Unit,
+    onDeleteLayout: () -> Unit,
+    onDone: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var page by remember { mutableStateOf(EditorPage.Root) }
 
     PanelCard(modifier = modifier) {
         when (page) {

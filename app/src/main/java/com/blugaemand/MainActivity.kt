@@ -140,6 +140,7 @@ class MainActivity : ComponentActivity() {
                 var snapToGrid by remember { mutableStateOf(true) }
                 // What is waiting to be dropped on the pad, if anything.
                 var pendingPlacement by remember { mutableStateOf<Placement?>(null) }
+                var editorPanelOpen by remember { mutableStateOf(false) }
 
                 /** Saves an edit and keeps it showing, which is one write per drag frame. */
                 fun saveEdit(edited: GamepadLayout) {
@@ -197,14 +198,38 @@ class MainActivity : ComponentActivity() {
                             snapToGrid = snapToGrid,
                         )
 
+                        // Same job as the scrim in normal mode: dismisses the panel on a touch
+                        // anywhere else and swallows that touch, so closing the menu cannot also
+                        // drag whatever control happened to be underneath it.
+                        if (editorPanelOpen) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(OverlayColors.Scrim)
+                                    .pointerInput(Unit) {
+                                        awaitEachGesture {
+                                            awaitFirstDown(requireUnconsumed = false).consume()
+                                            editorPanelOpen = false
+                                        }
+                                    },
+                            )
+                        }
+
                         EditorBar(
                             layout = layout,
                             selected = selectedControl,
+                            expanded = editorPanelOpen,
+                            onExpandedChange = { editorPanelOpen = it },
                             snapToGrid = snapToGrid,
                             onSnapToGridChange = { snapToGrid = it },
                             onLayoutChange = ::saveEdit,
                             pending = pendingPlacement,
-                            onStartPlacing = { pendingPlacement = it },
+                            onStartPlacing = {
+                                pendingPlacement = it
+                                // Out of the way immediately: the next thing to do is tap the pad,
+                                // and the panel is sitting on a good part of it.
+                                editorPanelOpen = false
+                            },
                             onCancelPlacing = { pendingPlacement = null },
                             onRemoveSelected = {
                                 selectedControl?.let { saveEdit(layout.withControlRemovedAt(it)) }
@@ -221,11 +246,13 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             },
-                            onDone = { editing = false },
+                            onDone = {
+                                editorPanelOpen = false
+                                editing = false
+                            },
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
-                                .padding(top = 4.dp)
-                                .width(240.dp),
+                                .padding(top = 4.dp),
                         )
                         return@Box
                     }

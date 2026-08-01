@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -86,10 +87,9 @@ fun HoldPill(
         }
     }
 
-    Row(
+    PillRow(
         modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(OverlayColors.Pill)
+            .pillSurface()
             .drawBehind {
                 if (progress.value > 0f) {
                     drawRect(
@@ -120,8 +120,52 @@ fun HoldPill(
                     // moment the panel closed.
                     pressed = false
                 }
-            }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            },
+        content = content,
+    )
+}
+
+/**
+ * A pill that opens on a plain tap.
+ *
+ * The 600 ms hold [HoldPill] asks for exists so that a stray thumb cannot throw a panel up in the
+ * middle of a game. The editor has no game to interrupt — nothing being edited is connected to
+ * anything — so there is nothing there to buy, and holding every time to reach the menu would be a
+ * tax with nothing bought by it.
+ */
+@Composable
+fun TapPill(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    PillRow(
+        modifier = modifier.pillSurface().clickable(onClick = onClick),
+        content = content,
+    )
+}
+
+/**
+ * The pill's shape and fill.
+ *
+ * A [Modifier] rather than something [PillRow] applies itself, because where it sits in the chain
+ * matters: it has to come before any gesture or decoration the caller adds, or the fill paints over
+ * them — [HoldPill]'s progress bar is drawn by exactly such a decoration.
+ */
+fun Modifier.pillSurface(): Modifier = clip(RoundedCornerShape(50)).background(OverlayColors.Pill)
+
+/**
+ * The shape every pill shares: the padding, the spacing and the alignment, with whatever look and
+ * gesture the caller has already put on [modifier]. Two pills that laid themselves out separately
+ * would drift, in the same way two hand-matched greys do.
+ */
+@Composable
+fun PillRow(
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier = modifier.padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         content = content,
