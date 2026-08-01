@@ -13,7 +13,10 @@ import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Binder
@@ -74,22 +77,60 @@ class HidGamepadService : Service() {
     /** Last report actually put on the wire, used to suppress duplicates. */
     private var lastSentReport: ByteArray? = null
 
+    /** Whether the promotion to a foreground service has succeeded. */
+    private var isForeground = false
+
     inner class LocalBinder : Binder() {
         val service: HidGamepadService get() = this@HidGamepadService
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
 
+    /**
+     * Picks the session back up when the user switches Bluetooth on, so enabling it from the
+     * system prompt is enough on its own — no trip back to the app to hit Retry.
+     */
+    private val adapterStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+            when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
+                BluetoothAdapter.STATE_ON -> retry()
+                BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> {
+                    releaseProfile()
+                    _status.value = HidStatus.BluetoothOff
+                }
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForegroundCompat()
+        ContextCompat.registerReceiver(
+            this,
+            adapterStateReceiver,
+            IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         initialise()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    /**
+     * Promotes to a foreground service.
+     *
+     * Deliberately not done in [onCreate]: a `connectedDevice` foreground service requires a
+     * Bluetooth runtime permission to have been *granted*, not merely declared, and the framework
+     * throws if it has not. The activity therefore binds first — which creates the service so the
+     * UI can read its status — and only starts it once the user has answered the permission
+     * prompt.
+     */
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForegroundCompat()
+        return START_STICKY
+    }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(adapterStateReceiver) }
         sendJob?.cancel()
         scope.cancel()
         releaseProfile()
@@ -147,11 +188,11 @@ class HidGamepadService : Service() {
         bluetoothAdapter = adapter
 
         if (!hasBluetoothPermission()) {
-            _status.value = HidStatus.BluetoothUnavailable
+            _status.value = HidStatus.PermissionRequired
             return
         }
         if (!adapter.isEnabled) {
-            _status.value = HidStatus.BluetoothUnavailable
+            _status.value = HidStatus.BluetoothOff
             return
         }
 
@@ -343,14 +384,14 @@ class HidGamepadService : Service() {
      */
     private inline fun <T> withBluetoothPermission(fallback: T, block: () -> T): T {
         if (!hasBluetoothPermission()) {
-            _status.value = HidStatus.BluetoothUnavailable
+            _status.value = HidStatus.PermissionRequired
             return fallback
         }
         return try {
             block()
         } catch (e: SecurityException) {
             Log.w(TAG, "Bluetooth permission denied", e)
-            _status.value = HidStatus.BluetoothUnavailable
+            _status.value = HidStatus.PermissionRequired
             fallback
         }
     }
@@ -373,6 +414,7 @@ class HidGamepadService : Service() {
     }
 
     private fun startForegroundCompat() {
+        if (isForeground) return
         val contentIntent = PendingIntent.getActivity(
             this,
             0,
@@ -388,14 +430,25 @@ class HidGamepadService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        // Even with the activity gating this on the permission being granted, the user can revoke
+        // it from Settings while the app is alive. Degrading to a bound-only service beats taking
+        // the whole process down.
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+                )
+            } else {
+                // API 28 predates foreground service types, and the permission checks that come
+                // with them.
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            isForeground = true
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Cannot run as a foreground service without a Bluetooth permission", e)
+            _status.value = HidStatus.PermissionRequired
         }
     }
 

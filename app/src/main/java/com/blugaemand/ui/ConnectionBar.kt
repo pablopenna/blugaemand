@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedButton
@@ -40,6 +41,7 @@ fun ConnectionBar(
     expanded: Boolean,
     hosts: List<HostOption>,
     onToggleExpanded: () -> Unit,
+    onFixBlocker: () -> Unit,
     onMakeDiscoverable: () -> Unit,
     onConnect: (HostOption) -> Unit,
     onRetry: () -> Unit,
@@ -83,11 +85,20 @@ fun ConnectionBar(
                         Text(text = it, color = Color(0xFFA8B1C2), fontSize = 11.sp)
                     }
 
-                    OutlinedButton(
-                        onClick = onMakeDiscoverable,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Make discoverable to pair", fontSize = 12.sp)
+                    // When something is blocking the session, that fix is the only useful action —
+                    // offering "make discoverable" while Bluetooth is off just wastes a tap.
+                    val blocker = status.primaryAction()
+                    if (blocker != null) {
+                        Button(onClick = onFixBlocker, modifier = Modifier.fillMaxWidth()) {
+                            Text(blocker, fontSize = 12.sp)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = onMakeDiscoverable,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Make discoverable to pair", fontSize = 12.sp)
+                        }
                     }
 
                     if (hosts.isNotEmpty()) {
@@ -142,7 +153,8 @@ private fun StatusDot(status: HidStatus) {
 
 private fun HidStatus.label(): String = when (this) {
     HidStatus.Initializing -> "Starting…"
-    HidStatus.BluetoothUnavailable -> "Bluetooth off or not permitted"
+    HidStatus.PermissionRequired -> "Permission needed"
+    HidStatus.BluetoothOff -> "Bluetooth is off"
     is HidStatus.Unsupported -> "Not supported on this phone"
     HidStatus.Idle -> "Not advertising"
     HidStatus.Advertising -> "Ready to pair"
@@ -154,9 +166,19 @@ private fun HidStatus.label(): String = when (this) {
 private fun HidStatus.detail(): String? = when (this) {
     is HidStatus.Unsupported -> reason
     is HidStatus.Error -> message
-    HidStatus.BluetoothUnavailable ->
-        "Turn Bluetooth on and grant the nearby-devices permission, then tap Retry."
+    HidStatus.PermissionRequired ->
+        "Blugaemand needs the nearby-devices permission to present itself as a gamepad."
+    HidStatus.BluetoothOff ->
+        "Bluetooth is switched off. Apps cannot turn it on themselves, so Android will ask you " +
+            "to confirm."
     HidStatus.Advertising ->
         "On the host, add a new Bluetooth device and pick this phone."
+    else -> null
+}
+
+/** The one action that will move this state forward, if there is one. */
+private fun HidStatus.primaryAction(): String? = when (this) {
+    HidStatus.PermissionRequired -> "Grant permission"
+    HidStatus.BluetoothOff -> "Turn on Bluetooth"
     else -> null
 }

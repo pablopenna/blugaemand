@@ -69,7 +69,9 @@ class MainActivity : ComponentActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) {
-        // Whatever the outcome, let the service re-evaluate rather than second-guessing it here.
+        // Only now is it safe to promote the service: a connectedDevice foreground service needs a
+        // Bluetooth permission actually granted, and the framework throws otherwise.
+        if (hasBluetoothPermission()) startForegroundSession()
         service?.retry()
         refreshBondedDevices()
     }
@@ -77,6 +79,15 @@ class MainActivity : ComponentActivity() {
     private val discoverableLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { refreshBondedDevices() }
+
+    /**
+     * Asks Android to switch Bluetooth on. An app cannot do this itself — `BluetoothAdapter.enable`
+     * has been a no-op for ordinary apps since Android 13 — so a system prompt is the only route.
+     * The service also listens for the adapter coming up, so no follow-up is needed here.
+     */
+    private val enableBluetoothLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { service?.retry() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,11 +114,16 @@ class MainActivity : ComponentActivity() {
                             barExpanded = !barExpanded
                             if (barExpanded) refreshBondedDevices()
                         },
+                        onFixBlocker = { fixBlocker(status) },
                         onMakeDiscoverable = ::launchDiscoverable,
                         onConnect = ::connectTo,
                         onRetry = {
-                            ensurePermissions()
-                            service?.retry()
+                            if (hasBluetoothPermission()) {
+                                startForegroundSession()
+                                service?.retry()
+                            } else {
+                                ensurePermissions()
+                            }
                         },
                         onStop = {
                             barExpanded = false
@@ -124,8 +140,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        ensurePermissions()
-        startAndBindService()
+        // Bind unconditionally so the UI can read the service's status even when permissions are
+        // missing; only promote it to the foreground once we are allowed to.
+        bindToService()
+        if (hasBluetoothPermission()) startForegroundSession() else ensurePermissions()
     }
 
     override fun onStop() {
@@ -147,11 +165,19 @@ class MainActivity : ComponentActivity() {
 
     // -- Service and permissions --------------------------------------------------------------
 
-    private fun startAndBindService() {
+    private fun bindToService() {
         val intent = Intent(this, HidGamepadService::class.java)
-        startForegroundService(intent)
         bindService(intent, connection, Context.BIND_AUTO_CREATE)
     }
+
+    private fun startForegroundSession() {
+        startForegroundService(Intent(this, HidGamepadService::class.java))
+    }
+
+    private fun hasBluetoothPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) ==
+            PackageManager.PERMISSION_GRANTED
 
     private fun stopGamepad() {
         runCatching { unbindService(connection) }
@@ -172,6 +198,18 @@ class MainActivity : ComponentActivity() {
         }.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
 
         if (needed.isNotEmpty()) permissionLauncher.launch(needed.toTypedArray())
+    }
+
+    /** Resolves whatever is currently blocking the session. */
+    private fun fixBlocker(status: HidStatus) {
+        when (status) {
+            HidStatus.PermissionRequired -> ensurePermissions()
+            HidStatus.BluetoothOff -> runCatching {
+                enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+            }
+
+            else -> Unit
+        }
     }
 
     private fun launchDiscoverable() {

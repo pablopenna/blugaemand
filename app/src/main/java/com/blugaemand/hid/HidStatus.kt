@@ -6,8 +6,17 @@ sealed interface HidStatus {
     /** Waiting for the Bluetooth profile proxy to arrive. */
     data object Initializing : HidStatus
 
-    /** Bluetooth is off, or the user has not granted the connect permission yet. */
-    data object BluetoothUnavailable : HidStatus
+    /** The nearby-devices permission has not been granted. */
+    data object PermissionRequired : HidStatus
+
+    /**
+     * The permission is granted but the Bluetooth adapter is switched off.
+     *
+     * Kept distinct from [PermissionRequired] because the two need different things from the user,
+     * and an app cannot resolve either on its own — `BluetoothAdapter.enable()` has been a no-op
+     * for ordinary apps since Android 13, so the only route is a system prompt.
+     */
+    data object BluetoothOff : HidStatus
 
     /**
      * This device cannot act as an HID peripheral. Some manufacturer builds ship without the HID
