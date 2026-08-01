@@ -332,7 +332,41 @@ class LayoutEditsTest {
         assertEquals("A", ControlId.Button(GamepadButton.SOUTH).describe())
         assertEquals("Left stick", ControlId.Stick(Side.LEFT).describe())
         assertEquals("Right trigger", ControlId.Trigger(Side.RIGHT).describe())
-        assertEquals("D-pad", ControlId.Dpad.describe())
+    }
+
+    @Test
+    fun `the two kinds of D-pad are told apart by name`() {
+        // Both are offered on the same page, so "D-pad" on its own would be a coin toss between a
+        // cross and one arm of one.
+        assertEquals("D-pad (one cross)", ControlId.Dpad.describe())
+        assertEquals("D-pad up", ControlId.DpadButton(ControlId.Direction.UP).describe())
+    }
+
+    @Test
+    fun `the four D-pad arms default to a cross, and a square one`() {
+        // Adding all four should build the shape you expect. The offsets are fractions of different
+        // dimensions -- width across, height down -- so equal numbers would give a squashed cross;
+        // these are the pair that come out equal on the 16:9 the layouts are authored for.
+        val empty = GamepadLayout(id = "e", name = "e", controls = emptyList())
+        val cross = ControlId.Direction.entries
+            .fold(empty) { acc, d -> acc.withControlAdded(ControlId.DpadButton(d)) }
+        val by = cross.controls.associateBy { (it.id as ControlId.DpadButton).direction }
+
+        val up = by.getValue(ControlId.Direction.UP).shape
+        val down = by.getValue(ControlId.Direction.DOWN).shape
+        val left = by.getValue(ControlId.Direction.LEFT).shape
+        val right = by.getValue(ControlId.Direction.RIGHT).shape
+
+        assertEquals("up and down share a column", up.centerX, down.centerX, TOLERANCE)
+        assertEquals("left and right share a row", left.centerY, right.centerY, TOLERANCE)
+        assertTrue("up is above down", up.centerY < down.centerY)
+        assertTrue("left is left of right", left.centerX < right.centerX)
+
+        // Square on 16:9: the horizontal arm spacing in width-units must equal the vertical spacing
+        // in height-units once both are taken to the same scale.
+        val across = (right.centerX - left.centerX) * 16f
+        val down16 = (down.centerY - up.centerY) * 9f
+        assertEquals(across, down16, TOLERANCE)
     }
 
     @Test

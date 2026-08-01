@@ -122,7 +122,8 @@ fun ControlId.describe(): String = when (this) {
     is ControlId.Button -> defaultSpecFor(this).label.ifEmpty { button.name }
     is ControlId.Stick -> "${side.spelled()} stick"
     is ControlId.Trigger -> "${side.spelled()} trigger"
-    ControlId.Dpad -> "D-pad"
+    ControlId.Dpad -> "D-pad (one cross)"
+    is ControlId.DpadButton -> "D-pad ${direction.name.lowercase()}"
 }
 
 /** [value] rounded to the nearest multiple of [step]. */
@@ -152,24 +153,68 @@ internal fun defaultSpecFor(id: ControlId): ControlSpec =
     DEFAULT_LAYOUT.controls.firstOrNull { it.id == id } ?: FALLBACK_SPECS.getValue(id)
 
 /**
- * The controls [DEFAULT_LAYOUT] does not place — L2 and R2, whose analog halves it reaches through
- * [ControlId.Trigger] instead. They sit inboard of the shoulder row, clear of everything the
- * default puts down, so adding one to a full layout does not drop it on top of another control.
+ * The controls [DEFAULT_LAYOUT] does not place, and what they look like when one is added.
  *
- * Derived rather than listed so that a control added to [ControlId.ALL] without a home in the
- * default layout fails here, at class-load, rather than the first time someone tries to add it.
+ * Two families end up here. **L2 and R2**, whose analog halves the default reaches through
+ * [ControlId.Trigger] instead, sit inboard of the shoulder row, clear of everything the default puts
+ * down. **The four D-pad arms** sit in a cross around where the default's one-piece D-pad is, so
+ * adding all four builds the shape you would expect rather than a pile.
+ *
+ * The arm offsets are `0.045` across and `0.08` down for a reason: the first is a fraction of screen
+ * width and the second of screen height, and on the 16:9 the layouts are authored for those are the
+ * same distance — the cross comes out square rather than squashed.
+ *
+ * Derived from [ControlId.ALL] rather than listed, so a control added to that list without a home in
+ * the default layout fails here at class-load rather than the first time someone tries to add it.
  */
 private val FALLBACK_SPECS: Map<ControlId, ControlSpec> = ControlId.ALL
     .filter { id -> DEFAULT_LAYOUT.controls.none { it.id == id } }
     .associateWith { id ->
-        val button = (id as ControlId.Button).button
-        val left = button == GamepadButton.L2
-        ControlSpec(
-            id = id,
-            shape = ControlSpec.Shape.Circle(if (left) 0.32f else 0.68f, 0.08f, radius = 0.055f),
-            label = button.name,
-        )
+        when (id) {
+            is ControlId.Button -> ControlSpec(
+                id = id,
+                shape = ControlSpec.Shape.Circle(
+                    centerX = if (id.button == GamepadButton.L2) 0.32f else 0.68f,
+                    centerY = 0.08f,
+                    radius = 0.055f,
+                ),
+                label = id.button.name,
+            )
+
+            is ControlId.DpadButton -> ControlSpec(
+                id = id,
+                shape = ControlSpec.Shape.Circle(
+                    centerX = DPAD_CENTER_X + when (id.direction) {
+                        ControlId.Direction.LEFT -> -DPAD_ARM_X
+                        ControlId.Direction.RIGHT -> DPAD_ARM_X
+                        else -> 0f
+                    },
+                    centerY = DPAD_CENTER_Y + when (id.direction) {
+                        ControlId.Direction.UP -> -DPAD_ARM_Y
+                        ControlId.Direction.DOWN -> DPAD_ARM_Y
+                        else -> 0f
+                    },
+                    radius = 0.055f,
+                ),
+                label = id.direction.arrow(),
+            )
+
+            else -> error("no default spec for $id")
+        }
     }
+
+private const val DPAD_CENTER_X = 0.13f
+private const val DPAD_CENTER_Y = 0.83f
+private const val DPAD_ARM_X = 0.045f
+private const val DPAD_ARM_Y = 0.08f
+
+/** The glyph an arm wears. No art pack names the arms yet, so this is what gets drawn. */
+private fun ControlId.Direction.arrow(): String = when (this) {
+    ControlId.Direction.UP -> "▲"
+    ControlId.Direction.DOWN -> "▼"
+    ControlId.Direction.LEFT -> "◀"
+    ControlId.Direction.RIGHT -> "▶"
+}
 
 private fun ControlSpec.Shape.withCenter(x: Float, y: Float): ControlSpec.Shape = when (this) {
     is ControlSpec.Shape.Circle -> copy(centerX = x, centerY = y)

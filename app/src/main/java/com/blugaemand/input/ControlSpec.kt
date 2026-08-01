@@ -31,10 +31,30 @@ sealed interface ControlId {
     @SerialName("trigger")
     data class Trigger(val side: Side) : ControlId
 
-    /** The whole D-pad, which resolves to a hat value based on where within it the touch lands. */
+    /**
+     * The whole D-pad as one cross, resolving to a hat value from where within it the touch lands.
+     *
+     * One of two ways to have a D-pad; see [DpadButton]. This one is a single control, so a thumb
+     * rolling across it gives diagonals without lifting, which is how a real cross behaves.
+     */
     @Serializable
     @SerialName("dpad")
     data object Dpad : ControlId
+
+    /**
+     * One arm of a D-pad as a control of its own, so a layout can put the four directions where it
+     * likes rather than accepting a cross.
+     *
+     * Still one hat to the host: [com.blugaemand.hid.Hat.of] folds the held directions into a
+     * single value, so two arms make a diagonal and opposing arms cancel, exactly as a cross does.
+     * What is given up is the roll — each arm has to be hit on its own.
+     */
+    @Serializable
+    @SerialName("dpad_button")
+    data class DpadButton(val direction: Direction) : ControlId
+
+    @Serializable
+    enum class Direction { UP, DOWN, LEFT, RIGHT }
 
     @Serializable
     enum class Side { LEFT, RIGHT }
@@ -51,6 +71,7 @@ sealed interface ControlId {
          */
         val ALL: List<ControlId> = buildList {
             add(Dpad)
+            for (direction in Direction.entries) add(DpadButton(direction))
             for (side in Side.entries) add(Stick(side))
             for (side in Side.entries) add(Trigger(side))
             for (button in GamepadButton.entries) add(Button(button))

@@ -41,6 +41,20 @@ class LayoutSerializationTest {
     }
 
     @Test
+    fun `a layout holding the same control twice round trips`() {
+        // Duplicates are a list, not a set, and a format that deduplicated them would quietly halve
+        // someone's pad on the way back in.
+        val id = ControlId.Button(GamepadButton.SOUTH)
+        val spec = ControlSpec(id, ControlSpec.Shape.Circle(0.2f, 0.2f, radius = 0.07f), "A")
+        val twice = GamepadLayout(
+            id = "twice",
+            name = "Twice",
+            controls = listOf(spec, spec.copy(shape = ControlSpec.Shape.Circle(0.8f, 0.8f, 0.07f))),
+        )
+        assertEquals(listOf(twice), decodeLayouts(encodeLayouts(listOf(twice))))
+    }
+
+    @Test
     fun `a layout with no controls at all round trips`() {
         // The editor can create one, and an empty list is exactly the kind of thing a format
         // quietly turns into a missing key and then into a null.
@@ -182,6 +196,11 @@ class LayoutSerializationTest {
                     id = ControlId.Dpad,
                     shape = ControlSpec.Shape.Dpad(0.13f, 0.83f, radius = 0.13f),
                 ),
+                ControlSpec(
+                    id = ControlId.DpadButton(ControlId.Direction.UP),
+                    shape = ControlSpec.Shape.Circle(0.13f, 0.75f, radius = 0.055f),
+                    label = "▲",
+                ),
             ),
             style = LayoutStyle.Colors(),
         )
@@ -247,6 +266,19 @@ class LayoutSerializationTest {
                                     "deadZone": 0.25
                                 },
                                 "label": ""
+                            },
+                            {
+                                "id": {
+                                    "type": "dpad_button",
+                                    "direction": "UP"
+                                },
+                                "shape": {
+                                    "type": "circle",
+                                    "centerX": 0.13,
+                                    "centerY": 0.75,
+                                    "radius": 0.055
+                                },
+                                "label": "▲"
                             }
                         ],
                         "style": {

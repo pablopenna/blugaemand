@@ -300,6 +300,92 @@ class TouchRouterTest {
         assertEquals(Hat.SOUTH_EAST, router.state().hat)
     }
 
+    // -- A D-pad made of four buttons -----------------------------------------------------
+
+    /**
+     * Four arms on a 1000x500 surface: up (500, 100), down (500, 300), left (400, 200),
+     * right (600, 200) — each a circle of radius 50, with no one-piece cross anywhere.
+     */
+    private val armed = GamepadLayout(
+        id = "arms",
+        name = "Arms",
+        controls = ControlId.Direction.entries.map { direction ->
+            val x = when (direction) {
+                ControlId.Direction.LEFT -> 0.4f
+                ControlId.Direction.RIGHT -> 0.6f
+                else -> 0.5f
+            }
+            val y = when (direction) {
+                ControlId.Direction.UP -> 0.2f
+                ControlId.Direction.DOWN -> 0.6f
+                else -> 0.4f
+            }
+            ControlSpec(ControlId.DpadButton(direction), ControlSpec.Shape.Circle(x, y, 0.1f))
+        },
+    )
+
+    private fun armedRouter() = TouchRouter(ResolvedLayout(armed, 1000f, 500f))
+
+    @Test
+    fun `one arm of a four-button D-pad reads as that direction`() {
+        val router = armedRouter()
+        router.down(1, 500f, 100f)
+        assertEquals(Hat.NORTH, router.state().hat)
+    }
+
+    @Test
+    fun `two adjacent arms read as the diagonal between them`() {
+        // The thing four separate buttons have to get right, and the reason the hat is settled
+        // after the whole binding loop rather than inside it: one arm alone says nothing about it.
+        val router = armedRouter()
+        router.down(1, 500f, 100f) // up
+        router.down(2, 600f, 200f) // right
+        assertEquals(Hat.NORTH_EAST, router.state().hat)
+    }
+
+    @Test
+    fun `opposing arms cancel rather than fighting`() {
+        val router = armedRouter()
+        router.down(1, 500f, 100f) // up
+        router.down(2, 500f, 300f) // down
+        assertEquals(Hat.CENTER, router.state().hat)
+    }
+
+    @Test
+    fun `a four-button D-pad rests centred`() {
+        // A hat stuck pointing north at rest is the classic symptom of getting this wrong.
+        assertEquals(Hat.CENTER, armedRouter().state().hat)
+    }
+
+    @Test
+    fun `releasing one of two arms leaves the other pointing`() {
+        val router = armedRouter()
+        router.down(1, 500f, 100f) // up
+        router.down(2, 600f, 200f) // right
+        router.up(2)
+        assertEquals(Hat.NORTH, router.state().hat)
+    }
+
+    @Test
+    fun `a held cross beats the arms around it`() {
+        // A layout carrying both is one where the cross is the deliberate control; a stray arm
+        // should not override the thumb already on it.
+        val both = armed.copy(
+            controls = armed.controls + ControlSpec(
+                ControlId.Dpad,
+                ControlSpec.Shape.Dpad(0.2f, 0.9f, radius = 0.1f),
+            ),
+        )
+        val router = TouchRouter(ResolvedLayout(both, 1000f, 500f))
+        router.down(1, 500f, 100f) // the up arm -- north
+        router.down(2, 200f, 400f) // the cross, pushed north of its centre at (200, 450)
+        assertEquals(Hat.NORTH, router.state().hat)
+
+        // And with the cross pushed elsewhere, it is the cross that is heard.
+        router.move(2, 250f, 450f) // due east of its centre
+        assertEquals(Hat.EAST, router.state().hat)
+    }
+
     // -- Triggers -------------------------------------------------------------------------
 
     @Test

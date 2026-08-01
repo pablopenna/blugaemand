@@ -76,6 +76,11 @@ class TouchRouter(private val layout: ResolvedLayout) {
     fun state(): GamepadState {
         var state = GamepadState.NEUTRAL
 
+        // The hat is settled after the loop rather than inside it, because it can come from either
+        // one cross or several direction buttons, and the buttons only mean something together.
+        var crossHat: Hat? = null
+        val directions = mutableSetOf<ControlId.Direction>()
+
         for (binding in bindings.values) {
             val control = binding.control
             state = when (val id = control.id) {
@@ -107,11 +112,23 @@ class TouchRouter(private val layout: ResolvedLayout) {
                     }
                 }
 
-                ControlId.Dpad -> state.copy(hat = control.hatFor(binding.x, binding.y))
+                ControlId.Dpad -> state.also { crossHat = control.hatFor(binding.x, binding.y) }
+
+                is ControlId.DpadButton -> state.also { directions += id.direction }
             }
         }
 
-        return state
+        // A held cross wins. A layout carrying both is a layout where the cross is the deliberate
+        // one, and letting a stray arm override a thumb already on the cross would be worse than
+        // ignoring it.
+        val hat = crossHat ?: Hat.of(
+            up = ControlId.Direction.UP in directions,
+            down = ControlId.Direction.DOWN in directions,
+            left = ControlId.Direction.LEFT in directions,
+            right = ControlId.Direction.RIGHT in directions,
+        )
+
+        return state.copy(hat = hat)
     }
 
     private companion object {
