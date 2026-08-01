@@ -43,6 +43,25 @@ class LayoutArtTest {
             "A" to Glyph(ControlIcon.PS_CROSS, ControlIcon.PS_CROSS_PRESSED),
             "B" to Glyph(ControlIcon.PS_CIRCLE, ControlIcon.PS_CIRCLE_PRESSED),
         ),
+        // Read this one carefully: the key is the letter the *host* reports, the value is the
+        // letter Nintendo prints in that spot, and on a Switch the two disagree in all four
+        // positions. The control the host calls Y is the top of the diamond, and Nintendo puts X
+        // there; the one it calls B is the right, and Nintendo puts A there. Both pairs swap, which
+        // is the swap every Switch owner already lives with.
+        "switch" to mapOf(
+            "Y" to Glyph(ControlIcon.SWITCH_X, ControlIcon.SWITCH_X_PRESSED),
+            "X" to Glyph(ControlIcon.SWITCH_Y, ControlIcon.SWITCH_Y_PRESSED),
+            "A" to Glyph(ControlIcon.SWITCH_B, ControlIcon.SWITCH_B_PRESSED),
+            "B" to Glyph(ControlIcon.SWITCH_A, ControlIcon.SWITCH_A_PRESSED),
+        ),
+        // Valve kept Microsoft's arrangement, so this one is the only plate where the printed
+        // letter and the reported letter agree everywhere.
+        "steamdeck" to mapOf(
+            "Y" to Glyph(ControlIcon.DECK_Y, ControlIcon.DECK_Y_PRESSED),
+            "X" to Glyph(ControlIcon.DECK_X, ControlIcon.DECK_X_PRESSED),
+            "A" to Glyph(ControlIcon.DECK_A, ControlIcon.DECK_A_PRESSED),
+            "B" to Glyph(ControlIcon.DECK_B, ControlIcon.DECK_B_PRESSED),
+        ),
     )
 
     /**
@@ -60,6 +79,16 @@ class LayoutArtTest {
             ControlId.Stick(ControlId.Side.LEFT),
             ControlId.Stick(ControlId.Side.RIGHT),
             ControlId.Button(GamepadButton.GUIDE),
+        ),
+        // Kenney draws both a Switch Home button and a Steam button, so unlike the PS5 plate these
+        // two have nothing falling back to a shape except the sticks.
+        "switch" to setOf(
+            ControlId.Stick(ControlId.Side.LEFT),
+            ControlId.Stick(ControlId.Side.RIGHT),
+        ),
+        "steamdeck" to setOf(
+            ControlId.Stick(ControlId.Side.LEFT),
+            ControlId.Stick(ControlId.Side.RIGHT),
         ),
     )
 

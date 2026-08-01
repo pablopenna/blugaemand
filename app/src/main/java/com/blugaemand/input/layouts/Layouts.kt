@@ -11,5 +11,11 @@ object Layouts {
      * layout inherits them for free. Saved user layouts will be appended once they can be
      * serialised.
      */
-    val ALL: List<GamepadLayout> = listOf(DEFAULT_LAYOUT, XBOX_LAYOUT, PS5_LAYOUT)
+    val ALL: List<GamepadLayout> = listOf(
+        DEFAULT_LAYOUT,
+        XBOX_LAYOUT,
+        PS5_LAYOUT,
+        SWITCH_LAYOUT,
+        STEAM_DECK_LAYOUT,
+    )
 }

@@ -70,10 +70,14 @@ turns up along the way.
 - [ ] Editor extras that did not make the first cut: undo, moving a group as a unit after it has
       been placed, nudging a selection with arrows, and a real colour picker rather than twelve
       presets
-- [ ] More built-in layouts to switch between — Nintendo is the obvious next one, then Steam Deck.
-      The art is in the same Kenney pack, and since PS5 landed the shape is settled: convert the
-      SVGs, add the `ControlIcon` names, write one pack file and one layout. Nintendo's own A/B/X/Y
-      crossing is the part to think about, not the plumbing
+- [x] **More built-in layouts** — **Switch** and **Steam Deck** both ship. As predicted, the
+      plumbing was the easy part and Nintendo's A/B/X/Y crossing was the part to think about: it
+      swaps *both* pairs, so the key drawn A sends what an Xbox pad's B sends. Unlike Xbox and PS5
+      these two are **authored in full rather than derived** — the Pro Controller leans both lower
+      controls inboard, the Deck rides high because its trackpads own the lower third, and a derived
+      geometry would have made them the default pad with different pictures on it
+- [ ] Further plates, now that the shape is a pack file and a layout file: GameCube, Wii U and the
+      Switch 2 are all in the same Kenney download
 - [ ] D-pad glyph lighting the direction being pushed rather than the whole cross — the directional
       art exists, but `drawControl` is told only whether the control is held, not which way. The
       four-button D-pad needs the same art and does not have it either: each arm is one control, so

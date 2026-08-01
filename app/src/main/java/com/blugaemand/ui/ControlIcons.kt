@@ -13,8 +13,8 @@ import com.blugaemand.input.ControlIcon
  * returns a painter either way and the renderer draws both identically. Vectors are used for the
  * bundled art because they stay sharp at any size, not because anything requires them.
  *
- * The Xbox and PlayStation glyphs are Kenney's Input Prompts 1.5A (CC0), converted by
- * `art/input/convert-input-art.py`.
+ * The Xbox, PlayStation, Switch and Steam Deck glyphs are all Kenney's Input Prompts 1.5A (CC0),
+ * converted by `art/input/convert-input-art.py`.
  */
 @DrawableRes
 fun drawableFor(icon: ControlIcon): Int = when (icon) {
@@ -81,4 +81,74 @@ fun drawableFor(icon: ControlIcon): Int = when (icon) {
 
     ControlIcon.PS_DPAD -> R.drawable.playstation_dpad
     ControlIcon.PS_DPAD_PRESSED -> R.drawable.playstation_dpad_all
+
+    // Neither Nintendo's pack nor Valve's has coloured face buttons -- both draw them in one
+    // colour, as the real pads are -- so the pressed picture is the solid fill rather than a
+    // second hue.
+    ControlIcon.SWITCH_A -> R.drawable.switch_button_a_outline
+    ControlIcon.SWITCH_A_PRESSED -> R.drawable.switch_button_a
+    ControlIcon.SWITCH_B -> R.drawable.switch_button_b_outline
+    ControlIcon.SWITCH_B_PRESSED -> R.drawable.switch_button_b
+    ControlIcon.SWITCH_X -> R.drawable.switch_button_x_outline
+    ControlIcon.SWITCH_X_PRESSED -> R.drawable.switch_button_x
+    ControlIcon.SWITCH_Y -> R.drawable.switch_button_y_outline
+    ControlIcon.SWITCH_Y_PRESSED -> R.drawable.switch_button_y
+
+    ControlIcon.SWITCH_L -> R.drawable.switch_button_l_outline
+    ControlIcon.SWITCH_L_PRESSED -> R.drawable.switch_button_l
+    ControlIcon.SWITCH_R -> R.drawable.switch_button_r_outline
+    ControlIcon.SWITCH_R_PRESSED -> R.drawable.switch_button_r
+    ControlIcon.SWITCH_ZL -> R.drawable.switch_button_zl_outline
+    ControlIcon.SWITCH_ZL_PRESSED -> R.drawable.switch_button_zl
+    ControlIcon.SWITCH_ZR -> R.drawable.switch_button_zr_outline
+    ControlIcon.SWITCH_ZR_PRESSED -> R.drawable.switch_button_zr
+
+    ControlIcon.SWITCH_MINUS -> R.drawable.switch_button_minus_outline
+    ControlIcon.SWITCH_MINUS_PRESSED -> R.drawable.switch_button_minus
+    ControlIcon.SWITCH_PLUS -> R.drawable.switch_button_plus_outline
+    ControlIcon.SWITCH_PLUS_PRESSED -> R.drawable.switch_button_plus
+    ControlIcon.SWITCH_HOME -> R.drawable.switch_button_home_outline
+    ControlIcon.SWITCH_HOME_PRESSED -> R.drawable.switch_button_home
+
+    // No stick-click button in either pack, so the pair is the stick and the stick pressed.
+    ControlIcon.SWITCH_LS -> R.drawable.switch_stick_l
+    ControlIcon.SWITCH_LS_PRESSED -> R.drawable.switch_stick_l_press
+    ControlIcon.SWITCH_RS -> R.drawable.switch_stick_r
+    ControlIcon.SWITCH_RS_PRESSED -> R.drawable.switch_stick_r_press
+
+    ControlIcon.SWITCH_DPAD -> R.drawable.switch_dpad
+    ControlIcon.SWITCH_DPAD_PRESSED -> R.drawable.switch_dpad_all
+
+    ControlIcon.DECK_A -> R.drawable.steamdeck_button_a_outline
+    ControlIcon.DECK_A_PRESSED -> R.drawable.steamdeck_button_a
+    ControlIcon.DECK_B -> R.drawable.steamdeck_button_b_outline
+    ControlIcon.DECK_B_PRESSED -> R.drawable.steamdeck_button_b
+    ControlIcon.DECK_X -> R.drawable.steamdeck_button_x_outline
+    ControlIcon.DECK_X_PRESSED -> R.drawable.steamdeck_button_x
+    ControlIcon.DECK_Y -> R.drawable.steamdeck_button_y_outline
+    ControlIcon.DECK_Y_PRESSED -> R.drawable.steamdeck_button_y
+
+    ControlIcon.DECK_L1 -> R.drawable.steamdeck_button_l1_outline
+    ControlIcon.DECK_L1_PRESSED -> R.drawable.steamdeck_button_l1
+    ControlIcon.DECK_R1 -> R.drawable.steamdeck_button_r1_outline
+    ControlIcon.DECK_R1_PRESSED -> R.drawable.steamdeck_button_r1
+    ControlIcon.DECK_L2 -> R.drawable.steamdeck_button_l2_outline
+    ControlIcon.DECK_L2_PRESSED -> R.drawable.steamdeck_button_l2
+    ControlIcon.DECK_R2 -> R.drawable.steamdeck_button_r2_outline
+    ControlIcon.DECK_R2_PRESSED -> R.drawable.steamdeck_button_r2
+
+    ControlIcon.DECK_VIEW -> R.drawable.steamdeck_button_view_outline
+    ControlIcon.DECK_VIEW_PRESSED -> R.drawable.steamdeck_button_view
+    ControlIcon.DECK_OPTIONS -> R.drawable.steamdeck_button_options_outline
+    ControlIcon.DECK_OPTIONS_PRESSED -> R.drawable.steamdeck_button_options
+    ControlIcon.DECK_STEAM -> R.drawable.steamdeck_button_guide_outline
+    ControlIcon.DECK_STEAM_PRESSED -> R.drawable.steamdeck_button_guide
+
+    ControlIcon.DECK_LS -> R.drawable.steamdeck_stick_l
+    ControlIcon.DECK_LS_PRESSED -> R.drawable.steamdeck_stick_l_press
+    ControlIcon.DECK_RS -> R.drawable.steamdeck_stick_r
+    ControlIcon.DECK_RS_PRESSED -> R.drawable.steamdeck_stick_r_press
+
+    ControlIcon.DECK_DPAD -> R.drawable.steamdeck_dpad
+    ControlIcon.DECK_DPAD_PRESSED -> R.drawable.steamdeck_dpad_all
 }

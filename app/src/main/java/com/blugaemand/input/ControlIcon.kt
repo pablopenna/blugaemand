@@ -18,6 +18,12 @@ package com.blugaemand.input
  * The PlayStation names are split on purpose: `PS_` is the art every PlayStation pad shares, and
  * `PS5_` the two glyphs that are the DualSense's own. A PS4 face plate would reuse the first group
  * and pair it with Share and Options rather than inheriting a controller it does not have.
+ *
+ * `SWITCH_` and `DECK_` name their own buttons rather than a shared idea of one, which is why
+ * `SWITCH_ZL` sits beside `DECK_L2` and `XBOX_LT`: they are three pictures of the same slot, and a
+ * layout is free to want a specific one. `SWITCH_LS` and `DECK_LS` are the exception to the
+ * outline-and-solid pairing — neither pack draws a stick-click button, so both pair a picture of
+ * the stick with a picture of it being pressed, which says the same thing.
  */
 enum class ControlIcon {
     XBOX_A,
@@ -83,4 +89,70 @@ enum class ControlIcon {
 
     PS_DPAD,
     PS_DPAD_PRESSED,
+
+    SWITCH_A,
+    SWITCH_A_PRESSED,
+    SWITCH_B,
+    SWITCH_B_PRESSED,
+    SWITCH_X,
+    SWITCH_X_PRESSED,
+    SWITCH_Y,
+    SWITCH_Y_PRESSED,
+
+    SWITCH_L,
+    SWITCH_L_PRESSED,
+    SWITCH_R,
+    SWITCH_R_PRESSED,
+    SWITCH_ZL,
+    SWITCH_ZL_PRESSED,
+    SWITCH_ZR,
+    SWITCH_ZR_PRESSED,
+
+    SWITCH_MINUS,
+    SWITCH_MINUS_PRESSED,
+    SWITCH_PLUS,
+    SWITCH_PLUS_PRESSED,
+    SWITCH_HOME,
+    SWITCH_HOME_PRESSED,
+
+    SWITCH_LS,
+    SWITCH_LS_PRESSED,
+    SWITCH_RS,
+    SWITCH_RS_PRESSED,
+
+    SWITCH_DPAD,
+    SWITCH_DPAD_PRESSED,
+
+    DECK_A,
+    DECK_A_PRESSED,
+    DECK_B,
+    DECK_B_PRESSED,
+    DECK_X,
+    DECK_X_PRESSED,
+    DECK_Y,
+    DECK_Y_PRESSED,
+
+    DECK_L1,
+    DECK_L1_PRESSED,
+    DECK_R1,
+    DECK_R1_PRESSED,
+    DECK_L2,
+    DECK_L2_PRESSED,
+    DECK_R2,
+    DECK_R2_PRESSED,
+
+    DECK_VIEW,
+    DECK_VIEW_PRESSED,
+    DECK_OPTIONS,
+    DECK_OPTIONS_PRESSED,
+    DECK_STEAM,
+    DECK_STEAM_PRESSED,
+
+    DECK_LS,
+    DECK_LS_PRESSED,
+    DECK_RS,
+    DECK_RS_PRESSED,
+
+    DECK_DPAD,
+    DECK_DPAD_PRESSED,
 }

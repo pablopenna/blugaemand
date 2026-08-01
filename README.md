@@ -4,8 +4,9 @@ Turns an Android phone into a real Bluetooth gamepad. The host sees a standard H
 driver, no companion app, no root.
 
 **Current state:** an Xbox-style pad (two sticks, D-pad, ABXY, four shoulder controls, the three
-centre buttons, two stick clicks), offered in three presentations — **Default**, drawn as shapes and
-labels, and **Xbox** and **PS5**, drawn with console button art. **You can also make your own**,
+centre buttons, two stick clicks), offered in five presentations — **Default**, drawn as shapes and
+labels, and **Xbox**, **PS5**, **Switch** and **Steam Deck**, drawn with each console's button art
+and laid out the way that console lays its buttons out. **You can also make your own**,
 from empty or as a copy of one of those, and move, resize, add and remove controls on it; layouts
 and the choice of one are saved between launches. Verified end-to-end against a **Linux** host;
 Windows is the stated target but is **not yet tested**. Two pills sit at the top edge, each opening
@@ -146,14 +147,17 @@ host. Only the service and the Compose layer touch the framework.
   in `Images` mode gets from a control to something to draw. Named once on the style rather than
   written onto every `ControlSpec`, so a layout stays geometry and the pack stays swappable. A pack
   need not be complete; see *Two presentations*.
-- `art/` — the built-in packs, `XBOX_ART` and `PLAYSTATION_ART`. One file each, and the one place
-  each console's face-button crossing is decided.
+- `art/` — the built-in packs: `XBOX_ART`, `PLAYSTATION_ART`, `SWITCH_ART`, `STEAM_DECK_ART`, plus
+  `ArtPacks.ALL`, the catalog a saved layout's pack id resolves against. One file each, and the one
+  place each console's face-button crossing is decided.
 - `layouts/` — one file per built-in, plus `Layouts.ALL`, the catalog the menu lists. `XBOX_LAYOUT`
-  and `PS5_LAYOUT` derive their geometry from `DEFAULT_LAYOUT` rather than copying it, so tuning a
-  position moves all three; what is left in each file is which pack to draw with. `PS5_LAYOUT`
-  restates the left cluster on top of that — see *Two presentations*. **The derivation happens at
-  class-load, so it does not extend to user layouts:** a copy of Default that is then edited moves
-  nothing but itself, which is what you want but is the opposite of what "moves all three" suggests.
+  derives its geometry from `DEFAULT_LAYOUT` rather than copying it, so tuning a position moves
+  both; what is left in its file is which pack to draw with. `PS5_LAYOUT` derives too but restates
+  its left cluster — see *Two presentations*. `SWITCH_LAYOUT` and `STEAM_DECK_LAYOUT` are authored
+  in full, because on those two the arrangement is the point; see *The five built-in plates*.
+  **The derivation happens at class-load, so it does not extend to user layouts:** a copy of Default
+  that is then edited moves nothing but itself, which is what you want but is the opposite of what
+  "moves both" suggests.
 - `ResolvedLayout` — converts a layout to pixels once per size change. The renderer, hit-testing
   *and the editor* all read from it, so what is drawn is exactly what is touchable and exactly what
   a drag moves. Untouched by the two modes: presentation never changes where a touch lands.
@@ -251,6 +255,50 @@ Consequences worth knowing:
 Only the two fills that change with press state belong to the layout. Strokes, labels, the stick
 well and the canvas stay in `PadColors`: they are the pad's chrome rather than the layout's
 identity, and a layout free to recolour its strokes is a layout free to make itself invisible.
+
+### The five built-in plates
+
+| | Geometry | Face plate |
+|---|---|---|
+| **Default** | authored; the others start here | drawn shapes and letters |
+| **Xbox** | derived from Default, unchanged | Xbox prompts |
+| **PS5** | derived, with the left cluster restated | PlayStation prompts |
+| **Switch** | authored in full | Switch prompts |
+| **Steam Deck** | authored in full | Steam Deck prompts |
+
+Xbox is derived because a Series pad genuinely is the default arrangement. The other three are not,
+and a derived geometry would have made them the same pad with different pictures on it:
+
+- **PS5** puts the D-pad opposite the diamond and drops the left stick level with the right, because
+  PlayStation has never used the offset arrangement.
+- **Switch** leans both lower controls inboard. A Pro Controller's D-pad and right stick sit
+  noticeably closer to the middle than the stick and diamond above them, so the clusters splay
+  outwards as they rise — that lean is the most recognisable thing about its front. Minus and Plus
+  are a high, wide pair with Home centred below, which is Nintendo's own arrangement rather than the
+  row of three everyone else uses.
+- **Steam Deck** rides high. The lower third of each side of the real thing is trackpad, so the
+  sticks, D-pad and diamond are all pushed up and outboard, the diamond is tighter than the shared
+  one, and the centre is spread — View and Options high and wide apart, the Steam button alone and
+  low.
+
+Two things neither of the new plates can show: the Deck's trackpads and back paddles, and the Switch
+having no L3/R3 buttons at all (you press the sticks). The stick clicks are put along the bottom
+edge on both, out of the way, because there is no authentic place for them.
+
+**The Switch plate is where the face-button crossing bites hardest.** Every pack keys its glyph to
+the position on the diamond, and Nintendo swaps *both* pairs relative to Xbox:
+
+| Position | Slot | Xbox | Nintendo |
+|---|---|---|---|
+| top | `WEST` | Y | **X** |
+| left | `NORTH` | X | **Y** |
+| right | `EAST` | B | **A** |
+| bottom | `SOUTH` | A | **B** |
+
+So **the key drawn A sends the same button an Xbox pad's B sends**. That is not a bug — it is the
+swap every Switch owner already lives with, and matching the printed letter instead would move the
+button under the thumb rather than the picture on it. Valve kept Microsoft's arrangement, so the
+Steam Deck plate is the only one where the printed letter and the reported letter agree everywhere.
 
 ### Layouts, built-in and user-made
 
@@ -644,8 +692,15 @@ also covers Switch, Steam Deck and others, which is what makes a new face plate 
 three-line layout.
 
 Not every button has art: the pack ships an Xbox logo but no PlayStation one, so the PS5 layout's
-guide button falls back to a drawn shape rather than borrowing another button's picture. Expect the
-same kind of gap in any pack, and prefer the fallback to a near-miss.
+guide button falls back to a drawn shape rather than borrowing another button's picture. The Switch
+and Steam Deck sets do have their guide buttons — Home and Steam — so on those two nothing falls
+back but the sticks. Expect the same kind of gap in any pack, and prefer the fallback to a near-miss.
+
+Four families ship: Xbox, PlayStation, Switch and Steam Deck. Neither Nintendo's nor Valve's set has
+coloured face buttons — both draw them in one colour, as the real pads are — so on those two plates
+the pressed picture is the solid fill rather than a second hue. Neither has a stick-click button
+either, so `SWITCH_LS` and `DECK_LS` pair a picture of the stick with a picture of it pressed, which
+says the same thing.
 
 The conversion is a text transform, not an SVG renderer, and it can be because these files are
 uniformly simple: a 64×64 canvas, one or two `<path>` elements, no strokes, a solid hex fill, and

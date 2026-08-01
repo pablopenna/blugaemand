@@ -31,9 +31,11 @@ val DEFAULT_LAYOUT = GamepadLayout(
             shape = ControlSpec.Shape.Stick(0.16f, 0.46f, radius = 0.20f, knobRadius = 0.09f),
             label = "L",
         ),
+        // Roughly one D-pad width in from where it started. At 0.13 its left arm reached within a
+        // few percent of the edge of the glass, which is where a palm rests rather than a thumb.
         ControlSpec(
             id = ControlId.Dpad,
-            shape = ControlSpec.Shape.Dpad(0.13f, 0.83f, radius = 0.13f),
+            shape = ControlSpec.Shape.Dpad(0.28f, 0.83f, radius = 0.13f),
         ),
 
         // Right hand: face buttons above, stick below. The diamond is spread wider than the
