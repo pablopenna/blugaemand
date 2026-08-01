@@ -23,6 +23,13 @@ enum class TopPanel { Connection, Menu }
  * its own: a panel opening changes its column's width, and side-by-side columns would slide both
  * pills sideways every time one was opened. Here the row's width never changes, so the pills stay
  * put and only the panel appears.
+ *
+ * **Both panels are weighted**, which is what bounds their height to the screen. A `Column`
+ * measures an unweighted child with an unbounded main axis, so a panel taller than the space under
+ * the pills would simply be measured at its full height and have the overflow clipped away —
+ * silently, with the missing rows looking like rows that do not exist. `fill = false` keeps a short
+ * panel its own size; the weight only ever takes effect as a ceiling. [PanelCard] scrolls whatever
+ * does not fit under it.
  */
 @Composable
 fun TopBar(
@@ -65,7 +72,10 @@ fun TopBar(
             )
         }
 
-        AnimatedVisibility(visible = openPanel == TopPanel.Connection) {
+        AnimatedVisibility(
+            visible = openPanel == TopPanel.Connection,
+            modifier = Modifier.weight(1f, fill = false),
+        ) {
             ConnectionPanel(
                 status = status,
                 hosts = hosts,
@@ -87,7 +97,9 @@ fun TopBar(
         // here, which cannot be called inside a Box — and that was not worth the indirection.
         AnimatedVisibility(
             visible = openPanel == TopPanel.Menu,
-            modifier = Modifier.align(Alignment.End),
+            modifier = Modifier
+                .align(Alignment.End)
+                .weight(1f, fill = false),
         ) {
             MenuPanel(
                 layouts = layouts,

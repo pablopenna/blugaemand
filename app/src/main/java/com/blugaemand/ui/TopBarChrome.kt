@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
@@ -129,6 +131,13 @@ fun HoldPill(
 /**
  * The card a pill's panel is drawn on. Every panel hangs the same distance below the pill row and
  * shares one surface, so which pill opened it is the only difference the eye has to pick up.
+ *
+ * **It scrolls**, because a panel's contents are not bounded by anything the app controls: the
+ * layout list grows with every layout made, and the editor's *add control* page is eighteen rows
+ * long. A landscape phone is under 400 dp tall and a row is 48, so the seventh row is already off
+ * the bottom — and a panel that runs off the screen does not look full, it looks like the row that
+ * should have been there does not exist. Whoever calls this still has to bound its height; see
+ * [TopBar] for why a `Column` does not do that on its own.
  */
 @Composable
 fun PanelCard(
@@ -141,7 +150,9 @@ fun PanelCard(
         shape = RoundedCornerShape(12.dp),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
             content = content,
         )
