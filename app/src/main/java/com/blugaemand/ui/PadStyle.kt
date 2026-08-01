@@ -1,0 +1,57 @@
+package com.blugaemand.ui
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.res.painterResource
+import com.blugaemand.input.ControlIcon
+import com.blugaemand.input.GamepadLayout
+import com.blugaemand.input.LayoutStyle
+import com.blugaemand.ui.theme.PadColors
+
+/**
+ * A [LayoutStyle] turned into the things the canvas actually draws with: Compose colours, and
+ * painters for the glyphs a layout names.
+ *
+ * This exists because `painterResource` is a composable while the pad draws inside a `Canvas`
+ * lambda, which is not composition — the painters have to be resolved up front and handed down. It
+ * is also where ARGB [Int]s become [Color]s, which is what keeps Compose types out of the `input`
+ * package.
+ */
+class PadStyle(
+    /** Fill for a control at rest. */
+    val resting: Color,
+    /** Fill for a control being held, and for a thumbstick's cap while in use. */
+    val pressed: Color,
+    private val painters: Map<ControlIcon, Painter>,
+) {
+    /** The painter for [icon], or null — including for every icon in colours mode. */
+    fun painter(icon: ControlIcon?): Painter? = icon?.let { painters[it] }
+}
+
+/**
+ * Resolves [layout]'s style during composition.
+ *
+ * Images mode declares no colours of its own, and falls back to the pad's neutrals. That only
+ * shows up on the thumbsticks: they stay drawn in both modes, because no static glyph can show a
+ * knob displaced from centre.
+ */
+@Composable
+fun rememberPadStyle(layout: GamepadLayout): PadStyle {
+    // Every glyph is resolved in images mode, not just the ones this layout uses. Compose
+    // identifies calls by position, so an unconditional walk of a fixed enum keeps them stable
+    // across recompositions in a way that filtering to the layout's own icons would not. There are
+    // a couple of dozen, all cached by the resource loader.
+    val painters = mutableMapOf<ControlIcon, Painter>()
+    if (layout.style is LayoutStyle.Images) {
+        for (icon in ControlIcon.entries) {
+            painters[icon] = painterResource(drawableFor(icon))
+        }
+    }
+
+    return when (val style = layout.style) {
+        is LayoutStyle.Colors -> PadStyle(Color(style.resting), Color(style.pressed), painters)
+        LayoutStyle.Images ->
+            PadStyle(PadColors.ControlFill, PadColors.ControlFillPressed, painters)
+    }
+}

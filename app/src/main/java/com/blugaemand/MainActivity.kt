@@ -38,7 +38,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.blugaemand.hid.GamepadState
 import com.blugaemand.hid.HidGamepadService
 import com.blugaemand.hid.HidStatus
-import com.blugaemand.input.GamepadLayout
+import com.blugaemand.input.layouts.DEFAULT_LAYOUT
+import com.blugaemand.input.layouts.Layouts
 import com.blugaemand.ui.GamepadScreen
 import com.blugaemand.ui.HostOption
 import com.blugaemand.ui.TopBar
@@ -106,7 +107,7 @@ class MainActivity : ComponentActivity() {
             BlugaemandTheme {
                 var openPanel by remember { mutableStateOf<TopPanel?>(null) }
                 // Only for this session; remembering the choice waits on layout persistence.
-                var layout by remember { mutableStateOf(GamepadLayout.XBOX_DEFAULT) }
+                var layout by remember { mutableStateOf(DEFAULT_LAYOUT) }
                 val status by (service?.status ?: fallbackStatus).collectAsStateWithLifecycle()
 
                 // The connection panel only exists to get connected. Once that has happened it is
@@ -146,7 +147,7 @@ class MainActivity : ComponentActivity() {
                     TopBar(
                         status = status,
                         hosts = bonded,
-                        layouts = GamepadLayout.ALL,
+                        layouts = Layouts.ALL,
                         selectedLayoutId = layout.id,
                         openPanel = openPanel,
                         onOpenPanelChange = { panel ->

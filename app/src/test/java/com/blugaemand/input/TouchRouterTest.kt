@@ -4,6 +4,8 @@ import com.blugaemand.hid.GamepadButton
 import com.blugaemand.hid.GamepadState
 import com.blugaemand.hid.Hat
 import com.blugaemand.input.ControlId.Side
+import com.blugaemand.input.layouts.DEFAULT_LAYOUT
+import com.blugaemand.input.layouts.Layouts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -291,14 +293,14 @@ class TouchRouterTest {
     @Test
     fun `the layout catalog has unique ids and includes the default`() {
         // The menu ticks the active layout by id, so a duplicate would tick two rows at once.
-        val ids = GamepadLayout.ALL.map { it.id }
+        val ids = Layouts.ALL.map { it.id }
         assertEquals("duplicate layout ids in $ids", ids.size, ids.toSet().size)
-        assertTrue("the default is offered", GamepadLayout.XBOX_DEFAULT in GamepadLayout.ALL)
+        assertTrue("the default is offered", DEFAULT_LAYOUT in Layouts.ALL)
     }
 
     @Test
     fun `every built-in layout exposes every button the profile declares`() {
-        for (layout in GamepadLayout.ALL) {
+        for (layout in Layouts.ALL) {
             assertEquals(layout.id, emptySet<GamepadButton>(), layout.missingButtons())
         }
     }
@@ -308,7 +310,7 @@ class TouchRouterTest {
         // BTN_X aliases BTN_NORTH and BTN_Y aliases BTN_WEST, so the key labelled Y has to drive
         // GamepadButton.X for the host to report a Y. Wiring each key to its same-letter slot is
         // the obvious-looking mistake, and it swaps the two on every host.
-        val faces = GamepadLayout.XBOX_DEFAULT.controls.associateBy { it.label }
+        val faces = DEFAULT_LAYOUT.controls.associateBy { it.label }
         val north = faces.getValue("Y")
         val west = faces.getValue("X")
 
@@ -325,7 +327,7 @@ class TouchRouterTest {
         // Overlapping touch areas make hit-testing ambiguous and the pad frustrating to use.
         // Checked at a typical 1080p landscape size and at a squarer tablet ratio, since circular
         // controls size themselves from height while positions are relative to both axes.
-        for (layout in GamepadLayout.ALL) {
+        for (layout in Layouts.ALL) {
             for ((w, h) in listOf(2400f to 1080f, 1600f to 1200f)) {
                 val pad = ResolvedLayout(layout, width = w, height = h)
                 for (i in pad.controls.indices) {

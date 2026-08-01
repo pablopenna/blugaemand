@@ -41,6 +41,9 @@ fun GamepadScreen(
 ) {
     val currentOnStateChange by rememberUpdatedState(onStateChange)
     val textMeasurer = rememberTextMeasurer()
+    // Resolved here rather than in the draw lambda: `painterResource` is a composable, and the
+    // canvas below is not composition.
+    val padStyle = rememberPadStyle(layout)
 
     var size by remember { mutableStateOf(IntSize.Zero) }
     val resolved = remember(layout, size) {
@@ -97,6 +100,7 @@ fun GamepadScreen(
                     ?.let { router.stickOffset(it.side) }
                 drawControl(
                     control = control,
+                    style = padStyle,
                     pressed = control.id in active,
                     stickOffset = stickOffset,
                     textMeasurer = textMeasurer,

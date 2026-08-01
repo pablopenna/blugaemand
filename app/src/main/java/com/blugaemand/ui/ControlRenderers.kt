@@ -5,6 +5,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -15,29 +17,61 @@ import com.blugaemand.ui.theme.PadColors
 /**
  * Draws one resolved control. [pressed] drives the highlight, and [stickOffset] positions a
  * thumbstick's cap as a -1..1 displacement.
+ *
+ * A control with a glyph draws the glyph alone — no plate, no label — because the art pack's
+ * prompts are whole buttons in their own right. Everything without one falls back to the drawn
+ * shape, which is what keeps thumbsticks working in both modes and stops a layout missing a glyph
+ * from rendering a hole.
  */
 fun DrawScope.drawControl(
     control: ResolvedControl,
+    style: PadStyle,
     pressed: Boolean,
     stickOffset: Pair<Float, Float>?,
     textMeasurer: TextMeasurer,
 ) {
+    val glyph = style.painter(control.spec.iconPressed.takeIf { pressed } ?: control.spec.icon)
+    if (glyph != null) {
+        drawGlyph(control, glyph)
+        return
+    }
+
     when (val shape = control.spec.shape) {
-        is ControlSpec.Shape.Circle -> drawCircleControl(control, pressed, textMeasurer)
-        is ControlSpec.Shape.Rect -> drawRectControl(control, pressed, textMeasurer)
-        is ControlSpec.Shape.Stick -> drawStick(control, pressed, stickOffset)
-        is ControlSpec.Shape.Dpad -> drawDpad(control, shape, pressed)
+        is ControlSpec.Shape.Circle -> drawCircleControl(control, style, pressed, textMeasurer)
+        is ControlSpec.Shape.Rect -> drawRectControl(control, style, pressed, textMeasurer)
+        is ControlSpec.Shape.Stick -> drawStick(control, style, pressed, stickOffset)
+        is ControlSpec.Shape.Dpad -> drawDpad(control, style, shape, pressed)
+    }
+}
+
+/**
+ * Draws [glyph] centred on the control, square, and sized to the smaller of its two extents so a
+ * wide control like a shoulder button gets a glyph of its height rather than a stretched one.
+ *
+ * The touch area is deliberately left as the resolved shape, which for those wide controls is
+ * larger than the picture — a trigger that is easier to hit than it looks is the right way round.
+ */
+private fun DrawScope.drawGlyph(control: ResolvedControl, glyph: Painter) {
+    val extent = if (control.radius > 0f) {
+        control.radius * 2f
+    } else {
+        minOf(control.halfWidth, control.halfHeight) * 2f
+    }
+
+    translate(left = control.centerX - extent / 2f, top = control.centerY - extent / 2f) {
+        with(glyph) { draw(Size(extent, extent)) }
     }
 }
 
 private fun DrawScope.drawCircleControl(
     control: ResolvedControl,
+    style: PadStyle,
     pressed: Boolean,
     textMeasurer: TextMeasurer,
 ) {
     val center = Offset(control.centerX, control.centerY)
     drawCircle(
-        color = if (pressed) PadColors.ControlFillPressed else PadColors.ControlFill,
+        color = if (pressed) style.pressed else style.resting,
         radius = control.radius,
         center = center,
     )
@@ -52,6 +86,7 @@ private fun DrawScope.drawCircleControl(
 
 private fun DrawScope.drawRectControl(
     control: ResolvedControl,
+    style: PadStyle,
     pressed: Boolean,
     textMeasurer: TextMeasurer,
 ) {
@@ -60,7 +95,7 @@ private fun DrawScope.drawRectControl(
     val corner = CornerRadius(control.halfHeight * 0.4f)
 
     drawRoundRect(
-        color = if (pressed) PadColors.ControlFillPressed else PadColors.ControlFill,
+        color = if (pressed) style.pressed else style.resting,
         topLeft = topLeft,
         size = size,
         cornerRadius = corner,
@@ -83,6 +118,7 @@ private fun DrawScope.drawRectControl(
 
 private fun DrawScope.drawStick(
     control: ResolvedControl,
+    style: PadStyle,
     pressed: Boolean,
     stickOffset: Pair<Float, Float>?,
 ) {
@@ -101,8 +137,10 @@ private fun DrawScope.drawStick(
     val (dx, dy) = stickOffset ?: (0f to 0f)
     val knobCenter = Offset(center.x + dx * travel, center.y + dy * travel)
 
+    // The cap keeps its own resting grey — it reads as sitting on top of the well only because it
+    // is lighter than the base — and takes the layout's colour only while in use.
     drawCircle(
-        color = if (pressed) PadColors.StickKnobActive else PadColors.StickKnob,
+        color = if (pressed) style.pressed else PadColors.StickKnob,
         radius = control.knobRadius,
         center = knobCenter,
     )
@@ -110,12 +148,13 @@ private fun DrawScope.drawStick(
 
 private fun DrawScope.drawDpad(
     control: ResolvedControl,
+    style: PadStyle,
     shape: ControlSpec.Shape.Dpad,
     pressed: Boolean,
 ) {
     val r = control.radius
     val arm = r * 0.42f // half-thickness of the cross arms
-    val fill = if (pressed) PadColors.ControlFillPressed else PadColors.ControlFill
+    val fill = if (pressed) style.pressed else style.resting
     val corner = CornerRadius(arm * 0.4f)
 
     // Two overlapping rounded bars form the cross.

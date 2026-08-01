@@ -24,16 +24,29 @@ turns up along the way.
 
 ## Iteration 2 — Configurable layouts
 
-- [x] **Quick switcher** — the ☰ Menu pill's *Layouts* page lists `GamepadLayout.ALL` and ticks the
+- [x] **Quick switcher** — the ☰ Menu pill's *Layouts* page lists `Layouts.ALL` and ticks the
       active one. New built-ins appear in it by being added to `ALL`, and inherit the layout-sanity
       tests for free
-- [ ] Serialise `GamepadLayout` (kotlinx.serialization); the data model is already normalised for it
-- [ ] Persist with DataStore; ship `XBOX_DEFAULT` as the seeded default
+- [x] **One file per layout** — `input/layouts/`, with `Layouts.ALL` as the catalog. `XBOX_LAYOUT`
+      derives its geometry from `DEFAULT_LAYOUT`, so tuning a position moves both
+- [x] **Two presentations** — `LayoutStyle` is `Colors` (drawn shapes and labels, in the layout's
+      own resting and pressed colours) or `Images` (a glyph per control, from an art pack). A layout
+      is in exactly one. Ships **Default** and **Xbox**; see the README for what the modes share
+- [ ] Serialise `GamepadLayout` (kotlinx.serialization); the data model is already normalised for
+      it, and `ControlIcon` is an enum of names rather than resource IDs for this reason
+- [ ] Persist with DataStore; ship `DEFAULT_LAYOUT` as the seeded default
 - [ ] Remember the menu's layout choice across launches — it is session-only until the above lands
-- [ ] Editor screen: drag to move, pinch to resize, snap-to-grid
-- [ ] More built-in layouts to switch between; a Nintendo-style face plate is the obvious first one
+- [ ] Editor screen: drag to move, pinch to resize, snap-to-grid. Picking a layout's two colours
+      belongs here too — they are data already, just not editable
+- [ ] More built-in layouts to switch between; a Nintendo-style face plate is the obvious first one.
+      The art for PlayStation, Switch, Steam Deck and others is in the same Kenney pack, so an
+      image-mode layout is a geometry table plus a glyph table
+- [ ] D-pad glyph lighting the direction being pushed rather than the whole cross — the directional
+      art exists, but `drawControl` is told only whether the control is held, not which way
 - [ ] Add / remove controls, and surface `missingButtons()` as a validation warning
-- [ ] Import / export layouts as JSON so they can be shared
+- [ ] Import / export layouts as JSON so they can be shared. User-supplied art cannot go through
+      `R.drawable` at all — it needs a file loaded at runtime, turning `ControlSpec.icon` into a
+      sealed `Builtin | File`. The enum is the seam that would grow along
 - [ ] Portrait layout variant — this is the real fix for the Android 16 orientation opt-out in
       `AndroidManifest.xml`, which stops working at targetSdk 37
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Regenerates the launcher icon density assets from art/icon.png.
+"""Regenerates the launcher icon density assets from art/icon/icon.png.
 
 Run after editing icon.aseprite and re-exporting icon.png:
 
-    python3 art/generate-launcher-icons.py
+    python3 art/icon/generate-launcher-icons.py
 
 Produces two adaptive-icon layers at all five densities:
 
@@ -24,8 +24,14 @@ from pathlib import Path
 
 from PIL import Image
 
-ART = Path(__file__).parent
-RES = ART.parent / "app/src/main/res"
+HERE = Path(__file__).resolve().parent
+# parents[1] is art/, parents[2] the repo root. Derived by index rather than by walking up with
+# .parent so that moving this script again fails loudly on the assert below instead of quietly
+# building a res/ tree in the wrong place — mkdir(parents=True) further down is happy to do that.
+ROOT = Path(__file__).resolve().parents[2]
+RES = ROOT / "app/src/main/res"
+
+assert (ROOT / "settings.gradle.kts").exists(), f"{ROOT} is not the repo root; fix the path above"
 
 SOURCE_SIZE = 54
 
@@ -115,7 +121,7 @@ def export(image: Image.Image, name: str) -> None:
 
 
 def main() -> None:
-    source = Image.open(ART / "icon.png").convert("RGBA")
+    source = Image.open(HERE / "icon.png").convert("RGBA")
 
     if source.size != (SOURCE_SIZE, SOURCE_SIZE):
         raise SystemExit(
