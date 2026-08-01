@@ -16,6 +16,9 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -26,6 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -113,13 +118,36 @@ class MainActivity : ComponentActivity() {
                         onStateChange = { service?.updateState(it) },
                     )
 
+                    // Sits between the pad and the bar while the panel is open: dismisses on a
+                    // touch anywhere else, and swallows that touch so it cannot also press a
+                    // button underneath. Releasing the pad's held controls avoids leaving anything
+                    // stuck down on the host.
+                    if (barExpanded) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0x59000000))
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        awaitFirstDown(requireUnconsumed = false).consume()
+                                        barExpanded = false
+                                    }
+                                },
+                        )
+                    }
+
                     ConnectionBar(
                         status = status,
                         expanded = barExpanded,
                         hosts = bonded,
-                        onToggleExpanded = {
-                            barExpanded = !barExpanded
-                            if (barExpanded) refreshBondedDevices()
+                        onExpandedChange = { open ->
+                            barExpanded = open
+                            if (open) {
+                                refreshBondedDevices()
+                                // The panel covers the pad, so anything held is about to be
+                                // unreachable; do not leave it asserted on the host.
+                                service?.updateState(GamepadState.NEUTRAL)
+                            }
                         },
                         onFixBlocker = { fixBlocker(status) },
                         onMakeDiscoverable = ::launchDiscoverable,

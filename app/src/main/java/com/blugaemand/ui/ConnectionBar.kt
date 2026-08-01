@@ -1,8 +1,13 @@
 package com.blugaemand.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,28 +24,40 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.blugaemand.hid.HidStatus
+import kotlinx.coroutines.launch
 
 /** A paired host the user can reconnect to. */
 data class HostOption(val name: String, val address: String)
 
+/** How long the pill must be held before the panel opens. */
+private const val HOLD_TO_OPEN_MS = 600
+
 /**
  * Compact status pill pinned to the top of the pad. It stays small so it does not eat into the
- * play area, and expands on tap to reveal the pairing actions — which are only needed occasionally.
+ * play area, and opens on a deliberate hold to reveal the pairing actions — which are only needed
+ * occasionally.
  */
 @Composable
 fun ConnectionBar(
     status: HidStatus,
     expanded: Boolean,
     hosts: List<HostOption>,
-    onToggleExpanded: () -> Unit,
+    onExpandedChange: (Boolean) -> Unit,
     onFixBlocker: () -> Unit,
     onMakeDiscoverable: () -> Unit,
     onConnect: (HostOption) -> Unit,
@@ -52,24 +69,11 @@ fun ConnectionBar(
         modifier = modifier.widthIn(max = 420.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(Color(0xCC1B1F27))
-                .clickable(onClick = onToggleExpanded)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            StatusDot(status)
-            Text(
-                text = status.label(),
-                color = Color(0xFFDCE2EE),
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        StatusPill(
+            status = status,
+            expanded = expanded,
+            onExpandedChange = onExpandedChange,
+        )
 
         AnimatedVisibility(visible = expanded) {
             Card(
@@ -131,6 +135,79 @@ fun ConnectionBar(
                 }
             }
         }
+    }
+}
+
+/**
+ * The pill itself.
+ *
+ * Opening requires holding rather than tapping: the pill sits along the top edge, right where a
+ * thumb travels during play, and a stray tap that threw up the pairing panel mid-game would be
+ * worse than a slightly slower deliberate open. A blue bar sweeps left to right while held so the
+ * hold is visibly doing something and its length is obvious. Closing is a plain tap — there is
+ * nothing to protect against there.
+ */
+@Composable
+private fun StatusPill(
+    status: HidStatus,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+) {
+    val progress = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xCC1B1F27))
+            .drawBehind {
+                if (progress.value > 0f) {
+                    drawRect(
+                        color = Color(0xFF4C82F7),
+                        size = Size(size.width * progress.value, size.height),
+                    )
+                }
+            }
+            .pointerInput(expanded) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+
+                    if (expanded) {
+                        // Closing needs no ceremony; a plain tap will do.
+                        if (waitForUpOrCancellation() != null) onExpandedChange(false)
+                        return@awaitEachGesture
+                    }
+
+                    val fill = scope.launch {
+                        progress.animateTo(
+                            targetValue = 1f,
+                            animationSpec = tween(HOLD_TO_OPEN_MS, easing = LinearEasing),
+                        )
+                        // Reaching full is the trigger; the buzz confirms it without looking.
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onExpandedChange(true)
+                    }
+
+                    // Null means the gesture was cancelled rather than lifted; either way the
+                    // hold is over and the bar should drain back to empty.
+                    waitForUpOrCancellation()
+                    fill.cancel()
+                    scope.launch { progress.animateTo(0f, tween(180)) }
+                }
+            }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        StatusDot(status)
+        Text(
+            text = status.label(),
+            color = Color(0xFFDCE2EE),
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
