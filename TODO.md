@@ -14,9 +14,13 @@ turns up along the way.
 - [x] Compose pad with multitouch, connection bar, immersive landscape
 - [x] 34 JVM unit tests; lint clean
 - [x] Pixel-art launcher icon with derived monochrome layer for themed icons
-- [ ] **Verify on a physical phone** — install, confirm the status reaches *Ready to pair*
+- [x] **Verified on a physical phone** — Xiaomi 25080RABDC, Android 16 / HyperOS. The ROM does
+      include the HID Device profile (`bluetooth.profile.hid.device.enabled: true`)
+- [x] **Verified end-to-end against a Linux host** — enumerates as `BLUETOOTH HID v0.00 Gamepad`,
+      creates `js0`; all 13 buttons and all 8 axes land on the intended evdev codes (see below)
 - [ ] **Verify on Windows** — pair, then check every control in `joy.cpl` → Properties
 - [ ] Tune the default layout against a real thumb once it has been held in landscape
+- [ ] Decide whether to dodge the trailing descriptor byte (see Known constraints)
 
 ## Iteration 2 — Configurable layouts
 
@@ -32,7 +36,7 @@ turns up along the way.
 ## Iteration 3 — More hosts
 
 - [ ] Verify against Android / Android TV (should map to `KEYCODE_BUTTON_*` unchanged)
-- [ ] Verify against Linux / Raspberry Pi (`/dev/input/js0`, `jstest`, `evtest`)
+- [x] Verify against Linux (`/dev/input/js0`) — done on x86 Ubuntu; Raspberry Pi still untried
 - [ ] Verify against macOS
 - [ ] Profile picker in the UI once there is more than one `GamepadProfile`
 - [ ] Per-host default layout, remembered per bonded device
@@ -72,3 +76,13 @@ Not bugs, and not fixable — recorded so they do not get rediscovered.
   HID-over-GATT is unavailable.
 - **No VID/PID control.** See Iteration 4.
 - **Some OEM builds omit the HID Device profile** entirely. The app detects and reports this.
+- **A trailing `0x00` is appended to the report descriptor in transit.** Confirmed by diffing
+  `/sys/bus/hid/devices/*/report_descriptor` against `GenericHidProfile.descriptor`: our 93 bytes
+  arrive byte-for-byte intact, with one extra `0x00` on the end. It is added by Android's SDP
+  encoding or by BlueZ — not by us. Linux decodes it as a Main item with tag 0, logs
+  `unknown main item tag 0x0`, skips it, and parses everything else correctly.
+
+  Harmless on Linux, but worth resolving before trusting Windows, whose HID parser is stricter.
+  Plausible cause is padding an odd-length descriptor to an even one (93 → 94). If so, making the
+  descriptor 94 bytes would dodge it — e.g. encoding `Logical Maximum (7)` as the two-byte
+  `0x26 0x07 0x00` instead of `0x25 0x07`, which is semantically identical. Untested.
