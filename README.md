@@ -117,6 +117,7 @@ aggressively than `joy.cpl` does.
 | *Bluetooth off or not permitted* | Turn Bluetooth on, grant the nearby-devices permission, then tap **Retry**. |
 | Pairs but never connects | Almost always one of the two gotchas above. Remove the pairing on the host and redo it with the app already showing **Ready to pair**. |
 | Buttons stick down after switching apps | Should not happen — the pad sends a neutral report on focus loss. If you see it, it is a bug worth reporting. |
+| Changed the HID descriptor but the host still sees the old one | Hosts cache the SDP record at pair time, and reconnecting does not refresh it. Remove the pairing on **both** ends and pair again. On Linux, `bluetoothctl remove <mac>` is what clears BlueZ's cache in `/var/lib/bluetooth/<adapter>/cache/`. |
 
 To watch reports leave the phone without any host involved:
 

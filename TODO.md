@@ -76,6 +76,9 @@ Not bugs, and not fixable — recorded so they do not get rediscovered.
   HID-over-GATT is unavailable.
 - **No VID/PID control.** See Iteration 4.
 - **Some OEM builds omit the HID Device profile** entirely. The app detects and reports this.
+- **Hosts cache the report descriptor at pair time.** Reconnecting does not pick up a changed
+  descriptor — the pairing has to be removed and redone on both ends. Worth remembering for every
+  future profile change, since the symptom is a descriptor edit that appears to do nothing.
 - **A trailing `0x00` is appended to the report descriptor in transit.** Confirmed by diffing
   `/sys/bus/hid/devices/*/report_descriptor` against `GenericHidProfile.descriptor`: our 93 bytes
   arrive byte-for-byte intact, with one extra `0x00` on the end. It is added by Android's SDP

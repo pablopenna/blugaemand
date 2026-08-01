@@ -44,6 +44,20 @@ object GenericHidProfile : GamepadProfile {
      */
     private const val TRIGGER_DIGITAL_THRESHOLD = 32
 
+    /**
+     * The descriptor is padded to an even number of bytes on purpose.
+     *
+     * At 93 bytes, the descriptor that reached a Linux host was 94 — ours byte-for-byte, plus a
+     * trailing `0x00` added somewhere in Android's SDP encoding or BlueZ. A lone `0x00` decodes as
+     * a Main item with tag 0, so the kernel logged `unknown main item tag 0x0`. It skipped the
+     * item and everything worked, but Windows' HID parser is stricter and a stray malformed item
+     * at the end is not worth gambling on.
+     *
+     * The theory is that an odd-length descriptor gets padded to an even one, so the descriptor is
+     * kept even and the padding never appears. [GenericHidProfileTest] enforces the length.
+     */
+    const val KEEP_DESCRIPTOR_LENGTH_EVEN = true
+
     override val descriptor: ByteArray = byteArrayOf(
         0x05.b, 0x01.b, //  Usage Page (Generic Desktop)
         0x09.b, 0x05.b, //  Usage (Gamepad)
@@ -79,7 +93,9 @@ object GenericHidProfile : GamepadProfile {
         0x05.b, 0x01.b, //      Usage Page (Generic Desktop)
         0x09.b, 0x39.b, //      Usage (Hat switch)
         0x15.b, 0x00.b, //      Logical Minimum (0)
-        0x25.b, 0x07.b, //      Logical Maximum (7)
+        //  Logical Maximum (7), written as a two-byte value where one would do. This is the
+        //  padding byte from KEEP_DESCRIPTOR_LENGTH_EVEN below; see that comment for why.
+        0x26.b, 0x07.b, 0x00.b,
         0x35.b, 0x00.b, //      Physical Minimum (0)
         0x46.b, 0x3B.b, 0x01.b, // Physical Maximum (315 degrees)
         0x65.b, 0x14.b, //      Unit (English Rotation: Degrees)

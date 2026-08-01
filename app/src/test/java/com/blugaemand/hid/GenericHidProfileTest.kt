@@ -141,6 +141,19 @@ class GenericHidProfileTest {
     }
 
     @Test
+    fun `descriptor length is even`() {
+        // Not cosmetic. An odd-length descriptor came back from a Linux host one byte longer, with
+        // a trailing 0x00 that the kernel reported as "unknown main item tag 0x0" — something in
+        // Android's SDP encoding or BlueZ pads to an even length. Keeping it even means the pad
+        // never appears, which matters for stricter parsers than Linux's.
+        assertEquals(
+            "descriptor must stay an even number of bytes",
+            0,
+            GenericHidProfile.descriptor.size % 2,
+        )
+    }
+
+    @Test
     fun `descriptor is a well-formed item stream declaring one gamepad collection`() {
         val d = GenericHidProfile.descriptor.map { it.toInt() and 0xFF }
 
