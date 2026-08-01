@@ -1,5 +1,7 @@
 package com.blugaemand.hid
 
+import kotlinx.serialization.Serializable
+
 /**
  * Direction of the D-pad, encoded the way an HID "hat switch" control expects: eight compass
  * positions clockwise from north, and a null value for centred.
@@ -57,7 +59,12 @@ enum class Hat(val value: Int) {
  * The face buttons are named by position rather than by letter, since the letters are not portable:
  * Xbox puts Y north and X west, Nintendo swaps both pairs, and HID's own aliases are a third
  * arrangement again. Which glyph a slot wears belongs to the layout's face plate.
+ *
+ * **These names are a saved format.** A layout stores the button it drives by name, so renaming an
+ * entry here silently repoints every layout already on a phone; `LayoutSerializationTest` pins them
+ * against a golden file so it fails loudly instead.
  */
+@Serializable
 enum class GamepadButton(val hidButtonNumber: Int) {
     SOUTH(1), // BTN_SOUTH
     EAST(2), // BTN_EAST

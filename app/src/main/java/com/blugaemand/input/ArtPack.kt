@@ -23,7 +23,10 @@ data class Glyph(val idle: ControlIcon, val pressed: ControlIcon? = null)
  * pack simply has no picture of; see [com.blugaemand.input.art.PLAYSTATION_ART].
  */
 data class ArtPack(
-    /** Stable identifier, for tests and for whatever serialises a layout's choice of pack. */
+    /**
+     * Stable identifier. This is the whole of what a saved layout writes down about its pack, so
+     * changing one orphans every layout already using it; see [ArtPackSerializer].
+     */
     val id: String,
     val glyphs: Map<ControlId, Glyph>,
 ) {
