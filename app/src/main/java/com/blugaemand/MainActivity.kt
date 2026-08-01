@@ -22,6 +22,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,8 +41,16 @@ import com.blugaemand.data.LayoutStore
 import com.blugaemand.hid.GamepadState
 import com.blugaemand.hid.HidGamepadService
 import com.blugaemand.hid.HidStatus
+import com.blugaemand.input.ControlId
+import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutLibrary
+import com.blugaemand.input.copyAsUser
+import com.blugaemand.input.emptyUserLayout
 import com.blugaemand.input.layouts.DEFAULT_LAYOUT
+import com.blugaemand.input.withControlAdded
+import com.blugaemand.input.withControlRemoved
+import com.blugaemand.ui.EditorBar
+import com.blugaemand.ui.EditorScreen
 import com.blugaemand.ui.GamepadScreen
 import com.blugaemand.ui.HostOption
 import com.blugaemand.ui.TopBar
@@ -123,6 +132,34 @@ class MainActivity : ComponentActivity() {
                 // rather than showing nothing keeps the pad usable either way.
                 val layout = library.byId(selectedId) ?: DEFAULT_LAYOUT
 
+                var editing by remember { mutableStateOf(false) }
+                var selectedControl by remember { mutableStateOf<ControlId?>(null) }
+                var snapToGrid by remember { mutableStateOf(true) }
+
+                /** Saves an edit and keeps it showing, which is one write per drag frame. */
+                fun saveEdit(edited: GamepadLayout) {
+                    scope.launch { layoutStore.save(library.with(edited)) }
+                }
+
+                /** Creates [new], selects it, and opens the editor on it. */
+                fun startEditing(new: GamepadLayout) {
+                    scope.launch {
+                        layoutStore.save(library.with(new))
+                        layoutStore.select(new)
+                    }
+                    selectedControl = null
+                    editing = true
+                    // The pad is about to stop being a pad. Anything held is unreachable from here
+                    // on, so do not leave it asserted on the host.
+                    service?.updateState(GamepadState.NEUTRAL)
+                }
+
+                // A layout can stop being editable underneath the editor -- deleting it is the way
+                // that happens -- and staying in there would be editing something that is gone.
+                LaunchedEffect(selectedId, library) {
+                    if (editing && !library.isEditable(selectedId)) editing = false
+                }
+
                 // The connection panel only exists to get connected. Once that has happened it is
                 // just covering the pad, so fold it away rather than making the user dismiss it.
                 // The menu is left alone: it is not about connecting, and closing it under the
@@ -134,6 +171,46 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
+                    if (editing) {
+                        EditorScreen(
+                            layout = layout,
+                            selected = selectedControl,
+                            onSelect = { selectedControl = it },
+                            onLayoutChange = ::saveEdit,
+                            snapToGrid = snapToGrid,
+                        )
+
+                        EditorBar(
+                            layout = layout,
+                            selected = selectedControl,
+                            snapToGrid = snapToGrid,
+                            onSnapToGridChange = { snapToGrid = it },
+                            onLayoutChange = ::saveEdit,
+                            onAddControl = { id ->
+                                saveEdit(layout.withControlAdded(id))
+                                // Selected on arrival, so it can be dragged off the spot it landed
+                                // on without hunting for it first.
+                                selectedControl = id
+                            },
+                            onRemoveSelected = {
+                                selectedControl?.let { saveEdit(layout.withControlRemoved(it)) }
+                                selectedControl = null
+                            },
+                            onDeleteLayout = {
+                                scope.launch {
+                                    layoutStore.save(library.without(layout.id))
+                                    layoutStore.select(DEFAULT_LAYOUT)
+                                }
+                            },
+                            onDone = { editing = false },
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 4.dp)
+                                .width(240.dp),
+                        )
+                        return@Box
+                    }
+
                     GamepadScreen(
                         layout = layout,
                         onStateChange = { service?.updateState(it) },
@@ -162,6 +239,8 @@ class MainActivity : ComponentActivity() {
                         hosts = bonded,
                         layouts = library.all,
                         selectedLayoutId = layout.id,
+                        currentLayoutName = layout.name,
+                        canEditLayout = library.isEditable(layout.id),
                         openPanel = openPanel,
                         onOpenPanelChange = { panel ->
                             openPanel = panel
@@ -188,6 +267,17 @@ class MainActivity : ComponentActivity() {
                             // Switching rebuilds the router, which drops its pointer bindings
                             // without ever emitting a release — so whatever the last report
                             // asserted would stay asserted on the host.
+                            service?.updateState(GamepadState.NEUTRAL)
+                        },
+                        onNewEmptyLayout = {
+                            startEditing(emptyUserLayout(library.uniqueName("New layout")))
+                        },
+                        onCopyCurrentLayout = {
+                            startEditing(layout.copyAsUser(library.uniqueName("${layout.name} copy")))
+                        },
+                        onEditLayout = {
+                            selectedControl = null
+                            editing = true
                             service?.updateState(GamepadState.NEUTRAL)
                         },
                         onQuit = {

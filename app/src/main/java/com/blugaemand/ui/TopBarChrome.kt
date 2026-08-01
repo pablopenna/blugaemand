@@ -12,10 +12,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,10 +31,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.blugaemand.ui.theme.OverlayColors
 
 /** How long a pill must be held before its panel opens. */
@@ -139,4 +146,63 @@ fun PanelCard(
             content = content,
         )
     }
+}
+
+/**
+ * One row of a panel: an optional gutter glyph, the label, and an optional trailing glyph. The
+ * gutter is a fixed slot rather than a prefix on the label, so labels line up under each other
+ * whether or not their row has one.
+ *
+ * Here rather than in one panel's file because the menu and the editor are both lists of these, and
+ * a second implementation would drift from the first in exactly the way two hand-matched greys do.
+ * [color] defaults to the button's own, the accent every panel already uses.
+ */
+@Composable
+fun PanelEntry(
+    label: String,
+    modifier: Modifier = Modifier,
+    leading: String? = null,
+    trailing: String? = null,
+    color: Color = Color.Unspecified,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    TextButton(onClick = onClick, enabled = enabled, modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (leading != null) {
+                Text(
+                    text = leading,
+                    fontSize = 12.sp,
+                    color = color,
+                    modifier = Modifier.width(12.dp),
+                )
+            }
+            Text(
+                text = label,
+                fontSize = 12.sp,
+                color = color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (trailing != null) {
+                Text(text = trailing, fontSize = 12.sp, color = color)
+            }
+        }
+    }
+}
+
+/** A line of explanation under a panel's rows, in the quieter of the two overlay text colours. */
+@Composable
+fun PanelCaption(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        fontSize = 11.sp,
+        color = OverlayColors.Caption,
+        modifier = modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+    )
 }

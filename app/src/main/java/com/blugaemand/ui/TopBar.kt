@@ -30,6 +30,8 @@ fun TopBar(
     hosts: List<HostOption>,
     layouts: List<GamepadLayout>,
     selectedLayoutId: String,
+    currentLayoutName: String,
+    canEditLayout: Boolean,
     openPanel: TopPanel?,
     onOpenPanelChange: (TopPanel?) -> Unit,
     onFixBlocker: () -> Unit,
@@ -37,6 +39,9 @@ fun TopBar(
     onConnect: (HostOption) -> Unit,
     onRetry: () -> Unit,
     onSelectLayout: (GamepadLayout) -> Unit,
+    onNewEmptyLayout: () -> Unit,
+    onCopyCurrentLayout: () -> Unit,
+    onEditLayout: () -> Unit,
     onQuit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -87,8 +92,24 @@ fun TopBar(
             MenuPanel(
                 layouts = layouts,
                 selectedLayoutId = selectedLayoutId,
+                currentLayoutName = currentLayoutName,
+                canEdit = canEditLayout,
                 onSelectLayout = { layout ->
                     onSelectLayout(layout)
+                    onOpenPanelChange(null)
+                },
+                // Creating one selects it and opens the editor, so the menu has nothing left to
+                // show and closing it is what gets it out of the way of the pad underneath.
+                onNewEmptyLayout = {
+                    onNewEmptyLayout()
+                    onOpenPanelChange(null)
+                },
+                onCopyCurrentLayout = {
+                    onCopyCurrentLayout()
+                    onOpenPanelChange(null)
+                },
+                onEditLayout = {
+                    onEditLayout()
                     onOpenPanelChange(null)
                 },
                 onQuit = onQuit,
