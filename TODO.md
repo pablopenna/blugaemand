@@ -56,17 +56,29 @@ turns up along the way.
       tested on the JVM and `EditorScreen` is only gestures. **Built-ins are read-only**; you make
       your own from empty or as a copy, and `LayoutLibrary.isEditable` is the one place that line
       is drawn
-- [x] **Add / remove controls**, with `missingButtons()` surfaced as a caption in the editor. A
-      control is added where `DEFAULT_LAYOUT` has it, so building an empty layout up one control at
-      a time reconstructs the default pad
-- [ ] Editor extras that did not make the first cut: undo, duplicating a control, nudging a
-      selection with arrows, and a real colour picker rather than twelve presets
+- [x] **Add / remove controls**, with `missingButtons()` surfaced as a caption in the editor.
+      **Adding is pick-then-tap**: nothing is created until the drop point is known, with a preview
+      following the finger, because a control's default position is almost never the wanted one. Any
+      control can be placed **more than once** — the id says what a control does, its index says
+      which one it is
+- [x] **Control groups** — `ControlGroups.ALL` places several at once: the face diamond, a
+      four-button D-pad, the centre three, and each shoulder pair side by side or stacked. A
+      placement shortcut only; once dropped the members are ordinary controls, so a layout stays a
+      flat list and the editor keeps one selection model
+- [x] **A D-pad can be four separate buttons** as well as one cross, both sending one hat.
+      `Hat.of` was already there and unused, so the router folds the held arms through it
+- [ ] Editor extras that did not make the first cut: undo, moving a group as a unit after it has
+      been placed, nudging a selection with arrows, and a real colour picker rather than twelve
+      presets
 - [ ] More built-in layouts to switch between — Nintendo is the obvious next one, then Steam Deck.
       The art is in the same Kenney pack, and since PS5 landed the shape is settled: convert the
       SVGs, add the `ControlIcon` names, write one pack file and one layout. Nintendo's own A/B/X/Y
       crossing is the part to think about, not the plumbing
 - [ ] D-pad glyph lighting the direction being pushed rather than the whole cross — the directional
-      art exists, but `drawControl` is told only whether the control is held, not which way
+      art exists, but `drawControl` is told only whether the control is held, not which way. The
+      four-button D-pad needs the same art and does not have it either: each arm is one control, so
+      *it* knows its direction, but no `ControlIcon` names a single arm yet. One conversion run
+      covers both
 - [ ] Import / export layouts as JSON so they can be shared. The format exists and is versioned;
       what is left is the file picker and the share sheet. Two things to decide there: what to do
       with an incoming id that collides with a local layout (copies already take a fresh UUID, so

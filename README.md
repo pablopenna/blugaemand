@@ -113,7 +113,7 @@ host. Only the service and the Compose layer touch the framework.
 | Package | Android-free | Contents |
 |---|---|---|
 | `hid/` | mostly | `GamepadState`, `GamepadProfile`, `GenericHidProfile` are pure Kotlin; `HidGamepadService` is not |
-| `input/` | yes | `ControlSpec`, `ControlIcon`, `ArtPack`, `GamepadLayout`, `LayoutStyle`, `LayoutJson`, `LayoutLibrary`, `LayoutEdits`, `ResolvedLayout`, `TouchRouter`, `art/`, `layouts/` |
+| `input/` | yes | `ControlSpec`, `ControlIcon`, `ArtPack`, `GamepadLayout`, `LayoutStyle`, `LayoutJson`, `LayoutLibrary`, `LayoutEdits`, `Placement`, `ControlGroups`, `ResolvedLayout`, `TouchRouter`, `art/`, `layouts/` |
 | `data/` | no | `LayoutStore` — the only file outside `hid/` and `ui/` that touches Android |
 | `ui/` | no | `GamepadScreen`, `EditorScreen`, `ControlRenderers`, `PadStyle`, `ControlIcons`, `TopBar`, `TopBarChrome`, `ConnectionBar`, `MenuBar`, `EditorBar`, `theme/` |
 
@@ -164,6 +164,8 @@ host. Only the service and the Compose layer touch the framework.
   `isEditable` is the single place that line is drawn.
 - `LayoutEdits` — every edit the editor makes, as arithmetic on plain data. This is where the
   editor is actually tested.
+- `Placement` / `ControlGroups` — controls waiting to be dropped, positioned relative to the point
+  they will land on, and the built-in arrangements of several at once.
 
 **`data/`**
 
@@ -190,16 +192,22 @@ host. Only the service and the Compose layer touch the framework.
   state is one nullable `TopPanel`, not a boolean each, so "only one open at a time" is structural.
   The pills share a `Row` and the panels hang beneath it: side-by-side pill-and-panel columns would
   change width as a panel opened and slide the pills sideways every time.
-- `TopBarChrome` — `HoldPill`, `PanelCard`, `PanelEntry` and `PanelCaption`: the shape, the rows and
-  the gesture every pill and panel is built from. A second pill that reimplemented the hold would
-  drift from the first; see the trap below for why that gesture is not worth writing twice, and the
-  same goes for the rows now that two panels are lists of them.
+- `TopBarChrome` — `HoldPill`, `TapPill`, `PillRow`, `Modifier.pillSurface`, `PanelCard`,
+  `PanelEntry` and `PanelCaption`: the shape, the rows and the gestures every pill and panel is
+  built from. A second pill that reimplemented the hold would drift from the first; see the trap
+  below for why that gesture is not worth writing twice, and the same goes for the rows now that
+  three panels are lists of them. The pill's look is a `Modifier` rather than something `PillRow`
+  applies itself, because it has to come *before* whatever gesture or decoration the caller adds or
+  the fill paints over it — `HoldPill`'s progress bar is drawn by exactly such a decoration, and
+  wrapping instead would have needed `Modifier.then`, which crashes lint.
 - `ConnectionBar` — `ConnectionPill` and `ConnectionPanel`: status, pairing and reconnection.
 - `MenuBar` — `MenuPill` and `MenuPanel`: picking a layout, making one, editing, and quitting. The
   panel's page state lives inside the composable, which is only composed while open, so the menu
   reopens on its root page without a reset that would visibly flip pages mid-close.
-- `EditorBar` — the editor's own panel. Deliberately not a `HoldPill`: the hold exists so a stray
-  tap cannot throw a panel up mid-game, and nothing being edited is connected to anything.
+- `EditorBar` — the editor's own pill and panel. **Collapsed by default**, because an always-open
+  panel covers the top centre and makes the controls under it unselectable. Built on `TapPill`
+  rather than `HoldPill`: the hold exists so a stray tap cannot throw a panel up mid-game, and
+  nothing being edited is connected to anything, so it would be a tax with nothing bought by it.
 
 ### Two presentations
 
@@ -256,8 +264,29 @@ someone else can never land on top of one already here. It keeps everything else
 a copy of the PS5 pad is a PlayStation-looking pad you can then rearrange.
 
 **Editing is four operations** — move, resize, add, remove — plus the two colours and a rename. All
-of the arithmetic is in `LayoutEdits`, which is plain Kotlin, so the editor is tested on the JVM and
-`EditorScreen` is nothing but gestures. Three decisions in there are easy to undo by accident:
+of the arithmetic is in `LayoutEdits` and `Placement`, which are plain Kotlin, so the editor is
+tested on the JVM and `EditorScreen` is nothing but gestures.
+
+**A control's identity, for editing, is its index in `layout.controls` — not its `ControlId`.** The
+same id may appear more than once: two A buttons, one under each thumb, is a reasonable pad. So the
+id says what a control *does* and the index says which one it *is*. Anything about a particular
+control keys on the index (selection, moving, resizing, the pressed highlight); anything about the
+button it drives keys on the id (what the host is sent, which glyph an art pack supplies). Getting
+that backwards is not a compile error — it looks like pressing one A button lighting both.
+
+**Adding is pick, then tap where it goes.** A control's default position is almost never the wanted
+one, so nothing is created until the drop point is known, and a preview of what is coming follows
+the finger. `Placement` is the shape of that: controls positioned relative to the point they will be
+dropped on, which makes a single control a placement of one and lets groups reuse the whole path.
+
+**A control group is a placement shortcut and nothing more.** `ControlGroups.ALL` holds seven — the
+face diamond, a four-arm D-pad, the centre three, and each shoulder pair in both arrangements — most
+derived from `DEFAULT_LAYOUT` so tuning it moves them. Once dropped, the members are ordinary
+controls: nothing records that they arrived together, and nothing in the saved layout says so. That
+keeps a layout a flat list of controls, which is what it serialises as, and the editor down to one
+selection model.
+
+Decisions in there that are easy to undo by accident:
 
 - **The grid is in pixels, off the layout unit.** Defined in normalised coordinates it would not be
   square — x divides by width and y by height, so on a 16:9 screen the cells would be nearly twice
@@ -271,12 +300,44 @@ of the arithmetic is in `LayoutEdits`, which is plain Kotlin, so the editor is t
   never moves at all.
 - **A move is clamped so the control stays wholly on screen**, not merely so its centre stays in
   `0..1`. Half a button hanging over the edge cannot be touched, and reads as a bug.
+- **A group snaps as a unit.** The drop point is snapped once and the members keep their offsets
+  from it; snapping each member separately would pull the arrangement out of shape. Clamping is the
+  one thing that can distort a group, and only at the very edge.
+- **A group centres on its bounding box, not on the average of its positions.** With an odd member
+  out — the centre three, where two are small and one is not — an average drifts towards the
+  crowded side and the group lands beside the thumb rather than under it.
 
-**A layout added by the editor lands where `DEFAULT_LAYOUT` has it**, size and label included, so
-building an empty layout up one control at a time reconstructs the default pad instead of piling
-everything in the middle. `L2` and `R2` are the only two of `ControlId.ALL` the default does not
-place — it reaches the triggers through `ControlId.Trigger` — and they are the only two with a
-fallback spec, derived rather than listed so that a control with no home fails at class-load.
+**A control arrives at the size and label `DEFAULT_LAYOUT` gives it** — only the position is chosen,
+which is what stops a fresh control turning up as an unlabelled speck. Six of `ControlId.ALL` are not
+on the default pad and carry a fallback spec instead: `L2` and `R2`, whose analog halves it reaches
+through `ControlId.Trigger`, and the four D-pad arms. The fallbacks are derived from `ControlId.ALL`
+rather than listed, so a control added to that list with no home fails at class-load rather than the
+first time someone tries to add it.
+
+### Two kinds of D-pad
+
+A layout can have either, and both send the host the same thing — one hat.
+
+| | `ControlId.Dpad` | four `ControlId.DpadButton`s |
+|---|---|---|
+| On screen | one cross | four separate controls, put where you like |
+| Diagonals | roll the thumb across it | hold two arms |
+| Resolved by | sector, from where in the cross the touch landed | `Hat.of(up, down, left, right)` |
+
+The four-button form costs almost nothing: `Hat.of` was already in `hid/GamepadState.kt`, already
+tested for diagonals and opposing-press cancellation, and unused. The hat has always been computed
+in `TouchRouter`, so neither the descriptor nor the encoder knows the difference.
+
+Two consequences worth keeping:
+
+- **The hat is settled after the whole binding loop, not inside it.** One arm on its own says nothing
+  about the value — it takes all of them together, which is also what makes opposing arms cancel
+  rather than the last one read winning.
+- **A held cross beats the arms.** A layout carrying both is one where the cross is the deliberate
+  control, and a stray arm should not override a thumb already on it.
+
+No art pack names the arms, so they draw as shapes with arrow labels; per-arm art is still on the
+backlog.
 
 User layouts are deliberately allowed to be **incomplete, empty or overlapping**. The layout-sanity
 tests apply to `Layouts.ALL` only; `missingButtons()` is surfaced in the editor as a caption, which
@@ -407,7 +468,17 @@ edit the layout editor makes — all on the JVM:
   saving replaces in place and keeps its position rather than shuffling the menu under a thumb.
 - `LayoutEditsTest` — everything a drag, a pinch, an add and a remove do, on a 1000×500 surface that
   makes the layout unit exactly 500 and the grid step exactly 25. The round-trip test (move by
-  `(dx, dy)`, then by `(-dx, -dy)`) is the one that catches an axis divided by the wrong dimension.
+  `(dx, dy)`, then by `(-dx, -dy)`) is the one that catches an axis divided by the wrong dimension,
+  and several exist only to hold the line that controls are addressed by index — *moving one copy
+  leaves the other where it is* is the one that fails if that slips.
+- `PlacementTest` — that something lands centred on the point it was dropped on, that a group keeps
+  its arrangement wherever it goes and snaps as a unit, that nothing ends up part-way off screen,
+  and that the preview shows exactly what placing would add. A preview that disagreed with the
+  result would be worse than no preview, since it is what the finger is aiming with.
+- `ControlGroupsTest` — the catalog's invariants: distinct names, more than one control each, no
+  duplicates within a group, nothing stacked on anything else, and every group centred on the
+  origin. Most groups derive from `DEFAULT_LAYOUT`, so these also fail if a control is renamed or
+  dropped from the default pad, rather than at the moment someone taps the group that wanted it.
 
 ---
 
@@ -459,14 +530,18 @@ The three built-ins cannot be changed — make your own instead:
 
 1. **Hold** the ☰ Menu pill, then **Layouts → New layout**, and pick either **Empty** or **Copy of**
    whichever layout is showing. Either one is selected and opens the editor straight away.
-2. **Drag** a control to move it, **pinch** it to resize. **Grid** toggles snapping, which applies to
+2. The **☰ Edit** pill opens the menu and closes again, so the pad underneath stays reachable.
+3. **Drag** a control to move it, **pinch** it to resize. **Grid** toggles snapping, which applies to
    sizes as well as positions, so two buttons meant to match can be made to match.
-3. **Add control** places anything not already on the pad, where the default layout has it.
-   **Remove** takes out whatever is selected. A caption names any button left with no control — a
+4. **Add control** then **tap the pad where it should go** — a preview follows your finger until you
+   lift. Any control can be added more than once. **Add control group** does the same for several at
+   a time: the face diamond, a four-button D-pad, the centre three, or a shoulder pair side by side
+   or stacked. Once dropped they are ordinary controls and move separately.
+5. **Remove** takes out whatever is selected. A caption names any button left with no control — a
    warning, not an error.
-4. **Colours** picks the resting and held fills, on a colours-mode layout. A layout copied from Xbox
+6. **Colours** picks the resting and held fills, on a colours-mode layout. A layout copied from Xbox
    or PS5 draws its art's own, so it has none to pick.
-5. **Done** goes back to the pad. Everything is saved as you go; **Delete layout** asks first,
+7. **Done** goes back to the pad. Everything is saved as you go; **Delete layout** asks first,
    because there is no undo.
 
 To reach the editor again later, select the layout in the menu — *Edit layout* appears on the root
