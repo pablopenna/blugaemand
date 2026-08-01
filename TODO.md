@@ -18,8 +18,8 @@ turns up along the way.
       include the HID Device profile (`bluetooth.profile.hid.device.enabled: true`)
 - [x] **Verified end-to-end against a Linux host** — enumerates as `BLUETOOTH HID v0.00 Gamepad`,
       creates `js0`; all 13 buttons and all 8 axes land on the intended evdev codes (see below)
-- [ ] **Verify on Windows** — pair, then check every control in `joy.cpl` → Properties
-- [ ] Tune the default layout against a real thumb once it has been held in landscape
+- [x] **Verify on Windows** — pair, then check every control in `joy.cpl` → Properties
+- [x] Tune the default layout against a real thumb once it has been held in landscape
 - [x] Investigated the trailing descriptor byte — unavoidable, see Known constraints
 
 ## Iteration 2 — Configurable layouts
