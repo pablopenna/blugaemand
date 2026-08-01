@@ -270,7 +270,11 @@ class MainActivity : ComponentActivity() {
                             service?.updateState(GamepadState.NEUTRAL)
                         },
                         onNewEmptyLayout = {
-                            startEditing(emptyUserLayout(library.uniqueName("New layout")))
+                            // Not "New layout", which is what the row that creates it is called --
+                            // the two sit on adjacent pages of the same menu, and two rows reading
+                            // the same thing while meaning different things is worse than either
+                            // name being slightly off.
+                            startEditing(emptyUserLayout(library.uniqueName("My layout")))
                         },
                         onCopyCurrentLayout = {
                             startEditing(layout.copyAsUser(library.uniqueName("${layout.name} copy")))

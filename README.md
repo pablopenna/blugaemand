@@ -504,13 +504,21 @@ Context worth having before starting, especially for a fresh session.
 Bluetooth radio. The encoder, descriptor and touch routing are deliberately Android-free so most
 logic can be verified with `./gradlew test` instead.
 
-**The development phone is a Xiaomi (HyperOS), which restricts adb in three ways:**
+**The development phone is a Xiaomi (HyperOS), which gates three adb capabilities behind Developer
+options rather than removing them.** All three have been observed failing, and all three work with
+the right toggles on — so a failure here is a setting, not a dead end:
 
-| Blocked | Consequence |
+| Needs | Symptom when off |
 |---|---|
-| `adb install` without *Install via USB* | `INSTALL_FAILED_USER_RESTRICTED`. Enable it in Developer options; `pm install` from the shell does not get around it. |
-| `pm grant` | `SecurityException`. Runtime permissions must be granted by tapping the dialog. |
-| `input tap` / input injection | `INJECT_EVENTS` denied, so the UI cannot be driven from a script. Anything requiring a touch has to be done by hand. |
+| *Install via USB* | `INSTALL_FAILED_USER_RESTRICTED`. `pm install` from the shell does not get around it. |
+| *USB debugging (Security settings)* | `pm grant` throws a `SecurityException`, and `input tap` / `input swipe` are denied `INJECT_EVENTS`. This is the toggle that decides whether the UI can be driven from a script at all. |
+| A signed-in Mi account | HyperOS asks for one before it will let the two above be enabled. |
+
+**With input injection on, the whole UI is scriptable**, which is worth setting up before any work on
+the pad or the editor — `adb shell input tap x y`, `input swipe x1 y1 x2 y2 ms` for drags and holds,
+and `adb exec-out screencap -p > shot.png` to see the result. That is how the menu panel's clipping
+was found and confirmed fixed. Coordinates are in physical pixels; `adb shell wm size` reports them
+the wrong way round in landscape, so take `cur=` from `adb shell dumpsys window displays` instead.
 
 **Verification techniques that have proved useful:**
 
