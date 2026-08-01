@@ -53,15 +53,12 @@ Three decisions in there are worth knowing about, all in
   to a gamepad collection (`BTN_SOUTH`, `BTN_EAST`, `BTN_C`, `BTN_NORTH`, …), which Android
   inherits. Windows numbers buttons positionally and does not care, so matching the convention costs
   nothing and means Linux and Android hosts label buttons correctly for free.
-- **X and Y are crossed in the Xbox layout, on purpose.** Xbox letters the face diamond by position
-  (Y north, X west); HID letters it by slot, because `BTN_X` is an alias of `BTN_NORTH` and `BTN_Y`
-  of `BTN_WEST` — a leftover from six-button A/B/C/X/Y/Z pads whose letters ran in numeric order.
-  Hosts report the alias, so wiring each key to its same-letter slot lands a press of X on the host
-  as Y and vice versa. `DEFAULT_LAYOUT` crosses the two `ControlId`s; `GamepadButton` keeps the
-  positional naming, since the face plate belongs to the layout and not to the wire format. A
-  Nintendo-style layout, which also swaps A and B, will do the same thing. **Anything keyed off a
-  face button has to follow the label, not the id** — that is why `XboxLayout`'s glyph table pairs
-  `GamepadButton.X` with the *Y* picture.
+- **Face buttons are named by position** — `SOUTH`, `EAST`, `NORTH`, `WEST` — because the letters
+  are not portable: Xbox puts Y north and X west, Nintendo swaps both pairs, and HID's legacy
+  aliases (`BTN_X` for `BTN_NORTH`, `BTN_Y` for `BTN_WEST`) are a third arrangement again. Hosts
+  report the aliases, so `DEFAULT_LAYOUT` puts its Y key on `WEST` and its X key on `NORTH`.
+  **Anything keyed off a face button follows the label, not the slot** — that is why `XboxLayout`'s
+  glyph table pairs `GamepadButton.WEST` with the *Y* picture.
 - **The hat carries a null-state flag**, which is what lets a value above the logical maximum mean
   "centred". Without it the D-pad rests stuck pointing north.
 

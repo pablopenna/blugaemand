@@ -22,20 +22,17 @@ class LayoutArtTest {
 
     @Test
     fun `the face buttons show the letter they are labelled with, not the one they drive`() {
-        // The layout crosses X and Y so that hosts report the letter the player pressed: the key
-        // labelled Y drives GamepadButton.X. Anything keyed off these controls has to follow the
-        // label, so the control driving GamepadButton.X is the one that must show the Y glyph.
-        // Pairing each id with its same-letter glyph is the obvious-looking mistake, and it puts
-        // the wrong letter under the player's thumb.
+        // The layout puts its Y key on GamepadButton.WEST, so that is the control that must carry
+        // the Y glyph. Matching glyph to slot puts the wrong letter under the player's thumb.
         val faces = XBOX_LAYOUT.controls.associateBy { it.label }
 
         val north = faces.getValue("Y")
-        assertEquals(ControlId.Button(GamepadButton.X), north.id)
+        assertEquals(ControlId.Button(GamepadButton.WEST), north.id)
         assertEquals(ControlIcon.XBOX_Y, north.icon)
         assertEquals(ControlIcon.XBOX_Y_PRESSED, north.iconPressed)
 
         val west = faces.getValue("X")
-        assertEquals(ControlId.Button(GamepadButton.Y), west.id)
+        assertEquals(ControlId.Button(GamepadButton.NORTH), west.id)
         assertEquals(ControlIcon.XBOX_X, west.icon)
         assertEquals(ControlIcon.XBOX_X_PRESSED, west.iconPressed)
 

@@ -12,11 +12,9 @@ import com.blugaemand.input.LayoutStyle
  * so a press reads as the button filling in; the face buttons additionally take on their real Xbox
  * colours.
  *
- * **The face buttons follow the label, not the id.** [DEFAULT_LAYOUT] crosses X and Y — the key
- * labelled Y drives [GamepadButton.X] so that hosts report a Y — so the key driving
- * `GamepadButton.X` is the one that has to show the *Y* glyph. Pairing each id with its same-letter
- * glyph is the obvious-looking mistake and it puts the wrong letter under the player's thumb on
- * every host. Guarded by `LayoutArtTest`.
+ * **The face buttons follow the label, not the slot.** [DEFAULT_LAYOUT] puts its Y key on
+ * [GamepadButton.WEST], so that is the control that has to show the *Y* glyph. Guarded by
+ * `LayoutArtTest`.
  *
  * Sticks are absent deliberately: the pack has only static pictures of a stick, and nothing in it
  * can show a knob displaced from centre, so they stay drawn in both modes.
@@ -26,10 +24,10 @@ import com.blugaemand.input.LayoutStyle
  */
 private val XBOX_ICONS: Map<ControlId, Pair<ControlIcon, ControlIcon?>> = mapOf(
     // Face buttons — crossed, see above.
-    ControlId.Button(GamepadButton.X) to (ControlIcon.XBOX_Y to ControlIcon.XBOX_Y_PRESSED),
-    ControlId.Button(GamepadButton.Y) to (ControlIcon.XBOX_X to ControlIcon.XBOX_X_PRESSED),
-    ControlId.Button(GamepadButton.A) to (ControlIcon.XBOX_A to ControlIcon.XBOX_A_PRESSED),
-    ControlId.Button(GamepadButton.B) to (ControlIcon.XBOX_B to ControlIcon.XBOX_B_PRESSED),
+    ControlId.Button(GamepadButton.WEST) to (ControlIcon.XBOX_Y to ControlIcon.XBOX_Y_PRESSED),
+    ControlId.Button(GamepadButton.NORTH) to (ControlIcon.XBOX_X to ControlIcon.XBOX_X_PRESSED),
+    ControlId.Button(GamepadButton.SOUTH) to (ControlIcon.XBOX_A to ControlIcon.XBOX_A_PRESSED),
+    ControlId.Button(GamepadButton.EAST) to (ControlIcon.XBOX_B to ControlIcon.XBOX_B_PRESSED),
 
     // Shoulders and triggers.
     ControlId.Trigger(Side.LEFT) to (ControlIcon.XBOX_LT to ControlIcon.XBOX_LT_PRESSED),

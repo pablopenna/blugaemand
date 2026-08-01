@@ -38,32 +38,26 @@ val DEFAULT_LAYOUT = GamepadLayout(
         // buttons strictly need so there is a clear gap between neighbours — at these sizes a
         // thumb covers far more than one button's worth of glass.
         //
-        // X and Y are deliberately crossed. Xbox letters the diamond by position — Y north, X
-        // west — while HID letters it by slot: `BTN_X` is an alias of `BTN_NORTH` and `BTN_Y` of
-        // `BTN_WEST`, a leftover from six-button A/B/C/X/Y/Z pads where the letters ran in numeric
-        // order rather than around a diamond. Hosts report the alias, so wiring each key to its
-        // same-letter slot makes a press of X arrive as Y and vice versa. The face plate is a
-        // property of the layout, not of the wire format, so the crossing belongs here rather than
-        // in [GamepadButton] — a Nintendo-style layout, which also swaps A and B, will do the same
-        // thing. Anything keyed off these controls has to follow the label, not the id; see the
-        // icon table in [XBOX_LAYOUT].
+        // The north and west keys drive each other's slot on purpose: hosts read the legacy
+        // aliases, where BTN_NORTH is X and BTN_WEST is Y, so the key labelled Y has to sit on
+        // WEST to arrive as a Y. Anything keyed off these two follows the label, not the slot.
         ControlSpec(
-            id = ControlId.Button(GamepadButton.X),
+            id = ControlId.Button(GamepadButton.WEST),
             shape = ControlSpec.Shape.Circle(0.870f, 0.295f, radius = 0.072f),
             label = "Y",
         ),
         ControlSpec(
-            id = ControlId.Button(GamepadButton.Y),
+            id = ControlId.Button(GamepadButton.NORTH),
             shape = ControlSpec.Shape.Circle(0.812f, 0.420f, radius = 0.072f),
             label = "X",
         ),
         ControlSpec(
-            id = ControlId.Button(GamepadButton.B),
+            id = ControlId.Button(GamepadButton.EAST),
             shape = ControlSpec.Shape.Circle(0.928f, 0.420f, radius = 0.072f),
             label = "B",
         ),
         ControlSpec(
-            id = ControlId.Button(GamepadButton.A),
+            id = ControlId.Button(GamepadButton.SOUTH),
             shape = ControlSpec.Shape.Circle(0.870f, 0.545f, radius = 0.072f),
             label = "A",
         ),

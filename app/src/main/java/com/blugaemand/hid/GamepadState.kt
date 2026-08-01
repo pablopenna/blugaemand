@@ -53,12 +53,16 @@ enum class Hat(val value: Int) {
  * and saves work when the other hosts land.
  *
  * Buttons 3, 6 and 16 are intentionally unused: skipping them is what keeps the rest aligned.
+ *
+ * The face buttons are named by position rather than by letter, since the letters are not portable:
+ * Xbox puts Y north and X west, Nintendo swaps both pairs, and HID's own aliases are a third
+ * arrangement again. Which glyph a slot wears belongs to the layout's face plate.
  */
 enum class GamepadButton(val hidButtonNumber: Int) {
-    A(1), // BTN_SOUTH
-    B(2), // BTN_EAST
-    Y(4), // BTN_NORTH
-    X(5), // BTN_WEST
+    SOUTH(1), // BTN_SOUTH
+    EAST(2), // BTN_EAST
+    NORTH(4), // BTN_NORTH, aliased BTN_X
+    WEST(5), // BTN_WEST, aliased BTN_Y
     L1(7), // BTN_TL
     R1(8), // BTN_TR
     L2(9), // BTN_TL2  - digital companion to the analog left trigger

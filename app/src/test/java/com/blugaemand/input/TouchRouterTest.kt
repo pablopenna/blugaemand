@@ -34,11 +34,11 @@ class TouchRouterTest {
                 ControlSpec.Shape.Stick(0.2f, 0.5f, radius = 0.2f, knobRadius = 0.08f),
             ),
             ControlSpec(
-                ControlId.Button(GamepadButton.A),
+                ControlId.Button(GamepadButton.SOUTH),
                 ControlSpec.Shape.Circle(0.8f, 0.5f, radius = 0.1f),
             ),
             ControlSpec(
-                ControlId.Button(GamepadButton.B),
+                ControlId.Button(GamepadButton.EAST),
                 ControlSpec.Shape.Circle(0.9f, 0.5f, radius = 0.1f),
             ),
             ControlSpec(ControlId.Dpad, ControlSpec.Shape.Dpad(0.2f, 0.9f, radius = 0.1f)),
@@ -59,7 +59,7 @@ class TouchRouterTest {
     fun `touching a button presses it`() {
         val router = router()
         assertTrue(router.down(1, 800f, 250f))
-        assertTrue(router.state().isPressed(GamepadButton.A))
+        assertTrue(router.state().isPressed(GamepadButton.SOUTH))
     }
 
     @Test
@@ -78,19 +78,19 @@ class TouchRouterTest {
         router.move(1, 0f, 0f)
 
         val state = router.state()
-        assertTrue("A should still be held", state.isPressed(GamepadButton.A))
-        assertFalse("sliding onto empty space must not press anything else", state.isPressed(GamepadButton.B))
+        assertTrue("SOUTH should still be held", state.isPressed(GamepadButton.SOUTH))
+        assertFalse("sliding onto empty space must not press anything else", state.isPressed(GamepadButton.EAST))
     }
 
     @Test
     fun `a pointer sliding onto a neighbour does not switch controls`() {
         val router = router()
         router.down(1, 800f, 250f)
-        router.move(1, 900f, 250f) // directly over B
+        router.move(1, 900f, 250f) // directly over EAST
 
         val state = router.state()
-        assertTrue(state.isPressed(GamepadButton.A))
-        assertFalse(state.isPressed(GamepadButton.B))
+        assertTrue(state.isPressed(GamepadButton.SOUTH))
+        assertFalse(state.isPressed(GamepadButton.EAST))
     }
 
     @Test
@@ -129,13 +129,13 @@ class TouchRouterTest {
         val state = router.state()
         assertEquals(GamepadState.AXIS_MAX, state.leftStickX)
         assertEquals(GamepadState.AXIS_CENTER, state.leftStickY)
-        assertTrue(state.isPressed(GamepadButton.A))
+        assertTrue(state.isPressed(GamepadButton.SOUTH))
 
         // Releasing one must leave the other untouched.
         router.up(2)
         val after = router.state()
         assertEquals(GamepadState.AXIS_MAX, after.leftStickX)
-        assertFalse(after.isPressed(GamepadButton.A))
+        assertFalse(after.isPressed(GamepadButton.SOUTH))
     }
 
     @Test
@@ -147,8 +147,8 @@ class TouchRouterTest {
         router.down(4, 500f, 50f) // left trigger
 
         val state = router.state()
-        assertTrue(state.isPressed(GamepadButton.A))
-        assertTrue(state.isPressed(GamepadButton.B))
+        assertTrue(state.isPressed(GamepadButton.SOUTH))
+        assertTrue(state.isPressed(GamepadButton.EAST))
         assertEquals(GamepadState.AXIS_MAX, state.leftTrigger)
         assertEquals(4, router.activeControls().size)
     }
@@ -308,14 +308,13 @@ class TouchRouterTest {
     @Test
     fun `the built-in layout crosses X and Y onto the slots hosts report them as`() {
         // BTN_X aliases BTN_NORTH and BTN_Y aliases BTN_WEST, so the key labelled Y has to drive
-        // GamepadButton.X for the host to report a Y. Wiring each key to its same-letter slot is
-        // the obvious-looking mistake, and it swaps the two on every host.
+        // GamepadButton.WEST for the host to report a Y.
         val faces = DEFAULT_LAYOUT.controls.associateBy { it.label }
         val north = faces.getValue("Y")
         val west = faces.getValue("X")
 
-        assertEquals(ControlId.Button(GamepadButton.X), north.id)
-        assertEquals(ControlId.Button(GamepadButton.Y), west.id)
+        assertEquals(ControlId.Button(GamepadButton.WEST), north.id)
+        assertEquals(ControlId.Button(GamepadButton.NORTH), west.id)
 
         // Guards the premise: Y really is the northern key and X the western one.
         assertTrue("Y sits above X", north.shape.centerY < west.shape.centerY)

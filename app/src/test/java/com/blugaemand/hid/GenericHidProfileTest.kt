@@ -53,10 +53,10 @@ class GenericHidProfileTest {
     @Test
     fun `button numbering follows the hid-input gamepad order`() {
         // Locks in the ordering Linux and Android rely on to label buttons without extra config.
-        assertEquals(1, GamepadButton.A.hidButtonNumber)
-        assertEquals(2, GamepadButton.B.hidButtonNumber)
-        assertEquals(4, GamepadButton.Y.hidButtonNumber)
-        assertEquals(5, GamepadButton.X.hidButtonNumber)
+        assertEquals(1, GamepadButton.SOUTH.hidButtonNumber)
+        assertEquals(2, GamepadButton.EAST.hidButtonNumber)
+        assertEquals(4, GamepadButton.NORTH.hidButtonNumber)
+        assertEquals(5, GamepadButton.WEST.hidButtonNumber)
         assertEquals(7, GamepadButton.L1.hidButtonNumber)
         assertEquals(8, GamepadButton.R1.hidButtonNumber)
         assertEquals(11, GamepadButton.BACK.hidButtonNumber)
@@ -69,11 +69,11 @@ class GenericHidProfileTest {
     @Test
     fun `several buttons combine into one mask`() {
         val state = GamepadState.NEUTRAL
-            .withButton(GamepadButton.A, true)
+            .withButton(GamepadButton.SOUTH, true)
             .withButton(GamepadButton.START, true)
         val report = encode(state)
         val mask = report.u(7) or (report.u(8) shl 8)
-        assertEquals(GamepadButton.A.bit or GamepadButton.START.bit, mask)
+        assertEquals(GamepadButton.SOUTH.bit or GamepadButton.START.bit, mask)
     }
 
     @Test
