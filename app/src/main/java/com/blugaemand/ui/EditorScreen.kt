@@ -25,11 +25,14 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
 import com.blugaemand.input.GamepadLayout
+import com.blugaemand.input.Placement
 import com.blugaemand.input.ResolvedControl
 import com.blugaemand.input.ResolvedLayout
 import com.blugaemand.input.gridStep
 import com.blugaemand.input.movedControl
+import com.blugaemand.input.previewOf
 import com.blugaemand.input.resizedControl
+import com.blugaemand.input.withPlacement
 import com.blugaemand.ui.theme.OverlayColors
 import com.blugaemand.ui.theme.PadColors
 
@@ -52,6 +55,13 @@ fun EditorScreen(
     selected: Int?,
     onSelect: (Int) -> Unit,
     onLayoutChange: (GamepadLayout) -> Unit,
+    /** Waiting to be dropped, if anything is. While set, a touch places rather than drags. */
+    pending: Placement?,
+    /**
+     * The layout with [pending] dropped where the finger lifted. Done here rather than by the
+     * caller because the drop point is in pixels, and the pixels are this composable's business.
+     */
+    onPlaced: (GamepadLayout) -> Unit,
     snapToGrid: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -72,6 +82,13 @@ fun EditorScreen(
     val currentSnap by rememberUpdatedState(snapToGrid)
     val currentOnSelect by rememberUpdatedState(onSelect)
     val currentOnLayoutChange by rememberUpdatedState(onLayoutChange)
+    val currentPending by rememberUpdatedState(pending)
+    val currentOnPlaced by rememberUpdatedState(onPlaced)
+
+    // Where the thing waiting to be dropped is currently hovering. Null means untouched so far, in
+    // which case it shows in the middle of the screen -- somewhere visible, so that what is about to
+    // be added can be seen before a finger goes anywhere near it.
+    var previewAt by remember { mutableStateOf<Offset?>(null) }
 
     Box(
         modifier = modifier
@@ -91,12 +108,33 @@ fun EditorScreen(
                         // the editor bar sits over this canvas and has to win the taps that land on
                         // it, which is exactly what deferring to the normal order gives.
                         val down = awaitFirstDown()
-                        // Captured for the whole gesture. Deltas accumulate and are applied to
-                        // this, rather than each frame's delta being applied to the result of the
-                        // last: with snapping on, a drag slower than half a grid step per frame
-                        // would otherwise round back to where it started every time and the
-                        // control would never move at all.
+                        // Captured for the whole gesture; see the note on accumulating deltas below.
                         val base = currentResolved ?: return@awaitEachGesture
+
+                        // Placing takes over the whole surface, so a touch means one thing at a
+                        // time: while something is waiting to be dropped, nothing is being dragged.
+                        val placing = currentPending
+                        if (placing != null) {
+                            previewAt = down.position
+                            do {
+                                val event = awaitPointerEvent()
+                                event.changes.lastOrNull()?.let { previewAt = it.position }
+                                event.changes.forEach { it.consume() }
+                            } while (event.changes.any { it.pressed })
+
+                            previewAt?.let {
+                                currentOnPlaced(
+                                    base.withPlacement(placing, it.x, it.y, currentSnap),
+                                )
+                            }
+                            previewAt = null
+                            return@awaitEachGesture
+                        }
+
+                        // Deltas accumulate and are applied to `base`, rather than each frame's
+                        // delta being applied to the result of the last: with snapping on, a drag
+                        // slower than half a grid step per frame would otherwise round back to
+                        // where it started every time and the control would never move at all.
                         val target = base.hitTest(down.position.x, down.position.y)
                             // A miss keeps whatever was selected -- losing the control you were
                             // working on to a fat-fingered tap would be worse than nothing
@@ -147,6 +185,17 @@ fun EditorScreen(
             }
 
             selected?.let { resolved.controls.getOrNull(it) }?.let { drawSelection(it) }
+
+            // Drawn last so it reads as sitting above the pad rather than as part of it. Each
+            // member is drawn as it will look, ringed in the accent -- the ring is what says "not
+            // yet", and showing the real control is what makes an arrangement worth previewing.
+            if (pending != null) {
+                val at = previewAt ?: Offset(size.width / 2f, size.height / 2f)
+                for (control in resolved.previewOf(pending, at.x, at.y, snapToGrid)) {
+                    drawControl(control, padStyle, false, null, textMeasurer)
+                    drawSelection(control)
+                }
+            }
         }
     }
 }

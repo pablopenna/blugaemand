@@ -24,15 +24,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.blugaemand.input.ControlGroups
 import com.blugaemand.input.ControlId
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutStyle
+import com.blugaemand.input.Placement
 import com.blugaemand.input.describe
 import com.blugaemand.input.missingButtons
 import com.blugaemand.ui.theme.OverlayColors
 
 /** Which page of the editor is showing. */
-private enum class EditorPage { Root, Add, Colours, Rename, ConfirmDelete }
+private enum class EditorPage { Root, Add, AddGroup, Colours, Rename, ConfirmDelete }
 
 /**
  * The editor's controls, on the same card every other panel uses.
@@ -53,7 +55,10 @@ fun EditorBar(
     snapToGrid: Boolean,
     onSnapToGridChange: (Boolean) -> Unit,
     onLayoutChange: (GamepadLayout) -> Unit,
-    onAddControl: (ControlId) -> Unit,
+    /** Waiting to be dropped, if anything is. */
+    pending: Placement?,
+    onStartPlacing: (Placement) -> Unit,
+    onCancelPlacing: () -> Unit,
     onRemoveSelected: () -> Unit,
     onDeleteLayout: () -> Unit,
     onDone: () -> Unit,
@@ -61,11 +66,25 @@ fun EditorBar(
 ) {
     var page by remember { mutableStateOf(EditorPage.Root) }
 
+    // While something is waiting to be dropped the panel gets out of the way and says only what it
+    // has to. The pad underneath is the thing being aimed at, and a full menu over it would be
+    // covering the place most people want to put something.
+    if (pending != null) {
+        PanelCard(modifier = modifier) {
+            PanelCaption("Tap the pad to place ${pending.name.lowercase()}.")
+            PanelEntry(label = "Cancel", leading = "✕", onClick = onCancelPlacing)
+        }
+        return
+    }
+
     PanelCard(modifier = modifier) {
         when (page) {
             EditorPage.Root -> {
                 PanelEntry(label = "Done", leading = "✓", onClick = onDone)
                 PanelEntry(label = "Add control", trailing = "›") { page = EditorPage.Add }
+                PanelEntry(label = "Add control group", trailing = "›") {
+                    page = EditorPage.AddGroup
+                }
                 val selectedSpec = selected?.let { layout.controls.getOrNull(it) }
                 PanelEntry(
                     label = selectedSpec?.let { "Remove ${it.id.describe()}" } ?: "Remove control",
@@ -105,7 +124,18 @@ fun EditorBar(
                 // buttons, one under each thumb -- so there is nothing to filter out.
                 ControlId.ALL.forEach { id ->
                     PanelEntry(label = id.describe()) {
-                        onAddControl(id)
+                        onStartPlacing(Placement.of(id))
+                        page = EditorPage.Root
+                    }
+                }
+            }
+
+            EditorPage.AddGroup -> {
+                PanelEntry(label = "Add control group", leading = "‹") { page = EditorPage.Root }
+                PanelCaption("Placed together, then moved separately.")
+                ControlGroups.ALL.forEach { group ->
+                    PanelEntry(label = group.name) {
+                        onStartPlacing(group)
                         page = EditorPage.Root
                     }
                 }

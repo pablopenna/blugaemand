@@ -44,6 +44,7 @@ import com.blugaemand.hid.HidStatus
 import com.blugaemand.input.ControlId
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutLibrary
+import com.blugaemand.input.Placement
 import com.blugaemand.input.copyAsUser
 import com.blugaemand.input.emptyUserLayout
 import com.blugaemand.input.layouts.DEFAULT_LAYOUT
@@ -137,6 +138,8 @@ class MainActivity : ComponentActivity() {
                 // than its ControlId -- the same control may be on the layout twice.
                 var selectedControl by remember { mutableStateOf<Int?>(null) }
                 var snapToGrid by remember { mutableStateOf(true) }
+                // What is waiting to be dropped on the pad, if anything.
+                var pendingPlacement by remember { mutableStateOf<Placement?>(null) }
 
                 /** Saves an edit and keeps it showing, which is one write per drag frame. */
                 fun saveEdit(edited: GamepadLayout) {
@@ -182,6 +185,15 @@ class MainActivity : ComponentActivity() {
                             selected = selectedControl,
                             onSelect = { selectedControl = it },
                             onLayoutChange = ::saveEdit,
+                            pending = pendingPlacement,
+                            onPlaced = { placed ->
+                                saveEdit(placed)
+                                // Appended, so the first of the new ones is where the old list
+                                // ended. Selected on arrival, so it can be resized without being
+                                // hunted for.
+                                selectedControl = layout.controls.size
+                                pendingPlacement = null
+                            },
                             snapToGrid = snapToGrid,
                         )
 
@@ -191,12 +203,9 @@ class MainActivity : ComponentActivity() {
                             snapToGrid = snapToGrid,
                             onSnapToGridChange = { snapToGrid = it },
                             onLayoutChange = ::saveEdit,
-                            onAddControl = { id ->
-                                saveEdit(layout.withControlAdded(id))
-                                // Appended, so it is the last one -- and selected on arrival, so it
-                                // can be dragged off the spot it landed on without hunting for it.
-                                selectedControl = layout.controls.size
-                            },
+                            pending = pendingPlacement,
+                            onStartPlacing = { pendingPlacement = it },
+                            onCancelPlacing = { pendingPlacement = null },
                             onRemoveSelected = {
                                 selectedControl?.let { saveEdit(layout.withControlRemovedAt(it)) }
                                 selectedControl = null
