@@ -43,13 +43,22 @@ data class GamepadLayout(
                 // Right hand: face buttons above, stick below. The diamond is spread wider than
                 // the buttons strictly need so there is a clear gap between neighbours — at these
                 // sizes a thumb covers far more than one button's worth of glass.
+                //
+                // X and Y are deliberately crossed. Xbox letters the diamond by position — Y north,
+                // X west — while HID letters it by slot: `BTN_X` is an alias of `BTN_NORTH` and
+                // `BTN_Y` of `BTN_WEST`, a leftover from six-button A/B/C/X/Y/Z pads where the
+                // letters ran in numeric order rather than around a diamond. Hosts report the
+                // alias, so wiring each key to its same-letter slot makes a press of X arrive as Y
+                // and vice versa. The face plate is a property of the layout, not of the wire
+                // format, so the crossing belongs here rather than in [GamepadButton] — a
+                // Nintendo-style layout, which also swaps A and B, will do the same thing.
                 ControlSpec(
-                    id = ControlId.Button(GamepadButton.Y),
+                    id = ControlId.Button(GamepadButton.X),
                     shape = ControlSpec.Shape.Circle(0.870f, 0.295f, radius = 0.072f),
                     label = "Y",
                 ),
                 ControlSpec(
-                    id = ControlId.Button(GamepadButton.X),
+                    id = ControlId.Button(GamepadButton.Y),
                     shape = ControlSpec.Shape.Circle(0.812f, 0.420f, radius = 0.072f),
                     label = "X",
                 ),

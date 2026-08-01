@@ -291,6 +291,23 @@ class TouchRouterTest {
     }
 
     @Test
+    fun `the built-in layout crosses X and Y onto the slots hosts report them as`() {
+        // BTN_X aliases BTN_NORTH and BTN_Y aliases BTN_WEST, so the key labelled Y has to drive
+        // GamepadButton.X for the host to report a Y. Wiring each key to its same-letter slot is
+        // the obvious-looking mistake, and it swaps the two on every host.
+        val faces = GamepadLayout.XBOX_DEFAULT.controls.associateBy { it.label }
+        val north = faces.getValue("Y")
+        val west = faces.getValue("X")
+
+        assertEquals(ControlId.Button(GamepadButton.X), north.id)
+        assertEquals(ControlId.Button(GamepadButton.Y), west.id)
+
+        // Guards the premise: Y really is the northern key and X the western one.
+        assertTrue("Y sits above X", north.shape.centerY < west.shape.centerY)
+        assertTrue("X sits left of Y", west.shape.centerX < north.shape.centerX)
+    }
+
+    @Test
     fun `the built-in layout has no overlapping controls`() {
         // Overlapping touch areas make hit-testing ambiguous and the pad frustrating to use.
         // Checked at a typical 1080p landscape size and at a squarer tablet ratio, since circular

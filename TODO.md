@@ -72,6 +72,10 @@ Unordered; pull from here whenever.
 Not bugs, and not fixable — recorded so they do not get rediscovered.
 
 - **No XInput on Windows.** Bluetooth HID cannot reach XInput; the pad is a DirectInput device.
+- **HID's X/Y are not Xbox's X/Y.** `BTN_X` aliases `BTN_NORTH` and `BTN_Y` aliases `BTN_WEST`, so a
+  face button wired to its same-letter slot arrives at the host as the other letter. The Xbox layout
+  crosses the two to compensate; every future layout has to make the same decision for its own face
+  plate. See Design decisions in the README.
 - **No BLE.** Android blocks apps from registering the HID service UUID on its GATT server, so
   HID-over-GATT is unavailable.
 - **No VID/PID control.** See Iteration 4.
