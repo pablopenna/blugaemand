@@ -24,7 +24,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
-import com.blugaemand.input.ControlId
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.ResolvedControl
 import com.blugaemand.input.ResolvedLayout
@@ -49,8 +48,9 @@ import com.blugaemand.ui.theme.PadColors
 @Composable
 fun EditorScreen(
     layout: GamepadLayout,
-    selected: ControlId?,
-    onSelect: (ControlId) -> Unit,
+    /** Index of the control being edited, in [GamepadLayout.controls]; see [ResolvedControl.index]. */
+    selected: Int?,
+    onSelect: (Int) -> Unit,
     onLayoutChange: (GamepadLayout) -> Unit,
     snapToGrid: Boolean,
     modifier: Modifier = Modifier,
@@ -102,7 +102,7 @@ fun EditorScreen(
                             // working on to a fat-fingered tap would be worse than nothing
                             // happening -- but only what you actually touched can be dragged.
                             ?: return@awaitEachGesture
-                        currentOnSelect(target.id)
+                        currentOnSelect(target.index)
 
                         var pan = Offset.Zero
                         var zoom = 1f
@@ -117,13 +117,13 @@ fun EditorScreen(
                             // the grid, and a plain drag would resize it on the way.
                             if (pan != Offset.Zero) {
                                 edited = base.movedControl(
-                                    target.id, pan.x, pan.y, currentSnap,
+                                    target.index, pan.x, pan.y, currentSnap,
                                 )
                             }
                             if (zoom != 1f) {
                                 edited = ResolvedLayout(
                                     edited ?: base.layout, base.width, base.height,
-                                ).resizedControl(target.id, zoom, currentSnap)
+                                ).resizedControl(target.index, zoom, currentSnap)
                             }
                             edited?.let(currentOnLayoutChange)
 
@@ -146,7 +146,7 @@ fun EditorScreen(
                 )
             }
 
-            resolved.controls.firstOrNull { it.id == selected }?.let { drawSelection(it) }
+            selected?.let { resolved.controls.getOrNull(it) }?.let { drawSelection(it) }
         }
     }
 }

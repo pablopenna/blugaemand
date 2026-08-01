@@ -20,7 +20,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
 import com.blugaemand.hid.GamepadState
-import com.blugaemand.input.ControlId
+import com.blugaemand.input.ControlSpec
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.ResolvedLayout
 import com.blugaemand.input.TouchRouter
@@ -96,12 +96,14 @@ fun GamepadScreen(
 
             val active = router.activeControls()
             for (control in resolved.controls) {
-                val stickOffset = (control.id as? ControlId.Stick)
-                    ?.let { router.stickOffset(it.side) }
+                // Keyed on the shape rather than the id, because the shape is what dispatches to
+                // the stick renderer -- a layout is free to give ControlId.Stick a plain circle.
+                val stickOffset = (control.spec.shape as? ControlSpec.Shape.Stick)
+                    ?.let { router.stickOffset(control.index) }
                 drawControl(
                     control = control,
                     style = padStyle,
-                    pressed = control.id in active,
+                    pressed = control.index in active,
                     stickOffset = stickOffset,
                     textMeasurer = textMeasurer,
                 )

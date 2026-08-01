@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.sp
 import com.blugaemand.input.ControlId
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutStyle
-import com.blugaemand.input.addableControls
 import com.blugaemand.input.describe
 import com.blugaemand.input.missingButtons
 import com.blugaemand.ui.theme.OverlayColors
@@ -49,7 +48,8 @@ private enum class EditorPage { Root, Add, Colours, Rename, ConfirmDelete }
 @Composable
 fun EditorBar(
     layout: GamepadLayout,
-    selected: ControlId?,
+    /** Index of the control being edited, in [GamepadLayout.controls]. */
+    selected: Int?,
     snapToGrid: Boolean,
     onSnapToGridChange: (Boolean) -> Unit,
     onLayoutChange: (GamepadLayout) -> Unit,
@@ -66,12 +66,13 @@ fun EditorBar(
             EditorPage.Root -> {
                 PanelEntry(label = "Done", leading = "✓", onClick = onDone)
                 PanelEntry(label = "Add control", trailing = "›") { page = EditorPage.Add }
+                val selectedSpec = selected?.let { layout.controls.getOrNull(it) }
                 PanelEntry(
-                    label = selected?.let { "Remove ${it.describe()}" } ?: "Remove control",
+                    label = selectedSpec?.let { "Remove ${it.id.describe()}" } ?: "Remove control",
                     // Nothing selected means nothing to remove, and a row that acted on whichever
                     // control happened to be last would be worse than one that waits.
-                    enabled = selected != null,
-                    color = if (selected != null) Color.Unspecified else OverlayColors.Caption,
+                    enabled = selectedSpec != null,
+                    color = if (selectedSpec != null) Color.Unspecified else OverlayColors.Caption,
                     onClick = onRemoveSelected,
                 )
                 PanelEntry(
@@ -100,15 +101,11 @@ fun EditorBar(
 
             EditorPage.Add -> {
                 PanelEntry(label = "Add control", leading = "‹") { page = EditorPage.Root }
-                val addable = layout.addableControls()
-                if (addable.isEmpty()) {
-                    PanelCaption("Every control is already on the pad.")
-                }
-                addable.forEach { id ->
+                // Everything, every time. A control may appear on a layout more than once -- two A
+                // buttons, one under each thumb -- so there is nothing to filter out.
+                ControlId.ALL.forEach { id ->
                     PanelEntry(label = id.describe()) {
                         onAddControl(id)
-                        // Back to the root, where the newly added and now selected control can be
-                        // removed again or the pad carried on with.
                         page = EditorPage.Root
                     }
                 }

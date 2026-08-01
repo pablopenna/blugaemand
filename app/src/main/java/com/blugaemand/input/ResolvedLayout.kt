@@ -12,6 +12,13 @@ import kotlin.math.min
  * what is touchable.
  */
 data class ResolvedControl(
+    /**
+     * Where this control sits in its layout's list, and the only thing that tells two of them
+     * apart: a layout may hold the same [ControlId] more than once — two A buttons, one under each
+     * thumb — so the id says what a control *does* and this says which one it *is*. Anything about
+     * a particular control rather than about the button it drives keys on this.
+     */
+    val index: Int,
     val spec: ControlSpec,
     val centerX: Float,
     val centerY: Float,
@@ -54,29 +61,29 @@ class ResolvedLayout(
      */
     val unit: Float = min(height, width * REFERENCE_ASPECT)
 
-    val controls: List<ResolvedControl> = layout.controls.map { spec ->
+    val controls: List<ResolvedControl> = layout.controls.mapIndexed { index, spec ->
         val cx = spec.shape.centerX * width
         val cy = spec.shape.centerY * height
         when (val shape = spec.shape) {
             is ControlSpec.Shape.Circle -> ResolvedControl(
-                spec, cx, cy, radius = shape.radius * unit, knobRadius = 0f,
+                index, spec, cx, cy, radius = shape.radius * unit, knobRadius = 0f,
                 halfWidth = 0f, halfHeight = 0f,
             )
 
             is ControlSpec.Shape.Stick -> ResolvedControl(
-                spec, cx, cy, radius = shape.radius * unit,
+                index, spec, cx, cy, radius = shape.radius * unit,
                 knobRadius = shape.knobRadius * unit, halfWidth = 0f, halfHeight = 0f,
             )
 
             is ControlSpec.Shape.Dpad -> ResolvedControl(
-                spec, cx, cy, radius = shape.radius * unit, knobRadius = 0f,
+                index, spec, cx, cy, radius = shape.radius * unit, knobRadius = 0f,
                 halfWidth = 0f, halfHeight = 0f,
             )
 
             // Rectangles keep their width relative to the screen: the shoulder buttons are meant
             // to stretch across the top edge however wide it is.
             is ControlSpec.Shape.Rect -> ResolvedControl(
-                spec, cx, cy, radius = 0f, knobRadius = 0f,
+                index, spec, cx, cy, radius = 0f, knobRadius = 0f,
                 halfWidth = shape.width * width / 2f, halfHeight = shape.height * unit / 2f,
             )
         }

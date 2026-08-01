@@ -52,16 +52,23 @@ class TouchRouter(private val layout: ResolvedLayout) {
         bindings.clear()
     }
 
-    /** Controls currently held, for rendering the pressed state. */
-    fun activeControls(): Set<ControlId> = bindings.values.mapTo(mutableSetOf()) { it.control.id }
+    /**
+     * Controls currently held, by [ResolvedControl.index], for rendering the pressed state.
+     *
+     * By index and not by [ControlId], because a layout may hold the same id twice: keyed by id,
+     * pressing one of two A buttons would light both.
+     */
+    fun activeControls(): Set<Int> = bindings.values.mapTo(mutableSetOf()) { it.control.index }
 
     /**
      * Displacement of a stick's knob as a -1..1 pair, or null when nothing is touching it. The
      * renderer scales this by the stick radius to place the cap.
+     *
+     * By index for the same reason: two sticks on the same side are a strange layout, but they are
+     * a representable one, and they should not move in lockstep.
      */
-    fun stickOffset(side: ControlId.Side): Pair<Float, Float>? {
-        val binding = bindings.values.firstOrNull { it.control.id == ControlId.Stick(side) }
-            ?: return null
+    fun stickOffset(controlIndex: Int): Pair<Float, Float>? {
+        val binding = bindings.values.firstOrNull { it.control.index == controlIndex } ?: return null
         return binding.control.normalisedOffset(binding.x, binding.y)
     }
 

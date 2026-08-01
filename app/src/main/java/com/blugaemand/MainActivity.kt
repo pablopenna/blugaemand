@@ -48,7 +48,7 @@ import com.blugaemand.input.copyAsUser
 import com.blugaemand.input.emptyUserLayout
 import com.blugaemand.input.layouts.DEFAULT_LAYOUT
 import com.blugaemand.input.withControlAdded
-import com.blugaemand.input.withControlRemoved
+import com.blugaemand.input.withControlRemovedAt
 import com.blugaemand.ui.EditorBar
 import com.blugaemand.ui.EditorScreen
 import com.blugaemand.ui.GamepadScreen
@@ -133,7 +133,9 @@ class MainActivity : ComponentActivity() {
                 val layout = library.byId(selectedId) ?: DEFAULT_LAYOUT
 
                 var editing by remember { mutableStateOf(false) }
-                var selectedControl by remember { mutableStateOf<ControlId?>(null) }
+                // Which control the editor is acting on, as its index in the layout's list rather
+                // than its ControlId -- the same control may be on the layout twice.
+                var selectedControl by remember { mutableStateOf<Int?>(null) }
                 var snapToGrid by remember { mutableStateOf(true) }
 
                 /** Saves an edit and keeps it showing, which is one write per drag frame. */
@@ -191,12 +193,12 @@ class MainActivity : ComponentActivity() {
                             onLayoutChange = ::saveEdit,
                             onAddControl = { id ->
                                 saveEdit(layout.withControlAdded(id))
-                                // Selected on arrival, so it can be dragged off the spot it landed
-                                // on without hunting for it first.
-                                selectedControl = id
+                                // Appended, so it is the last one -- and selected on arrival, so it
+                                // can be dragged off the spot it landed on without hunting for it.
+                                selectedControl = layout.controls.size
                             },
                             onRemoveSelected = {
-                                selectedControl?.let { saveEdit(layout.withControlRemoved(it)) }
+                                selectedControl?.let { saveEdit(layout.withControlRemovedAt(it)) }
                                 selectedControl = null
                             },
                             onDeleteLayout = {

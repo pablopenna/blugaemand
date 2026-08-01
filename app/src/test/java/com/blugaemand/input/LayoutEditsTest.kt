@@ -17,6 +17,9 @@ import kotlin.math.abs
  * tested. Numbers are round on purpose: a 1000x500 surface makes the layout unit exactly 500 and
  * the grid step exactly 25, which is what lets the expectations below be written down rather than
  * derived.
+ *
+ * **Controls are addressed by index, not by [ControlId]**, because a layout may hold the same id
+ * more than once. Several of the tests below exist only to hold that line.
  */
 class LayoutEditsTest {
 
@@ -26,20 +29,29 @@ class LayoutEditsTest {
     /** unit = min(500, 1000 * 9/16) = 500, so the grid is 25 px. */
     private val step = 25f
 
-    private val south = ControlId.Button(GamepadButton.SOUTH)
+    // Indices into the layout below.
+    private val south = 0
+    private val east = 1
+    private val stick = 2
+    private val dpad = 3
+    private val trigger = 4
 
     /**
-     * - A button  centre (800, 250), radius 50
-     * - B button  centre (900, 250), radius 50
+     * - A button   centre (800, 250), radius 50
+     * - B button   centre (900, 250), radius 50
      * - left stick centre (200, 250), radius 100, knob 40
-     * - D-pad     centre (200, 450), radius 50, dead zone 0.25
-     * - trigger   centre (500, 50), 100 x 50
+     * - D-pad      centre (200, 450), radius 50, dead zone 0.25
+     * - trigger    centre (500, 50), 100 x 50
      */
     private val layout = GamepadLayout(
         id = "test",
         name = "Test",
         controls = listOf(
-            ControlSpec(south, ControlSpec.Shape.Circle(0.8f, 0.5f, radius = 0.1f), "A"),
+            ControlSpec(
+                ControlId.Button(GamepadButton.SOUTH),
+                ControlSpec.Shape.Circle(0.8f, 0.5f, radius = 0.1f),
+                "A",
+            ),
             ControlSpec(
                 ControlId.Button(GamepadButton.EAST),
                 ControlSpec.Shape.Circle(0.9f, 0.5f, radius = 0.1f),
@@ -67,8 +79,8 @@ class LayoutEditsTest {
         assertEquals(850f, moved.pixelCenterX(south), TOLERANCE)
         assertEquals(150f, moved.pixelCenterY(south), TOLERANCE)
         assertEquals(
-            layout.controls.filterNot { it.id == south },
-            moved.controls.filterNot { it.id == south },
+            layout.controls.filterIndexed { i, _ -> i != south },
+            moved.controls.filterIndexed { i, _ -> i != south },
         )
     }
 
@@ -85,14 +97,13 @@ class LayoutEditsTest {
     fun `a control cannot be dragged so far that part of it leaves the screen`() {
         // Clamping the centre alone would let half a button hang over the edge, where it cannot be
         // touched. The stick's radius is 100, so 100 is as far left as its centre may go.
-        val moved = resolve().movedControl(ControlId.Stick(Side.LEFT), -9999f, -9999f, snap = false)
-        assertEquals(100f, moved.pixelCenterX(ControlId.Stick(Side.LEFT)), TOLERANCE)
-        assertEquals(100f, moved.pixelCenterY(ControlId.Stick(Side.LEFT)), TOLERANCE)
+        val moved = resolve().movedControl(stick, -9999f, -9999f, snap = false)
+        assertEquals(100f, moved.pixelCenterX(stick), TOLERANCE)
+        assertEquals(100f, moved.pixelCenterY(stick), TOLERANCE)
     }
 
     @Test
     fun `a rectangle is held in by its own half-extents, which differ per axis`() {
-        val trigger = ControlId.Trigger(Side.LEFT)
         val moved = resolve().movedControl(trigger, 9999f, 9999f, snap = false)
         // Half-width 50 of a 1000-wide screen, half-height 25 of a 500-tall one.
         assertEquals(950f, moved.pixelCenterX(trigger), TOLERANCE)
@@ -100,9 +111,9 @@ class LayoutEditsTest {
     }
 
     @Test
-    fun `moving something the layout does not have changes nothing`() {
-        val absent = ControlId.Button(GamepadButton.GUIDE)
-        assertEquals(layout, resolve().movedControl(absent, 50f, 50f, snap = false))
+    fun `moving an index the layout does not have changes nothing`() {
+        assertEquals(layout, resolve().movedControl(99, 50f, 50f, snap = false))
+        assertEquals(layout, resolve().movedControl(-1, 50f, 50f, snap = false))
     }
 
     // -- Snapping -------------------------------------------------------------------------
@@ -167,14 +178,9 @@ class LayoutEditsTest {
     @Test
     fun `a stick's cap keeps its proportion to the base`() {
         // Otherwise the knob grows into the well, or disappears inside it.
-        val stick = ControlId.Stick(Side.LEFT)
         val before = layout.stick(stick)
         val after = resolve().resizedControl(stick, factor = 1.5f, snap = false).stick(stick)
-        assertEquals(
-            before.knobRadius / before.radius,
-            after.knobRadius / after.radius,
-            TOLERANCE,
-        )
+        assertEquals(before.knobRadius / before.radius, after.knobRadius / after.radius, TOLERANCE)
         assertNotEquals(before.radius, after.radius)
     }
 
@@ -182,18 +188,15 @@ class LayoutEditsTest {
     fun `resizing a D-pad leaves its dead zone alone`() {
         // deadZone is already a fraction *of* the radius, so scaling it too would compound and the
         // dead zone would end up swallowing the cross.
-        val resized = resolve().resizedControl(ControlId.Dpad, factor = 2f, snap = false)
-        val before = layout.controls.first { it.id == ControlId.Dpad }.shape
-        val after = resized.controls.first { it.id == ControlId.Dpad }.shape
-        before as ControlSpec.Shape.Dpad
-        after as ControlSpec.Shape.Dpad
+        val before = layout.shapeOf(dpad) as ControlSpec.Shape.Dpad
+        val after = resolve().resizedControl(dpad, factor = 2f, snap = false)
+            .shapeOf(dpad) as ControlSpec.Shape.Dpad
         assertEquals(before.deadZone, after.deadZone, TOLERANCE)
         assertEquals(0.2f, after.radius, TOLERANCE)
     }
 
     @Test
     fun `a rectangle scales on both axes`() {
-        val trigger = ControlId.Trigger(Side.LEFT)
         val before = layout.rect(trigger)
         val after = resolve().resizedControl(trigger, factor = 1.5f, snap = false).rect(trigger)
         assertEquals(before.width * 1.5f, after.width, TOLERANCE)
@@ -205,16 +208,62 @@ class LayoutEditsTest {
         // width is a fraction of screen width and height a fraction of the layout unit, so snapping
         // them in their own units would put them on two different grids -- 1000-relative against
         // 500-relative -- and a rectangle nudged bigger would change shape as well as size.
-        val trigger = ControlId.Trigger(Side.LEFT)
         val after = resolve().resizedControl(trigger, factor = 1.3f, snap = true).rect(trigger)
         assertOnGrid(after.width * width)
         assertOnGrid(after.height * height)
     }
 
     @Test
-    fun `resizing something the layout does not have changes nothing`() {
-        val absent = ControlId.Button(GamepadButton.GUIDE)
-        assertEquals(layout, resolve().resizedControl(absent, 2f, snap = false))
+    fun `resizing an index the layout does not have changes nothing`() {
+        assertEquals(layout, resolve().resizedControl(99, 2f, snap = false))
+    }
+
+    // -- The same control more than once --------------------------------------------------
+
+    @Test
+    fun `a control can be added twice`() {
+        // Two A buttons, one under each thumb, is a reasonable pad. Adding used to refuse this.
+        val id = ControlId.Button(GamepadButton.SOUTH)
+        val twice = layout.withControlAdded(id)
+        assertEquals(2, twice.controls.count { it.id == id })
+        assertEquals(layout.controls.size + 1, twice.controls.size)
+    }
+
+    @Test
+    fun `a second copy does not land exactly under the first`() {
+        // Perfectly stacked, the new one is invisible and the old one is what a drag would grab.
+        val id = ControlId.Button(GamepadButton.SOUTH)
+        val added = layout.withControlAdded(id).controls.last()
+        val original = layout.controls[south]
+        assertNotEquals(original.shape.centerX, added.shape.centerX)
+        assertNotEquals(original.shape.centerY, added.shape.centerY)
+    }
+
+    @Test
+    fun `each further copy steps further away`() {
+        val id = ControlId.Button(GamepadButton.SOUTH)
+        val three = layout.withControlAdded(id).withControlAdded(id)
+        val centres = three.controls.filter { it.id == id }.map { it.shape.centerX }
+        assertEquals(3, centres.size)
+        assertEquals("no two copies share a position", centres.size, centres.toSet().size)
+    }
+
+    @Test
+    fun `moving one copy leaves the other where it is`() {
+        // The point of addressing controls by index. Keyed by id, this would move both.
+        val id = ControlId.Button(GamepadButton.SOUTH)
+        val twice = layout.withControlAdded(id)
+        val copyAt = twice.controls.lastIndex
+        val moved = resolve(twice).movedControl(copyAt, 100f, 0f, snap = false)
+        assertEquals(layout.controls[south], moved.controls[south])
+    }
+
+    @Test
+    fun `removing one copy leaves the other`() {
+        val id = ControlId.Button(GamepadButton.SOUTH)
+        val twice = layout.withControlAdded(id)
+        val left = twice.withControlRemovedAt(twice.controls.lastIndex)
+        assertEquals(layout.controls, left.controls)
     }
 
     // -- Adding and removing --------------------------------------------------------------
@@ -222,67 +271,36 @@ class LayoutEditsTest {
     @Test
     fun `adding then removing gets back exactly what was there`() {
         val guide = ControlId.Button(GamepadButton.GUIDE)
-        assertEquals(layout, layout.withControlAdded(guide).withControlRemoved(guide))
+        val added = layout.withControlAdded(guide)
+        assertEquals(layout, added.withControlRemovedAt(added.controls.lastIndex))
     }
 
     @Test
-    fun `a control is added where the default layout has it`() {
-        // Which is what makes building an empty layout up one control at a time reconstruct the
-        // default pad, rather than pile everything in the middle of the screen.
+    fun `a control arrives at the size and label the default layout gives it`() {
+        // The position is chosen when it is placed; the size and label are not, and coming from the
+        // default pad is what stops a fresh control arriving as an unlabelled speck.
         val empty = GamepadLayout(id = "e", name = "e", controls = emptyList())
-        val built = ControlId.ALL.fold(empty) { acc, id -> acc.withControlAdded(id) }
         for (spec in DEFAULT_LAYOUT.controls) {
-            assertEquals(spec.id.toString(), spec, built.controls.first { it.id == spec.id })
+            val added = empty.withControlAdded(spec.id).controls.single()
+            assertEquals(spec.id.toString(), spec.label, added.label)
+            assertEquals(spec.id.toString(), spec.shape, added.shape)
         }
     }
 
     @Test
-    fun `a control added back returns to where it was, not to the default`() {
-        val moved = resolve().movedControl(south, 50f, 0f, snap = false)
-        // Removing loses the position -- there is nowhere to keep it -- so it comes back from the
-        // default. Pinned because the alternative (remembering) is a feature, not an accident.
-        val roundTrip = moved.withControlRemoved(south).withControlAdded(south)
-        assertEquals(
-            DEFAULT_LAYOUT.controls.first { it.id == south },
-            roundTrip.controls.first { it.id == south },
-        )
+    fun `every control the editor offers can actually be added`() {
+        // ControlId.ALL is what the add page lists, and defaultSpecFor throws on anything with no
+        // spec and no fallback -- so this is the guard on adding an id and forgetting to give it a
+        // home.
+        val empty = GamepadLayout(id = "e", name = "e", controls = emptyList())
+        val built = ControlId.ALL.fold(empty) { acc, id -> acc.withControlAdded(id) }
+        assertEquals(ControlId.ALL.size, built.controls.size)
     }
 
     @Test
-    fun `adding something already there is not a way to get two of it`() {
-        assertEquals(layout, layout.withControlAdded(south))
-    }
-
-    @Test
-    fun `removing something that is not there is not an error`() {
-        assertEquals(layout, layout.withControlRemoved(ControlId.Button(GamepadButton.GUIDE)))
-    }
-
-    @Test
-    fun `the default layout is missing only the two digital trigger buttons`() {
-        // It reaches the triggers through ControlId.Trigger instead, so L2 and R2 are the only two
-        // of ControlId.ALL it does not place -- and so the only two that need a fallback spec.
-        assertEquals(
-            setOf(
-                ControlId.Button(GamepadButton.L2),
-                ControlId.Button(GamepadButton.R2),
-            ),
-            DEFAULT_LAYOUT.addableControls().toSet(),
-        )
-    }
-
-    @Test
-    fun `the two controls with no home in the default layout still get a sensible one`() {
-        val l2 = ControlId.Button(GamepadButton.L2)
-        val added = DEFAULT_LAYOUT.withControlAdded(l2).controls.first { it.id == l2 }
-        assertEquals("L2", added.label)
-        assertTrue(added.shape.centerX in 0f..1f && added.shape.centerY in 0f..1f)
-    }
-
-    @Test
-    fun `a full layout has nothing left to add`() {
-        val full = ControlId.ALL.fold(layout) { acc, id -> acc.withControlAdded(id) }
-        assertTrue(full.addableControls().isEmpty())
+    fun `removing an index that is not there is not an error`() {
+        assertEquals(layout, layout.withControlRemovedAt(99))
+        assertEquals(layout, layout.withControlRemovedAt(-1))
     }
 
     // -- Empty layouts --------------------------------------------------------------------
@@ -297,7 +315,12 @@ class LayoutEditsTest {
         )
         assertTrue(empty.controls.isEmpty())
         assertNull(empty.hitTest(500f, 250f))
-        assertEquals(ControlId.ALL, empty.layout.addableControls())
+    }
+
+    @Test
+    fun `resolved controls know where they sit in the layout`() {
+        // The index is the whole identity story; if resolving ever reorders, everything above lies.
+        assertEquals(layout.controls.indices.toList(), resolve().controls.map { it.index })
     }
 
     // -- Naming ---------------------------------------------------------------------------
@@ -306,7 +329,7 @@ class LayoutEditsTest {
     fun `controls are named for a list, not for a button face`() {
         // The default layout labels its sticks L and R, which is right on the pad and useless in a
         // menu; buttons keep their label, because that is the letter the host reports.
-        assertEquals("A", south.describe())
+        assertEquals("A", ControlId.Button(GamepadButton.SOUTH).describe())
         assertEquals("Left stick", ControlId.Stick(Side.LEFT).describe())
         assertEquals("Right trigger", ControlId.Trigger(Side.RIGHT).describe())
         assertEquals("D-pad", ControlId.Dpad.describe())
@@ -324,12 +347,12 @@ class LayoutEditsTest {
         assertTrue("$pixels is not a multiple of $step", offGrid < TOLERANCE)
     }
 
-    private fun GamepadLayout.shapeOf(id: ControlId) = controls.first { it.id == id }.shape
-    private fun GamepadLayout.circle(id: ControlId) = shapeOf(id) as ControlSpec.Shape.Circle
-    private fun GamepadLayout.stick(id: ControlId) = shapeOf(id) as ControlSpec.Shape.Stick
-    private fun GamepadLayout.rect(id: ControlId) = shapeOf(id) as ControlSpec.Shape.Rect
-    private fun GamepadLayout.pixelCenterX(id: ControlId) = shapeOf(id).centerX * width
-    private fun GamepadLayout.pixelCenterY(id: ControlId) = shapeOf(id).centerY * height
+    private fun GamepadLayout.shapeOf(index: Int) = controls[index].shape
+    private fun GamepadLayout.circle(index: Int) = shapeOf(index) as ControlSpec.Shape.Circle
+    private fun GamepadLayout.stick(index: Int) = shapeOf(index) as ControlSpec.Shape.Stick
+    private fun GamepadLayout.rect(index: Int) = shapeOf(index) as ControlSpec.Shape.Rect
+    private fun GamepadLayout.pixelCenterX(index: Int) = shapeOf(index).centerX * width
+    private fun GamepadLayout.pixelCenterY(index: Int) = shapeOf(index).centerY * height
 
     private companion object {
         const val TOLERANCE = 1e-4f

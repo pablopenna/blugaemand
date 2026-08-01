@@ -53,6 +53,13 @@ class TouchRouterTest {
 
     private fun router() = TouchRouter(resolved)
 
+    // Indices into the layout above. Controls are addressed this way rather than by ControlId
+    // because a layout may hold the same id more than once.
+    private companion object {
+        const val STICK = 0
+        const val SOUTH_BUTTON = 1
+    }
+
     // -- Binding behaviour ----------------------------------------------------------------
 
     @Test
@@ -202,16 +209,18 @@ class TouchRouterTest {
 
     @Test
     fun `stick offset is reported for rendering and cleared on release`() {
+        // By index, not by side: a layout may carry the same control twice, so the renderer asks
+        // about the one it is drawing rather than about a side.
         val router = router()
-        assertNull(router.stickOffset(Side.LEFT))
+        assertNull(router.stickOffset(STICK))
 
         router.down(1, 200f, 250f)
         router.move(1, 300f, 250f)
-        assertEquals(1f, router.stickOffset(Side.LEFT)!!.first, 0.001f)
-        assertEquals(0f, router.stickOffset(Side.LEFT)!!.second, 0.001f)
+        assertEquals(1f, router.stickOffset(STICK)!!.first, 0.001f)
+        assertEquals(0f, router.stickOffset(STICK)!!.second, 0.001f)
 
         router.up(1)
-        assertNull(router.stickOffset(Side.LEFT))
+        assertNull(router.stickOffset(STICK))
     }
 
     @Test
@@ -223,7 +232,33 @@ class TouchRouterTest {
         val state = router.state()
         assertEquals(GamepadState.AXIS_CENTER, state.rightStickX)
         assertEquals(GamepadState.AXIS_CENTER, state.rightStickY)
-        assertNull(router.stickOffset(Side.RIGHT))
+    }
+
+    @Test
+    fun `two copies of one control light independently but both send the button`() {
+        // The reason press state is keyed by index. Keyed by ControlId, pressing either of two A
+        // buttons would light both -- while the host, correctly, sees one A either way.
+        val twin = layout.copy(
+            controls = layout.controls + ControlSpec(
+                ControlId.Button(GamepadButton.SOUTH),
+                ControlSpec.Shape.Circle(0.8f, 0.9f, radius = 0.1f),
+                "A",
+            ),
+        )
+        val router = TouchRouter(ResolvedLayout(twin, 1000f, 500f))
+        val copyAt = twin.controls.lastIndex
+
+        router.down(1, 800f, 450f) // the second A
+        assertEquals(setOf(copyAt), router.activeControls())
+        assertTrue(router.state().isPressed(GamepadButton.SOUTH))
+
+        router.down(2, 800f, 250f) // the first A as well
+        assertEquals(setOf(copyAt, SOUTH_BUTTON), router.activeControls())
+        assertTrue(router.state().isPressed(GamepadButton.SOUTH))
+
+        router.up(1)
+        assertEquals(setOf(SOUTH_BUTTON), router.activeControls())
+        assertTrue("still held by the other", router.state().isPressed(GamepadButton.SOUTH))
     }
 
     // -- D-pad ----------------------------------------------------------------------------

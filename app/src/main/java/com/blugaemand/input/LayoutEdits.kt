@@ -40,12 +40,12 @@ val ResolvedLayout.gridStep: Float get() = unit / 20f
  * hang over the edge, where it cannot be touched — which reads as a bug rather than as a choice.
  */
 fun ResolvedLayout.movedControl(
-    id: ControlId,
+    index: Int,
     dxPixels: Float,
     dyPixels: Float,
     snap: Boolean,
 ): GamepadLayout {
-    val control = controls.firstOrNull { it.id == id } ?: return layout
+    val control = controls.getOrNull(index) ?: return layout
 
     var x = control.centerX + dxPixels
     var y = control.centerY + dyPixels
@@ -58,7 +58,7 @@ fun ResolvedLayout.movedControl(
     val insetX = if (control.radius > 0f) control.radius else control.halfWidth
     val insetY = if (control.radius > 0f) control.radius else control.halfHeight
 
-    return layout.replacingShape(id) {
+    return layout.replacingShape(index) {
         it.withCenter(
             // A control wider than the screen would invert the range, hence the ordered bounds.
             x = (x.coerceIn(insetX, maxOf(insetX, width - insetX)) / width).coerceIn(0f, 1f),
@@ -73,40 +73,43 @@ fun ResolvedLayout.movedControl(
  * [snap] rounds the result to the grid as well, so two buttons meant to match can be made to match
  * rather than merely brought close.
  */
-fun ResolvedLayout.resizedControl(id: ControlId, factor: Float, snap: Boolean): GamepadLayout {
-    if (controls.none { it.id == id }) return layout
+fun ResolvedLayout.resizedControl(index: Int, factor: Float, snap: Boolean): GamepadLayout {
+    if (controls.getOrNull(index) == null) return layout
     val scale = Scale(factor, if (snap) gridStep else 0f, unit, width)
-    return layout.replacingShape(id) { it.scaledBy(scale) }
+    return layout.replacingShape(index) { it.scaledBy(scale) }
 }
 
 /**
- * [layout] with [id] placed on it, or unchanged if it is already there.
+ * [this] with another [id] on it.
  *
- * **The new control is copied from [DEFAULT_LAYOUT]** — position, size and label — so building an
- * empty layout up one control at a time reconstructs the default pad rather than a heap in the
- * middle of the screen, and so a control added back after being removed returns to where it was.
+ * **A control may appear more than once** — two A buttons, one under each thumb, is a reasonable
+ * pad. So this appends rather than refusing, and offsets each copy after the first by a step so the
+ * new one is visible and grabbable rather than exactly under the one already there.
  *
- * [GamepadButton.L2] and [GamepadButton.R2] are the only two of [ControlId.ALL] the default has no
- * spec for, since it reaches the triggers through [ControlId.Trigger]; they fall back to a plain
- * circle inboard of the shoulder row.
+ * Shape and label come from [DEFAULT_LAYOUT] via [defaultSpecFor], so a control arrives the size the
+ * built-in pad uses it at and carrying the label the host will report for it.
  */
 fun GamepadLayout.withControlAdded(id: ControlId): GamepadLayout {
-    if (controls.any { it.id == id }) return this
-    return copy(controls = controls + defaultSpecFor(id))
+    val copies = controls.count { it.id == id }
+    val spec = defaultSpecFor(id)
+    val offset = copies * DUPLICATE_OFFSET
+    return copy(
+        controls = controls + spec.copy(
+            shape = spec.shape.withCenter(
+                x = (spec.shape.centerX + offset).coerceIn(0f, 1f),
+                y = (spec.shape.centerY + offset).coerceIn(0f, 1f),
+            ),
+        ),
+    )
 }
 
-/** [this] without [id]. Removing something that is not there is not an error. */
-fun GamepadLayout.withControlRemoved(id: ControlId): GamepadLayout =
-    copy(controls = controls.filterNot { it.id == id })
+/** How far each further copy of a control is nudged, in normalised units. */
+private const val DUPLICATE_OFFSET = 0.04f
 
-/**
- * The controls this layout does not have yet, in [ControlId.ALL]'s order, which is what the
- * editor's *add control* page lists.
- */
-fun GamepadLayout.addableControls(): List<ControlId> {
-    val present = controls.mapTo(mutableSetOf()) { it.id }
-    return ControlId.ALL.filterNot { it in present }
-}
+/** [this] without the control at [index]. An index that is not there is not an error. */
+fun GamepadLayout.withControlRemovedAt(index: Int): GamepadLayout =
+    if (index !in controls.indices) this
+    else copy(controls = controls.filterIndexed { i, _ -> i != index })
 
 /**
  * How a control is named in the editor.
@@ -132,15 +135,20 @@ private fun ControlId.Side.spelled(): String =
     name.lowercase().replaceFirstChar { it.uppercase() }
 
 private fun GamepadLayout.replacingShape(
-    id: ControlId,
+    index: Int,
     transform: (ControlSpec.Shape) -> ControlSpec.Shape,
 ): GamepadLayout = copy(
-    controls = controls.map { spec ->
-        if (spec.id == id) spec.copy(shape = transform(spec.shape)) else spec
+    controls = controls.mapIndexed { i, spec ->
+        if (i == index) spec.copy(shape = transform(spec.shape)) else spec
     },
 )
 
-private fun defaultSpecFor(id: ControlId): ControlSpec =
+/**
+ * The shape and label a control arrives with, taken from [DEFAULT_LAYOUT] so that a control added
+ * to a layout is the size the built-in pad uses it at, and carries the label the host will report
+ * for it. Only the position is discarded — that is chosen when it is placed.
+ */
+internal fun defaultSpecFor(id: ControlId): ControlSpec =
     DEFAULT_LAYOUT.controls.firstOrNull { it.id == id } ?: FALLBACK_SPECS.getValue(id)
 
 /**
