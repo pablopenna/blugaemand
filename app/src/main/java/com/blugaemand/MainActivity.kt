@@ -29,7 +29,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -40,10 +39,12 @@ import com.blugaemand.hid.GamepadState
 import com.blugaemand.hid.HidGamepadService
 import com.blugaemand.hid.HidStatus
 import com.blugaemand.input.GamepadLayout
-import com.blugaemand.ui.ConnectionBar
 import com.blugaemand.ui.GamepadScreen
 import com.blugaemand.ui.HostOption
+import com.blugaemand.ui.TopBar
+import com.blugaemand.ui.TopPanel
 import com.blugaemand.ui.theme.BlugaemandTheme
+import com.blugaemand.ui.theme.OverlayColors
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
@@ -103,51 +104,59 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             BlugaemandTheme {
-                var barExpanded by remember { mutableStateOf(false) }
+                var openPanel by remember { mutableStateOf<TopPanel?>(null) }
+                // Only for this session; remembering the choice waits on layout persistence.
+                var layout by remember { mutableStateOf(GamepadLayout.XBOX_DEFAULT) }
                 val status by (service?.status ?: fallbackStatus).collectAsStateWithLifecycle()
 
-                // The panel only exists to get connected. Once that has happened it is just
-                // covering the pad, so fold it away rather than making the user dismiss it.
+                // The connection panel only exists to get connected. Once that has happened it is
+                // just covering the pad, so fold it away rather than making the user dismiss it.
+                // The menu is left alone: it is not about connecting, and closing it under the
+                // user's thumb because a host turned up would be startling.
                 LaunchedEffect(status) {
-                    if (status is HidStatus.Connected) barExpanded = false
+                    if (status is HidStatus.Connected && openPanel == TopPanel.Connection) {
+                        openPanel = null
+                    }
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     GamepadScreen(
-                        layout = GamepadLayout.XBOX_DEFAULT,
+                        layout = layout,
                         onStateChange = { service?.updateState(it) },
                     )
 
-                    // Sits between the pad and the bar while the panel is open: dismisses on a
+                    // Sits between the pad and the bar while a panel is open: dismisses on a
                     // touch anywhere else, and swallows that touch so it cannot also press a
                     // button underneath. Releasing the pad's held controls avoids leaving anything
                     // stuck down on the host.
-                    if (barExpanded) {
+                    if (openPanel != null) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color(0x59000000))
+                                .background(OverlayColors.Scrim)
                                 .pointerInput(Unit) {
                                     awaitEachGesture {
                                         awaitFirstDown(requireUnconsumed = false).consume()
-                                        barExpanded = false
+                                        openPanel = null
                                     }
                                 },
                         )
                     }
 
-                    ConnectionBar(
+                    TopBar(
                         status = status,
-                        expanded = barExpanded,
                         hosts = bonded,
-                        onExpandedChange = { open ->
-                            barExpanded = open
-                            if (open) {
-                                refreshBondedDevices()
-                                // The panel covers the pad, so anything held is about to be
+                        layouts = GamepadLayout.ALL,
+                        selectedLayoutId = layout.id,
+                        openPanel = openPanel,
+                        onOpenPanelChange = { panel ->
+                            openPanel = panel
+                            if (panel != null) {
+                                // Either panel covers the pad, so anything held is about to be
                                 // unreachable; do not leave it asserted on the host.
                                 service?.updateState(GamepadState.NEUTRAL)
                             }
+                            if (panel == TopPanel.Connection) refreshBondedDevices()
                         },
                         onFixBlocker = { fixBlocker(status) },
                         onMakeDiscoverable = ::launchDiscoverable,
@@ -160,8 +169,15 @@ class MainActivity : ComponentActivity() {
                                 ensurePermissions()
                             }
                         },
-                        onStop = {
-                            barExpanded = false
+                        onSelectLayout = { chosen ->
+                            layout = chosen
+                            // Switching rebuilds the router, which drops its pointer bindings
+                            // without ever emitting a release — so whatever the last report
+                            // asserted would stay asserted on the host.
+                            service?.updateState(GamepadState.NEUTRAL)
+                        },
+                        onQuit = {
+                            openPanel = null
                             stopGamepad()
                         },
                         modifier = Modifier

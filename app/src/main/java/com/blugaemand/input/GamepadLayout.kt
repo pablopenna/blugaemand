@@ -131,5 +131,11 @@ data class GamepadLayout(
                 ),
             ),
         )
+
+        /**
+         * Every layout the menu offers, in the order it lists them. Saved user layouts will be
+         * appended once they can be serialised; until then it is the built-ins alone.
+         */
+        val ALL = listOf(XBOX_DEFAULT)
     }
 }

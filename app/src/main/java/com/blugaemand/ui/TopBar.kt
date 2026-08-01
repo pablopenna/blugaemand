@@ -1,0 +1,99 @@
+package com.blugaemand.ui
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.blugaemand.hid.HidStatus
+import com.blugaemand.input.GamepadLayout
+
+/** The panels the top bar can have open. Exactly one at a time, or none. */
+enum class TopPanel { Connection, Menu }
+
+/**
+ * The two pills pinned to the top of the pad, and whichever panel is open beneath them.
+ *
+ * The pills share one row and the panels hang below it, rather than each pill owning a column of
+ * its own: a panel opening changes its column's width, and side-by-side columns would slide both
+ * pills sideways every time one was opened. Here the row's width never changes, so the pills stay
+ * put and only the panel appears.
+ */
+@Composable
+fun TopBar(
+    status: HidStatus,
+    hosts: List<HostOption>,
+    layouts: List<GamepadLayout>,
+    selectedLayoutId: String,
+    openPanel: TopPanel?,
+    onOpenPanelChange: (TopPanel?) -> Unit,
+    onFixBlocker: () -> Unit,
+    onMakeDiscoverable: () -> Unit,
+    onConnect: (HostOption) -> Unit,
+    onRetry: () -> Unit,
+    onSelectLayout: (GamepadLayout) -> Unit,
+    onQuit: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.widthIn(max = 420.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ConnectionPill(
+                expanded = openPanel == TopPanel.Connection,
+                status = status,
+                onExpandedChange = { open ->
+                    onOpenPanelChange(if (open) TopPanel.Connection else null)
+                },
+            )
+            MenuPill(
+                expanded = openPanel == TopPanel.Menu,
+                onExpandedChange = { open ->
+                    onOpenPanelChange(if (open) TopPanel.Menu else null)
+                },
+            )
+        }
+
+        AnimatedVisibility(visible = openPanel == TopPanel.Connection) {
+            ConnectionPanel(
+                status = status,
+                hosts = hosts,
+                onFixBlocker = onFixBlocker,
+                onMakeDiscoverable = onMakeDiscoverable,
+                onConnect = onConnect,
+                onRetry = onRetry,
+                onQuit = onQuit,
+            )
+        }
+
+        // Aligned to the end of the column, which — with only the pill row setting its width —
+        // puts the menu directly under the pill that opened it. Sized rather than left to fill,
+        // so a two-entry menu does not open as wide as the pairing panel.
+        //
+        // Swapping panels overlaps the two for a couple of frames, the arriving one landing below
+        // the departing one until it collapses. Stacking them in a shared Box fixes that, but
+        // needs a composable of its own — AnimatedVisibility resolves to the ColumnScope overload
+        // here, which cannot be called inside a Box — and that was not worth the indirection.
+        AnimatedVisibility(
+            visible = openPanel == TopPanel.Menu,
+            modifier = Modifier.align(Alignment.End),
+        ) {
+            MenuPanel(
+                layouts = layouts,
+                selectedLayoutId = selectedLayoutId,
+                onSelectLayout = { layout ->
+                    onSelectLayout(layout)
+                    onOpenPanelChange(null)
+                },
+                onQuit = onQuit,
+                modifier = Modifier.width(180.dp),
+            )
+        }
+    }
+}

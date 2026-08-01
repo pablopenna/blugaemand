@@ -3,9 +3,11 @@
 Turns an Android phone into a real Bluetooth gamepad. The host sees a standard HID controller — no
 driver, no companion app, no root.
 
-**Current state:** a static Xbox-style layout (two sticks, D-pad, ABXY, four shoulder controls, the
-three centre buttons, two stick clicks). Verified end-to-end against a **Linux** host; Windows is
-the stated target but is **not yet tested**. Configurable layouts and additional hosts are planned.
+**Current state:** an Xbox-style layout (two sticks, D-pad, ABXY, four shoulder controls, the three
+centre buttons, two stick clicks). Verified end-to-end against a **Linux** host; Windows is the
+stated target but is **not yet tested**. Two pills sit at the top edge, each opening its panel on a
+600 ms hold: the left one is connection status and pairing, the right one (**☰ Menu**) picks the
+layout and quits. Editable layouts and additional hosts are planned.
 
 **[TODO.md](TODO.md) is the live backlog** — what is done, what is next, and a *Known constraints*
 section recording things that are permanently impossible so they do not get rediscovered. Read it
@@ -109,7 +111,7 @@ host. Only the service and the Compose layer touch the framework.
 |---|---|---|
 | `hid/` | mostly | `GamepadState`, `GamepadProfile`, `GenericHidProfile` are pure Kotlin; `HidGamepadService` is not |
 | `input/` | yes | `ControlSpec`, `GamepadLayout`, `ResolvedLayout`, `TouchRouter` |
-| `ui/` | no | `GamepadScreen`, `ControlRenderers`, `ConnectionBar`, `theme/` |
+| `ui/` | no | `GamepadScreen`, `ControlRenderers`, `TopBar`, `TopBarChrome`, `ConnectionBar`, `MenuBar`, `theme/` |
 
 **`hid/`**
 
@@ -131,8 +133,22 @@ host. Only the service and the Compose layer touch the framework.
   hit-testing read from it, so what is drawn is exactly what is touchable.
 - `TouchRouter` — owns `pointerId → control` bindings and produces a `GamepadState`.
 
-**`ui/`** — `GamepadScreen` takes the layout as a parameter and never reads a global, which is what
-makes the planned layout editor a matter of passing a different instance.
+**`ui/`**
+
+- `GamepadScreen` takes the layout as a parameter and never reads a global. That is what lets the
+  menu switch layouts by handing it a different instance, and what will make the planned layout
+  editor the same trick.
+- `TopBar` — the two pills pinned to the top edge and whichever panel is open below them. Panel
+  state is one nullable `TopPanel`, not a boolean each, so "only one open at a time" is structural.
+  The pills share a `Row` and the panels hang beneath it: side-by-side pill-and-panel columns would
+  change width as a panel opened and slide the pills sideways every time.
+- `TopBarChrome` — `HoldPill` and `PanelCard`, the shape and gesture every pill and panel is built
+  from. A second pill that reimplemented the hold would drift from the first; see the trap below
+  for why that gesture is not worth writing twice.
+- `ConnectionBar` — `ConnectionPill` and `ConnectionPanel`: status, pairing and reconnection.
+- `MenuBar` — `MenuPill` and `MenuPanel`: the layout picker and quit. The panel's page state lives
+  inside the composable, which is only composed while open, so the menu reopens on its root page
+  without a reset that would visibly flip pages mid-close.
 
 ### The two seams
 
@@ -191,14 +207,16 @@ what resolves from the local Gradle cache. Lint's "newer version available" fami
   clamping, and a walk of the descriptor's item stream verifying it is structurally sound and
   declares exactly 9 bytes.
 - `TouchRouterTest` — pointer binding and release, multitouch independence, stick normalisation and
-  circular clamping, D-pad sectors, and layout sanity (no overlaps, every button reachable).
+  circular clamping, D-pad sectors, and layout sanity (no overlaps, every button reachable, unique
+  ids). The sanity tests run over `GamepadLayout.ALL`, so a new built-in is covered by adding it.
 
 ---
 
 ## Pairing
 
-1. Launch the app and grant the nearby-devices permission. The status pill should read
-   **Ready to pair**. If it says *Not supported on this phone*, stop — see Troubleshooting.
+1. Launch the app and grant the nearby-devices permission. The status pill — the left of the two at
+   the top — should read **Ready to pair**. If it says *Not supported on this phone*, stop — see
+   Troubleshooting.
 2. **Hold** the pill for ~600 ms — a blue bar sweeps across it — then **Make discoverable to pair**.
 3. On the host, add a new Bluetooth device and pick the phone.
 4. Accept the pairing code on both ends. The host then initiates the HID connection and the pill

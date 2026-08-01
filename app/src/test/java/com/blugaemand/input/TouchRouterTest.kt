@@ -285,9 +285,22 @@ class TouchRouterTest {
 
     // -- Layout sanity --------------------------------------------------------------------
 
+    // Run over the whole catalog rather than XBOX_DEFAULT alone, so every layout the menu can
+    // offer inherits these checks the moment it is added.
+
     @Test
-    fun `the built-in layout exposes every button the profile declares`() {
-        assertEquals(emptySet<GamepadButton>(), GamepadLayout.XBOX_DEFAULT.missingButtons())
+    fun `the layout catalog has unique ids and includes the default`() {
+        // The menu ticks the active layout by id, so a duplicate would tick two rows at once.
+        val ids = GamepadLayout.ALL.map { it.id }
+        assertEquals("duplicate layout ids in $ids", ids.size, ids.toSet().size)
+        assertTrue("the default is offered", GamepadLayout.XBOX_DEFAULT in GamepadLayout.ALL)
+    }
+
+    @Test
+    fun `every built-in layout exposes every button the profile declares`() {
+        for (layout in GamepadLayout.ALL) {
+            assertEquals(layout.id, emptySet<GamepadButton>(), layout.missingButtons())
+        }
     }
 
     @Test
@@ -308,20 +321,22 @@ class TouchRouterTest {
     }
 
     @Test
-    fun `the built-in layout has no overlapping controls`() {
+    fun `no built-in layout has overlapping controls`() {
         // Overlapping touch areas make hit-testing ambiguous and the pad frustrating to use.
         // Checked at a typical 1080p landscape size and at a squarer tablet ratio, since circular
         // controls size themselves from height while positions are relative to both axes.
-        for ((w, h) in listOf(2400f to 1080f, 1600f to 1200f)) {
-            val pad = ResolvedLayout(GamepadLayout.XBOX_DEFAULT, width = w, height = h)
-            for (i in pad.controls.indices) {
-                for (j in i + 1 until pad.controls.size) {
-                    val a = pad.controls[i]
-                    val b = pad.controls[j]
-                    assertFalse(
-                        "${a.id} overlaps ${b.id} at ${w.toInt()}x${h.toInt()}",
-                        overlaps(a, b),
-                    )
+        for (layout in GamepadLayout.ALL) {
+            for ((w, h) in listOf(2400f to 1080f, 1600f to 1200f)) {
+                val pad = ResolvedLayout(layout, width = w, height = h)
+                for (i in pad.controls.indices) {
+                    for (j in i + 1 until pad.controls.size) {
+                        val a = pad.controls[i]
+                        val b = pad.controls[j]
+                        assertFalse(
+                            "${layout.id}: ${a.id} overlaps ${b.id} at ${w.toInt()}x${h.toInt()}",
+                            overlaps(a, b),
+                        )
+                    }
                 }
             }
         }

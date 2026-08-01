@@ -12,7 +12,7 @@ turns up along the way.
 - [x] `HidGamepadService`: profile proxy, SDP registration, callbacks, 100 Hz coalesced send loop
 - [x] Normalised layout data, `ResolvedLayout`, `TouchRouter`
 - [x] Compose pad with multitouch, connection bar, immersive landscape
-- [x] 34 JVM unit tests; lint clean
+- [x] 36 JVM unit tests; lint clean
 - [x] Pixel-art launcher icon with derived monochrome layer for themed icons
 - [x] **Verified on a physical phone** — Xiaomi 25080RABDC, Android 16 / HyperOS. The ROM does
       include the HID Device profile (`bluetooth.profile.hid.device.enabled: true`)
@@ -24,10 +24,14 @@ turns up along the way.
 
 ## Iteration 2 — Configurable layouts
 
+- [x] **Quick switcher** — the ☰ Menu pill's *Layouts* page lists `GamepadLayout.ALL` and ticks the
+      active one. New built-ins appear in it by being added to `ALL`, and inherit the layout-sanity
+      tests for free
 - [ ] Serialise `GamepadLayout` (kotlinx.serialization); the data model is already normalised for it
 - [ ] Persist with DataStore; ship `XBOX_DEFAULT` as the seeded default
+- [ ] Remember the menu's layout choice across launches — it is session-only until the above lands
 - [ ] Editor screen: drag to move, pinch to resize, snap-to-grid
-- [ ] Multiple named layouts with a quick switcher
+- [ ] More built-in layouts to switch between; a Nintendo-style face plate is the obvious first one
 - [ ] Add / remove controls, and surface `missingButtons()` as a validation warning
 - [ ] Import / export layouts as JSON so they can be shared
 - [ ] Portrait layout variant — this is the real fix for the Android 16 orientation opt-out in

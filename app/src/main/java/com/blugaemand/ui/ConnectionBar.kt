@@ -1,229 +1,113 @@
 package com.blugaemand.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.blugaemand.hid.HidStatus
+import com.blugaemand.ui.theme.OverlayColors
 
 /** A paired host the user can reconnect to. */
 data class HostOption(val name: String, val address: String)
 
-/** How long the pill must be held before the panel opens. */
-private const val HOLD_TO_OPEN_MS = 600
-
-/** How quickly the bar empties again once the hold ends, however it ended. */
-private const val BAR_DRAIN_MS = 180
-
 /**
  * Compact status pill pinned to the top of the pad. It stays small so it does not eat into the
  * play area, and opens on a deliberate hold to reveal the pairing actions — which are only needed
- * occasionally.
+ * occasionally. See [HoldPill] for why opening is a hold and closing a tap.
  */
 @Composable
-fun ConnectionBar(
-    status: HidStatus,
+fun ConnectionPill(
     expanded: Boolean,
-    hosts: List<HostOption>,
+    status: HidStatus,
     onExpandedChange: (Boolean) -> Unit,
-    onFixBlocker: () -> Unit,
-    onMakeDiscoverable: () -> Unit,
-    onConnect: (HostOption) -> Unit,
-    onRetry: () -> Unit,
-    onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.widthIn(max = 420.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        StatusPill(
-            status = status,
-            expanded = expanded,
-            onExpandedChange = onExpandedChange,
-        )
-
-        AnimatedVisibility(visible = expanded) {
-            Card(
-                modifier = Modifier.padding(top = 6.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xF21B1F27)),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    status.detail()?.let {
-                        Text(text = it, color = Color(0xFFA8B1C2), fontSize = 11.sp)
-                    }
-
-                    // When something is blocking the session, that fix is the only useful action —
-                    // offering "make discoverable" while Bluetooth is off just wastes a tap.
-                    val blocker = status.primaryAction()
-                    if (blocker != null) {
-                        Button(onClick = onFixBlocker, modifier = Modifier.fillMaxWidth()) {
-                            Text(blocker, fontSize = 12.sp)
-                        }
-                    } else {
-                        OutlinedButton(
-                            onClick = onMakeDiscoverable,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Make discoverable to pair", fontSize = 12.sp)
-                        }
-                    }
-
-                    if (hosts.isNotEmpty()) {
-                        Text(
-                            text = "Reconnect to a paired device",
-                            color = Color(0xFFA8B1C2),
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                        hosts.forEach { host ->
-                            TextButton(
-                                onClick = { onConnect(host) },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    text = host.name,
-                                    fontSize = 12.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                        }
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = onRetry) { Text("Retry", fontSize = 12.sp) }
-                        TextButton(onClick = onStop) { Text("Stop gamepad", fontSize = 12.sp) }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * The pill itself.
- *
- * Opening requires holding rather than tapping: the pill sits along the top edge, right where a
- * thumb travels during play, and a stray tap that threw up the pairing panel mid-game would be
- * worse than a slightly slower deliberate open. A blue bar sweeps left to right while held so the
- * hold is visibly doing something and its length is obvious. Closing is a plain tap — there is
- * nothing to protect against there.
- */
-@Composable
-private fun StatusPill(
-    status: HidStatus,
-    expanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
-) {
-    val progress = remember { Animatable(0f) }
-    val haptics = LocalHapticFeedback.current
-    var pressed by remember { mutableStateOf(false) }
-
-    // The bar is driven from here rather than from inside the gesture, because the gesture
-    // coroutine does not survive long enough to clean up after itself: triggering flips `expanded`,
-    // which re-keys the pointerInput below and cancels the gesture mid-suspension. Anything after
-    // the await would never run, which is what previously left the bar stuck full after closing.
-    LaunchedEffect(pressed, expanded) {
-        if (pressed && !expanded) {
-            progress.animateTo(1f, tween(HOLD_TO_OPEN_MS, easing = LinearEasing))
-            // Reaching full is the trigger; the buzz confirms it without looking.
-            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-            onExpandedChange(true)
-        } else {
-            progress.animateTo(0f, tween(BAR_DRAIN_MS))
-        }
-    }
-
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(Color(0xCC1B1F27))
-            .drawBehind {
-                if (progress.value > 0f) {
-                    drawRect(
-                        color = Color(0xFF4C82F7),
-                        size = Size(size.width * progress.value, size.height),
-                    )
-                }
-            }
-            .pointerInput(expanded) {
-                try {
-                    awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false)
-
-                        if (expanded) {
-                            // Closing needs no ceremony; a plain tap will do.
-                            if (waitForUpOrCancellation() != null) onExpandedChange(false)
-                            return@awaitEachGesture
-                        }
-
-                        pressed = true
-                        // Null means cancelled rather than lifted; either way the hold is over.
-                        waitForUpOrCancellation()
-                        pressed = false
-                    }
-                } finally {
-                    // Triggering cancels this coroutine before the line above can run, so without
-                    // this the flag would stay set and the bar would start refilling by itself the
-                    // moment the panel closed.
-                    pressed = false
-                }
-            }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    HoldPill(expanded = expanded, onExpandedChange = onExpandedChange, modifier = modifier) {
         StatusDot(status)
         Text(
             text = status.label(),
-            color = Color(0xFFDCE2EE),
+            color = OverlayColors.Label,
             fontSize = 12.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+/** Everything needed to get the session connected, and nothing else. */
+@Composable
+fun ConnectionPanel(
+    status: HidStatus,
+    hosts: List<HostOption>,
+    onFixBlocker: () -> Unit,
+    onMakeDiscoverable: () -> Unit,
+    onConnect: (HostOption) -> Unit,
+    onRetry: () -> Unit,
+    onQuit: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    PanelCard(modifier = modifier) {
+        status.detail()?.let {
+            Text(text = it, color = OverlayColors.Caption, fontSize = 11.sp)
+        }
+
+        // When something is blocking the session, that fix is the only useful action —
+        // offering "make discoverable" while Bluetooth is off just wastes a tap.
+        val blocker = status.primaryAction()
+        if (blocker != null) {
+            Button(onClick = onFixBlocker, modifier = Modifier.fillMaxWidth()) {
+                Text(blocker, fontSize = 12.sp)
+            }
+        } else {
+            OutlinedButton(
+                onClick = onMakeDiscoverable,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Make discoverable to pair", fontSize = 12.sp)
+            }
+        }
+
+        if (hosts.isNotEmpty()) {
+            Text(
+                text = "Reconnect to a paired device",
+                color = OverlayColors.Caption,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            hosts.forEach { host ->
+                TextButton(
+                    onClick = { onConnect(host) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = host.name,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = onRetry) { Text("Retry", fontSize = 12.sp) }
+            TextButton(onClick = onQuit) { Text("Stop gamepad", fontSize = 12.sp) }
+        }
     }
 }
 

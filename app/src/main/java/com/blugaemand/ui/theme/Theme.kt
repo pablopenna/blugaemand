@@ -23,6 +23,21 @@ object PadColors {
     val StickKnobActive = Color(0xFF4C82F7)
 }
 
+/**
+ * The translucent chrome floating over the pad: the top-bar pills, their panels and the scrim.
+ *
+ * Named here rather than inlined so a new pill or panel cannot drift from the ones already
+ * there — matching by eye across files is how two nearly-identical greys happen.
+ */
+object OverlayColors {
+    val Pill = Color(0xCC1B1F27)
+    val Panel = Color(0xF21B1F27)
+    val Accent = Color(0xFF4C82F7)
+    val Label = Color(0xFFDCE2EE)
+    val Caption = Color(0xFFA8B1C2)
+    val Scrim = Color(0x59000000)
+}
+
 private val DarkColors = darkColorScheme(
     primary = Color(0xFF4C82F7),
     background = PadColors.Background,
