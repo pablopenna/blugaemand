@@ -20,9 +20,10 @@ data class GamepadLayout(
          * The built-in Xbox-style layout: two sticks, a D-pad, four face buttons, four shoulder
          * controls, the three centre buttons and the two stick clicks.
          *
-         * Positions were laid out against a 16:9 landscape screen. Circular controls size
-         * themselves from screen height so they stay round, which means unusually tall or wide
-         * screens shift the clusters slightly — acceptable until the layout editor exists.
+         * Authored against a 16:9 landscape screen. Sizes are relative to
+         * [ResolvedLayout.unit], so squarer screens scale the controls down rather than letting
+         * them collide; the clusters still drift a little as the aspect ratio changes, which is
+         * what the layout editor will eventually let people fix to taste.
          */
         val XBOX_DEFAULT = GamepadLayout(
             id = "xbox-default",
@@ -39,25 +40,27 @@ data class GamepadLayout(
                     shape = ControlSpec.Shape.Dpad(0.13f, 0.83f, radius = 0.13f),
                 ),
 
-                // Right hand: face buttons above, stick below.
+                // Right hand: face buttons above, stick below. The diamond is spread wider than
+                // the buttons strictly need so there is a clear gap between neighbours — at these
+                // sizes a thumb covers far more than one button's worth of glass.
                 ControlSpec(
                     id = ControlId.Button(GamepadButton.Y),
-                    shape = ControlSpec.Shape.Circle(0.870f, 0.310f, radius = 0.075f),
+                    shape = ControlSpec.Shape.Circle(0.870f, 0.295f, radius = 0.072f),
                     label = "Y",
                 ),
                 ControlSpec(
                     id = ControlId.Button(GamepadButton.X),
-                    shape = ControlSpec.Shape.Circle(0.820f, 0.420f, radius = 0.075f),
+                    shape = ControlSpec.Shape.Circle(0.812f, 0.420f, radius = 0.072f),
                     label = "X",
                 ),
                 ControlSpec(
                     id = ControlId.Button(GamepadButton.B),
-                    shape = ControlSpec.Shape.Circle(0.920f, 0.420f, radius = 0.075f),
+                    shape = ControlSpec.Shape.Circle(0.928f, 0.420f, radius = 0.072f),
                     label = "B",
                 ),
                 ControlSpec(
                     id = ControlId.Button(GamepadButton.A),
-                    shape = ControlSpec.Shape.Circle(0.870f, 0.530f, radius = 0.075f),
+                    shape = ControlSpec.Shape.Circle(0.870f, 0.545f, radius = 0.072f),
                     label = "A",
                 ),
                 ControlSpec(

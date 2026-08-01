@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!--
+        Lint suggests folding mipmap-anydpi-v26 into mipmap-anydpi because minSdk is already 28.
+        AAPT2 does not agree: the <adaptive-icon> element is only recognised under the -v26
+        qualifier, and dropping it fails resource linking outright.
+    -->
+    <issue id="ObsoleteSdkInt">
+        <ignore path="src/main/res/mipmap-anydpi-v26" />
+    </issue>
+</lint>

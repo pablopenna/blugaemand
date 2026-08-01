@@ -37,6 +37,13 @@ android {
     buildFeatures {
         compose = true
     }
+
+    lint {
+        abortOnError = true
+        // Dependency versions are pinned deliberately to what resolves offline; the "newer version
+        // available" family is pure noise here.
+        disable += setOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion")
+    }
 }
 
 dependencies {

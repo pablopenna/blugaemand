@@ -30,8 +30,9 @@ sealed interface ControlId {
  * Normalised rather than absolute so a layout renders identically on any screen size, and so the
  * whole thing serialises cleanly once layouts become user-editable.
  *
- * The X axis is normalised against screen *height*, not width, for anything that must stay
- * circular — see [Shape.Circle.radius].
+ * Positions are fractions of the screen's width and height. Sizes are fractions of
+ * [ResolvedLayout.unit] instead, so controls stay round and keep their proportions whatever the
+ * aspect ratio.
  */
 data class ControlSpec(
     val id: ControlId,
@@ -43,17 +44,17 @@ data class ControlSpec(
         val centerX: Float
         val centerY: Float
 
-        /**
-         * A circular control. [radius] is expressed as a fraction of screen height so the control
-         * stays round regardless of aspect ratio.
-         */
+        /** A circular control; [radius] is a fraction of the layout unit. */
         data class Circle(
             override val centerX: Float,
             override val centerY: Float,
             val radius: Float,
         ) : Shape
 
-        /** A rectangular control; [width] and [height] are fractions of screen width and height. */
+        /**
+         * A rectangular control. [width] is a fraction of screen width so shoulder buttons stretch
+         * across the top edge; [height] is a fraction of the layout unit.
+         */
         data class Rect(
             override val centerX: Float,
             override val centerY: Float,
@@ -63,7 +64,7 @@ data class ControlSpec(
 
         /**
          * A thumbstick: [radius] is the base the finger may roam within, [knobRadius] the moving
-         * cap drawn on top. Both are fractions of screen height.
+         * cap drawn on top. Both are fractions of the layout unit.
          */
         data class Stick(
             override val centerX: Float,
@@ -73,8 +74,8 @@ data class ControlSpec(
         ) : Shape
 
         /**
-         * A square D-pad cross. [radius] is half the width of the cross, as a fraction of screen
-         * height. The dead zone in the middle is a fraction of [radius].
+         * A square D-pad cross. [radius] is half the width of the cross, as a fraction of the
+         * layout unit. The dead zone in the middle is a fraction of [radius].
          */
         data class Dpad(
             override val centerX: Float,

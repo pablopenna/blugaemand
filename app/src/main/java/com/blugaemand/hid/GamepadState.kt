@@ -110,9 +110,15 @@ data class GamepadState(
         /**
          * Converts a -1f..1f stick displacement into the 0..255 axis range, where -1 is fully
          * left/up and +1 is fully right/down.
+         *
+         * A centre of 128 in a 0..255 range is not symmetric — there are 128 steps below it and
+         * only 127 above. Scaling by 128 and clamping puts full deflection on the rails in both
+         * directions; the cost is that the top 1/128th of travel saturates, which is well below
+         * anything a thumb can resolve. Scaling by 127 instead would leave full-left reading 1,
+         * and a stick that never quite reaches its stop is the more noticeable flaw.
          */
         fun axisFromUnit(unit: Float): Int =
-            clampAxis(Math.round(AXIS_CENTER + unit.coerceIn(-1f, 1f) * 127f))
+            clampAxis(Math.round(AXIS_CENTER + unit.coerceIn(-1f, 1f) * 128f))
 
         /** Converts a 0f..1f trigger pull into the 0..255 axis range. */
         fun triggerFromUnit(unit: Float): Int =

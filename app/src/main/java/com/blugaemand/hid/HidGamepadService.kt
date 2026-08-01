@@ -108,6 +108,7 @@ class HidGamepadService : Service() {
     }
 
     /** Bonded devices we could plausibly connect to as a gamepad. */
+    @SuppressLint("MissingPermission") // Guarded by withBluetoothPermission.
     fun bondedDevices(): List<BluetoothDevice> = withBluetoothPermission(emptyList()) {
         bluetoothAdapter?.bondedDevices?.toList().orEmpty()
     }
@@ -116,11 +117,13 @@ class HidGamepadService : Service() {
      * Initiates the HID connection to an already-paired host. For a first-time pairing the host
      * normally initiates instead, once the phone has been made discoverable.
      */
+    @SuppressLint("MissingPermission") // Guarded by withBluetoothPermission.
     fun connectTo(device: BluetoothDevice) = withBluetoothPermission(Unit) {
         hidDevice?.connect(device)
         Unit
     }
 
+    @SuppressLint("MissingPermission") // Guarded by withBluetoothPermission.
     fun disconnect() = withBluetoothPermission(Unit) {
         connectedHost?.let { hidDevice?.disconnect(it) }
         Unit
@@ -201,6 +204,7 @@ class HidGamepadService : Service() {
         }
     }
 
+    @SuppressLint("MissingPermission") // Guarded by withBluetoothPermission.
     private fun releaseProfile() = withBluetoothPermission(Unit) {
         stopSendLoop()
         hidDevice?.let { device ->

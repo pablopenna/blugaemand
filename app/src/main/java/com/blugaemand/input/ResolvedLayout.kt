@@ -42,28 +42,42 @@ class ResolvedLayout(
     val width: Float,
     val height: Float,
 ) {
+    /**
+     * The scale that control sizes are measured against.
+     *
+     * Sizing purely off height breaks down on squarer screens: a 4:3 tablet has far more vertical
+     * room than a 16:9 phone of the same width, so height-derived radii grow while the horizontal
+     * gaps between controls — which follow width — do not, and neighbouring buttons end up
+     * touching. Capping the scale at what a 16:9 screen of this width would have keeps the pad's
+     * proportions intact on any aspect ratio. On 16:9 and wider this is just the height, so the
+     * layout renders exactly as authored.
+     */
+    val unit: Float = min(height, width * REFERENCE_ASPECT)
+
     val controls: List<ResolvedControl> = layout.controls.map { spec ->
         val cx = spec.shape.centerX * width
         val cy = spec.shape.centerY * height
         when (val shape = spec.shape) {
             is ControlSpec.Shape.Circle -> ResolvedControl(
-                spec, cx, cy, radius = shape.radius * height, knobRadius = 0f,
+                spec, cx, cy, radius = shape.radius * unit, knobRadius = 0f,
                 halfWidth = 0f, halfHeight = 0f,
             )
 
             is ControlSpec.Shape.Stick -> ResolvedControl(
-                spec, cx, cy, radius = shape.radius * height,
-                knobRadius = shape.knobRadius * height, halfWidth = 0f, halfHeight = 0f,
+                spec, cx, cy, radius = shape.radius * unit,
+                knobRadius = shape.knobRadius * unit, halfWidth = 0f, halfHeight = 0f,
             )
 
             is ControlSpec.Shape.Dpad -> ResolvedControl(
-                spec, cx, cy, radius = shape.radius * height, knobRadius = 0f,
+                spec, cx, cy, radius = shape.radius * unit, knobRadius = 0f,
                 halfWidth = 0f, halfHeight = 0f,
             )
 
+            // Rectangles keep their width relative to the screen: the shoulder buttons are meant
+            // to stretch across the top edge however wide it is.
             is ControlSpec.Shape.Rect -> ResolvedControl(
                 spec, cx, cy, radius = 0f, knobRadius = 0f,
-                halfWidth = shape.width * width / 2f, halfHeight = shape.height * height / 2f,
+                halfWidth = shape.width * width / 2f, halfHeight = shape.height * unit / 2f,
             )
         }
     }
@@ -76,9 +90,8 @@ class ResolvedLayout(
         controls.filter { it.contains(x, y) }
             .minByOrNull { hypot(x - it.centerX, y - it.centerY) }
 
-    /** Smallest control dimension, useful for scaling text and stroke widths. */
-    val referenceSize: Float
-        get() = controls.minOfOrNull { c ->
-            if (c.radius > 0f) c.radius else min(c.halfWidth, c.halfHeight)
-        } ?: min(width, height) * 0.05f
+    private companion object {
+        /** Height as a fraction of width on a 16:9 screen, the ratio the layouts are authored for. */
+        const val REFERENCE_ASPECT = 9f / 16f
+    }
 }
