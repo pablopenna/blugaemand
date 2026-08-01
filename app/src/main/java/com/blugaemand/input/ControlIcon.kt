@@ -8,8 +8,16 @@ package com.blugaemand.input
  * different picture — or none. The mapping onto actual drawables lives in
  * [com.blugaemand.ui.drawableFor], the one place in the app that knows about `R`.
  *
- * Each control names an idle glyph and, optionally, a pressed one; see [ControlSpec.iconPressed].
- * The Xbox set pairs an outline with its solid counterpart, which is the art pack's own idiom.
+ * A name identifies a picture, not a role — which control draws it is [ArtPack]'s business. Naming
+ * roles instead, a `FACE_TOP` resolved against whichever pack is in play, would drop the
+ * per-platform prefixes and cost the ability to name one specific picture, which a layout mixing
+ * packs and the planned editor both need.
+ *
+ * Both sets pair an outline with its solid counterpart, which is the art pack's own idiom.
+ *
+ * The PlayStation names are split on purpose: `PS_` is the art every PlayStation pad shares, and
+ * `PS5_` the two glyphs that are the DualSense's own. A PS4 face plate would reuse the first group
+ * and pair it with Share and Options rather than inheriting a controller it does not have.
  */
 enum class ControlIcon {
     XBOX_A,
@@ -44,4 +52,35 @@ enum class ControlIcon {
 
     XBOX_DPAD,
     XBOX_DPAD_PRESSED,
+
+    PS_CROSS,
+    PS_CROSS_PRESSED,
+    PS_CIRCLE,
+    PS_CIRCLE_PRESSED,
+    PS_SQUARE,
+    PS_SQUARE_PRESSED,
+    PS_TRIANGLE,
+    PS_TRIANGLE_PRESSED,
+
+    PS_L1,
+    PS_L1_PRESSED,
+    PS_R1,
+    PS_R1_PRESSED,
+    PS_L2,
+    PS_L2_PRESSED,
+    PS_R2,
+    PS_R2_PRESSED,
+
+    PS5_CREATE,
+    PS5_CREATE_PRESSED,
+    PS5_OPTIONS,
+    PS5_OPTIONS_PRESSED,
+
+    PS_L3,
+    PS_L3_PRESSED,
+    PS_R3,
+    PS_R3_PRESSED,
+
+    PS_DPAD,
+    PS_DPAD_PRESSED,
 }

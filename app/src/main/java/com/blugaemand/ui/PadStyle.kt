@@ -4,7 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
+import com.blugaemand.input.ArtPack
 import com.blugaemand.input.ControlIcon
+import com.blugaemand.input.ControlId
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutStyle
 import com.blugaemand.ui.theme.PadColors
@@ -23,10 +25,15 @@ class PadStyle(
     val resting: Color,
     /** Fill for a control being held, and for a thumbstick's cap while in use. */
     val pressed: Color,
+    private val pack: ArtPack?,
     private val painters: Map<ControlIcon, Painter>,
 ) {
-    /** The painter for [icon], or null — including for every icon in colours mode. */
-    fun painter(icon: ControlIcon?): Painter? = icon?.let { painters[it] }
+    /**
+     * The picture [control] draws while [held], or null if it has none and falls back to its
+     * shape — which is every control in colours mode, where there is no pack at all.
+     */
+    fun glyph(control: ControlId, held: Boolean): Painter? =
+        pack?.glyph(control, held)?.let { painters[it] }
 }
 
 /**
@@ -50,8 +57,9 @@ fun rememberPadStyle(layout: GamepadLayout): PadStyle {
     }
 
     return when (val style = layout.style) {
-        is LayoutStyle.Colors -> PadStyle(Color(style.resting), Color(style.pressed), painters)
-        LayoutStyle.Images ->
-            PadStyle(PadColors.ControlFill, PadColors.ControlFillPressed, painters)
+        is LayoutStyle.Colors ->
+            PadStyle(Color(style.resting), Color(style.pressed), pack = null, painters = painters)
+        is LayoutStyle.Images ->
+            PadStyle(PadColors.ControlFill, PadColors.ControlFillPressed, style.pack, painters)
     }
 }

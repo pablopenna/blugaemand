@@ -37,15 +37,11 @@ sealed interface ControlId {
 data class ControlSpec(
     val id: ControlId,
     val shape: Shape,
-    /** Drawn in the middle of the control in [LayoutStyle.Colors] mode. Ignored in Images mode. */
-    val label: String = "",
-    /** Drawn in place of the shape and label in [LayoutStyle.Images] mode. */
-    val icon: ControlIcon? = null,
     /**
-     * Swapped in for [icon] while the control is held. Null means the control simply does not
-     * animate — which is the right answer for anything the art pack only ships one glyph for.
+     * Drawn in the middle of the control. In [LayoutStyle.Images] mode it shows only where the
+     * pack has no glyph for the control and it falls back to its shape.
      */
-    val iconPressed: ControlIcon? = null,
+    val label: String = "",
 ) {
     sealed interface Shape {
         /** Centre of the control, both components in 0..1. */

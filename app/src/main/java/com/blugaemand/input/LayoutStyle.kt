@@ -25,10 +25,14 @@ sealed interface LayoutStyle {
     ) : LayoutStyle
 
     /**
-     * A glyph per control, from an art pack. Which pack is implicit in the [ControlIcon] values the
-     * layout's controls name, so there is nothing to declare here.
+     * A picture per control, from [pack].
+     *
+     * The pack is named once here rather than a glyph being written onto every [ControlSpec]: what
+     * distinguishes two layouts over the same geometry is which art they draw with, and stating it
+     * once is what keeps a layout to the thing that is genuinely per-control — where the control
+     * is. A pack need not cover everything; see [ArtPack].
      */
-    data object Images : LayoutStyle
+    data class Images(val pack: ArtPack) : LayoutStyle
 
     companion object {
         /** The greys the pad has always used, so a layout that names no colours looks unchanged. */

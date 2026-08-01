@@ -13,7 +13,7 @@ import com.blugaemand.input.ControlIcon
  * returns a painter either way and the renderer draws both identically. Vectors are used for the
  * bundled art because they stay sharp at any size, not because anything requires them.
  *
- * The Xbox glyphs are Kenney's Input Prompts 1.5A (CC0), converted by
+ * The Xbox and PlayStation glyphs are Kenney's Input Prompts 1.5A (CC0), converted by
  * `art/input/convert-input-art.py`.
  */
 @DrawableRes
@@ -50,4 +50,35 @@ fun drawableFor(icon: ControlIcon): Int = when (icon) {
 
     ControlIcon.XBOX_DPAD -> R.drawable.xbox_dpad
     ControlIcon.XBOX_DPAD_PRESSED -> R.drawable.xbox_dpad_all
+
+    ControlIcon.PS_CROSS -> R.drawable.playstation_button_cross_outline
+    ControlIcon.PS_CROSS_PRESSED -> R.drawable.playstation_button_color_cross
+    ControlIcon.PS_CIRCLE -> R.drawable.playstation_button_circle_outline
+    ControlIcon.PS_CIRCLE_PRESSED -> R.drawable.playstation_button_color_circle
+    ControlIcon.PS_SQUARE -> R.drawable.playstation_button_square_outline
+    ControlIcon.PS_SQUARE_PRESSED -> R.drawable.playstation_button_color_square
+    ControlIcon.PS_TRIANGLE -> R.drawable.playstation_button_triangle_outline
+    ControlIcon.PS_TRIANGLE_PRESSED -> R.drawable.playstation_button_color_triangle
+
+    ControlIcon.PS_L1 -> R.drawable.playstation_trigger_l1_outline
+    ControlIcon.PS_L1_PRESSED -> R.drawable.playstation_trigger_l1
+    ControlIcon.PS_R1 -> R.drawable.playstation_trigger_r1_outline
+    ControlIcon.PS_R1_PRESSED -> R.drawable.playstation_trigger_r1
+    ControlIcon.PS_L2 -> R.drawable.playstation_trigger_l2_outline
+    ControlIcon.PS_L2_PRESSED -> R.drawable.playstation_trigger_l2
+    ControlIcon.PS_R2 -> R.drawable.playstation_trigger_r2_outline
+    ControlIcon.PS_R2_PRESSED -> R.drawable.playstation_trigger_r2
+
+    ControlIcon.PS5_CREATE -> R.drawable.playstation5_button_create_outline
+    ControlIcon.PS5_CREATE_PRESSED -> R.drawable.playstation5_button_create
+    ControlIcon.PS5_OPTIONS -> R.drawable.playstation5_button_options_outline
+    ControlIcon.PS5_OPTIONS_PRESSED -> R.drawable.playstation5_button_options
+
+    ControlIcon.PS_L3 -> R.drawable.playstation_button_l3_outline
+    ControlIcon.PS_L3_PRESSED -> R.drawable.playstation_button_l3
+    ControlIcon.PS_R3 -> R.drawable.playstation_button_r3_outline
+    ControlIcon.PS_R3_PRESSED -> R.drawable.playstation_button_r3
+
+    ControlIcon.PS_DPAD -> R.drawable.playstation_dpad
+    ControlIcon.PS_DPAD_PRESSED -> R.drawable.playstation_dpad_all
 }

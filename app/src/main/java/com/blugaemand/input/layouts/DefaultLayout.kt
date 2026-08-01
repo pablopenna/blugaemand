@@ -16,7 +16,9 @@ import com.blugaemand.input.LayoutStyle
  * than letting them collide; the clusters still drift a little as the aspect ratio changes, which
  * is what the layout editor will eventually let people fix to taste.
  *
- * This is also the geometry [XBOX_LAYOUT] draws with art, so a position tuned here moves on both.
+ * This is also the geometry the art layouts draw with, so a position tuned here moves on all three.
+ * [PS5_LAYOUT] is the one partial exception: it restates the left cluster, because PlayStation has
+ * never used the offset arrangement of a D-pad tucked below the stick.
  */
 val DEFAULT_LAYOUT = GamepadLayout(
     id = "default",

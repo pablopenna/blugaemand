@@ -4,11 +4,11 @@ Turns an Android phone into a real Bluetooth gamepad. The host sees a standard H
 driver, no companion app, no root.
 
 **Current state:** an Xbox-style pad (two sticks, D-pad, ABXY, four shoulder controls, the three
-centre buttons, two stick clicks), offered in two presentations — **Default**, drawn as shapes and
-labels, and **Xbox**, drawn with console button art. Verified end-to-end against a **Linux** host;
-Windows is the stated target but is **not yet tested**. Two pills sit at the top edge, each opening
-its panel on a 600 ms hold: the left one is connection status and pairing, the right one
-(**☰ Menu**) picks the layout and quits. Editable layouts and additional hosts are planned.
+centre buttons, two stick clicks), offered in three presentations — **Default**, drawn as shapes and
+labels, and **Xbox** and **PS5**, drawn with console button art. Verified end-to-end against a
+**Linux** host; Windows is the stated target but is **not yet tested**. Two pills sit at the top
+edge, each opening its panel on a 600 ms hold: the left one is connection status and pairing, the
+right one (**☰ Menu**) picks the layout and quits. Editable layouts and additional hosts are planned.
 
 **[TODO.md](TODO.md) is the live backlog** — what is done, what is next, and a *Known constraints*
 section recording things that are permanently impossible so they do not get rediscovered. Read it
@@ -57,8 +57,9 @@ Three decisions in there are worth knowing about, all in
   are not portable: Xbox puts Y north and X west, Nintendo swaps both pairs, and HID's legacy
   aliases (`BTN_X` for `BTN_NORTH`, `BTN_Y` for `BTN_WEST`) are a third arrangement again. Hosts
   report the aliases, so `DEFAULT_LAYOUT` puts its Y key on `WEST` and its X key on `NORTH`.
-  **Anything keyed off a face button follows the label, not the slot** — that is why `XboxLayout`'s
-  glyph table pairs `GamepadButton.WEST` with the *Y* picture.
+  **Anything keyed off a face button follows the label, not the slot** — that is why `XBOX_ART`
+  pairs `GamepadButton.WEST` with the *Y* picture, and `PLAYSTATION_ART` pairs it with the
+  triangle that sits in the same place on a DualSense.
 - **The hat carries a null-state flag**, which is what lets a value above the logical maximum mean
   "centred". Without it the D-pad rests stuck pointing north.
 
@@ -110,7 +111,7 @@ host. Only the service and the Compose layer touch the framework.
 | Package | Android-free | Contents |
 |---|---|---|
 | `hid/` | mostly | `GamepadState`, `GamepadProfile`, `GenericHidProfile` are pure Kotlin; `HidGamepadService` is not |
-| `input/` | yes | `ControlSpec`, `ControlIcon`, `GamepadLayout`, `LayoutStyle`, `ResolvedLayout`, `TouchRouter`, `layouts/` |
+| `input/` | yes | `ControlSpec`, `ControlIcon`, `ArtPack`, `GamepadLayout`, `LayoutStyle`, `ResolvedLayout`, `TouchRouter`, `art/`, `layouts/` |
 | `ui/` | no | `GamepadScreen`, `ControlRenderers`, `PadStyle`, `ControlIcons`, `TopBar`, `TopBarChrome`, `ConnectionBar`, `MenuBar`, `theme/` |
 
 **`hid/`**
@@ -131,11 +132,22 @@ host. Only the service and the Compose layer touch the framework.
   `List<ControlSpec>` plus a `LayoutStyle`.
 - `LayoutStyle` — which of the two presentations a layout uses, `Colors` or `Images`. A layout is in
   exactly one; see *Two presentations* below.
-- `ControlIcon` — the glyph a control draws in `Images` mode, as an enum of names. Deliberately not
-  a drawable resource ID: those are reassigned every build, so a serialised layout holding one would
-  come back pointing at a different picture.
+- `ControlIcon` — one picture from an art pack, as an enum of names. Deliberately not a drawable
+  resource ID: those are reassigned every build, so a serialised layout holding one would come back
+  pointing at a different picture. A name identifies a *picture*, not a role — naming roles instead
+  (a `FACE_TOP` resolved against whichever pack is in play) would drop the per-platform prefixes and
+  cost the ability to name one specific picture, which a layout mixing packs and the planned editor
+  both need.
+- `ArtPack` — `ControlId → Glyph` (an idle picture and an optional held one), which is how a layout
+  in `Images` mode gets from a control to something to draw. Named once on the style rather than
+  written onto every `ControlSpec`, so a layout stays geometry and the pack stays swappable. A pack
+  need not be complete; see *Two presentations*.
+- `art/` — the built-in packs, `XBOX_ART` and `PLAYSTATION_ART`. One file each, and the one place
+  each console's face-button crossing is decided.
 - `layouts/` — one file per built-in, plus `Layouts.ALL`, the catalog the menu lists. `XBOX_LAYOUT`
-  derives its geometry from `DEFAULT_LAYOUT` rather than copying it, so tuning a position moves both.
+  and `PS5_LAYOUT` derive their geometry from `DEFAULT_LAYOUT` rather than copying it, so tuning a
+  position moves all three; what is left in each file is which pack to draw with. `PS5_LAYOUT`
+  restates the left cluster on top of that — see *Two presentations*.
 - `ResolvedLayout` — converts a layout to pixels once per size change. Both the renderer and
   hit-testing read from it, so what is drawn is exactly what is touchable. Untouched by the two
   modes: presentation never changes where a touch lands.
@@ -169,22 +181,34 @@ layers, so nothing has to decide what a glyph on a coloured plate would mean.
 
 | | `LayoutStyle.Colors` | `LayoutStyle.Images` |
 |---|---|---|
-| Built-in | **Default** | **Xbox** |
-| Controls | drawn shapes, text labels | a glyph per control |
+| Built-in | **Default** | **Xbox**, **PS5** |
+| Controls | drawn shapes, text labels | a picture per control, from an `ArtPack` |
 | Colours | two ARGB values on the layout: resting and pressed | none — the art carries its own |
-| Pressed | the fill changes | a second glyph swaps in, if the control has one |
+| Pressed | the fill changes | a second picture swaps in, if the pack has one |
 
 Consequences worth knowing:
 
 - **Geometry and hit-testing are shared.** `ResolvedLayout` and `TouchRouter` know nothing about
   either mode. In `Images` mode a wide control like a trigger keeps its full touch area while its
   glyph is drawn square and smaller — easier to hit than it looks, which is the right way round.
-- **Thumbsticks stay drawn in both modes.** No static glyph can show a knob displaced from centre,
+- **A pack is not only pictures.** `PS5_LAYOUT` also moves its left cluster: the D-pad goes up
+  opposite the face diamond and the left stick drops to match the right, because that is where a
+  DualSense puts them, and PlayStation symbols in Xbox positions fight the muscle memory that comes
+  with them. The D-pad is much larger there too — it is the one control a thumb sweeps across
+  rather than lands on, and it inherits the room the stick gives up. Its height is what pays for
+  that size: a hair above the diamond's centre rather than level with it, which is the last place
+  it can sit before its touch square meets the stick's. Everything else still derives from
+  `DEFAULT_LAYOUT`.
+- **Thumbsticks stay drawn in both modes.** No static picture can show a knob displaced from centre,
   so an art pack's picture of a stick would be a picture of a control that no longer moves.
-- **A control with one glyph does not animate.** `iconPressed` is optional and the renderer falls
-  back to the idle glyph, so a pack that ships only one state degrades quietly rather than flickering.
-- **Anything without a glyph falls back to its shape**, which is what stops a layout missing one
-  from rendering a hole.
+- **A control with one picture does not animate.** `Glyph.pressed` is optional and the renderer
+  falls back to the idle one, so a pack that ships only one state degrades quietly rather than
+  flickering. `Glyph.idle` is not optional, which makes a pressed-only control unrepresentable
+  rather than something to test for.
+- **Anything the pack does not name falls back to its shape and label**, which is what stops a gap
+  in a pack rendering a hole. The live example is the PS button: Kenney draws the Xbox logo but not
+  Sony's, so `PS5_LAYOUT` leaves `GUIDE` out of the pack and relabels it *PS*. Lending it the mute
+  or touchpad glyph would put a different button's picture on the one that sends `GUIDE`.
 - Colours are plain ARGB `Int`s in `input/`, not Compose `Color`s. That is what keeps the package
   free of `androidx` imports — the thing that lets its tests run on the JVM and will let
   `GamepadLayout` serialise without a custom serialiser. `PadStyle` converts at the `ui/` boundary.
@@ -252,11 +276,16 @@ what resolves from the local Gradle cache. Lint's "newer version available" fami
 - `TouchRouterTest` — pointer binding and release, multitouch independence, stick normalisation and
   circular clamping, D-pad sectors, and layout sanity (no overlaps, every button reachable, unique
   ids). The sanity tests run over `Layouts.ALL`, so a new built-in is covered by adding it.
-- `LayoutArtTest` — invariants for layouts drawn with art: every control has a glyph except the
-  sticks, no control is pressed-only, colour-mode layouts name no glyphs, and the face buttons show
-  the letter they are *labelled* with rather than the one they drive. That last one is the guard on
-  the X/Y crossing. Nothing checks that a `ControlIcon` resolves to a real drawable — the mapping is
-  an exhaustive `when` naming `R.drawable` constants, so both halves are already compile errors.
+- `LayoutArtTest` — invariants for layouts drawn with art: the pack covers every control bar a
+  declared list of exceptions (the sticks, and the PS button), anything falling back to its shape
+  still has a label to draw, and the face buttons show the picture for the position they are
+  *labelled* for rather than the slot they drive. That last one is the guard on the X/Y crossing,
+  and it now covers both packs — Xbox's Y and PlayStation's triangle both sit on `WEST`. Two
+  invariants the earlier version tested are gone because the types made them unrepresentable: a
+  pressed-only control (`Glyph.idle` is non-null) and a colours-mode layout carrying dead glyphs
+  (only `Images` holds a pack). Nothing checks that a `ControlIcon` resolves to a real drawable —
+  the mapping is an exhaustive `when` naming `R.drawable` constants, so both halves are already
+  compile errors.
 
 ---
 
@@ -359,10 +388,10 @@ logic can be verified with `./gradlew test` instead.
 - **Adaptive icons need the `-v26` qualifier.** Lint's `ObsoleteSdkInt` suggests folding
   `mipmap-anydpi-v26` into `mipmap-anydpi`, but AAPT2 then fails to link. Suppressed in
   `app/lint.xml`.
-- **Top-level `val`s initialise in declaration order.** `XBOX_LAYOUT` reads the glyph table beside
-  it, so the table has to be declared first or the property is null when the layout is built. Kotlin
-  catches this within a file; across files it would be a cycle and would deadlock at class-load
-  instead. Worth remembering as `layouts/` grows.
+- **Top-level `val`s initialise in declaration order.** A layout that reads a table declared below
+  it in the same file gets null. Kotlin catches that within a file; across files it would be a cycle
+  and would deadlock at class-load instead. Less pressing now the packs live in `input/art/` and
+  every layout reads one from another file, but worth remembering as both folders grow.
 
 ### Art assets
 
@@ -377,9 +406,15 @@ bucket and again when drawing. The monochrome layer is *derived*, not copied: th
 the alpha channel, and the art's alpha is a solid square.
 
 **The input prompts** are [Kenney's Input Prompts](https://kenney.nl/assets/input-prompts) 1.5A,
-released under **CC0** — crediting Kenney is appreciated but not required. The SVGs actually used
-live in `art/input/` alongside the licence, so the drawables are regenerable from a clean checkout;
-run `python3 art/input/convert-input-art.py` after changing them.
+released under **CC0** — crediting Kenney is appreciated but not required. The Xbox and PlayStation
+SVGs actually used live in `art/input/` alongside the licence, so the drawables are regenerable from
+a clean checkout; run `python3 art/input/convert-input-art.py` after changing them. The pack itself
+also covers Switch, Steam Deck and others, which is what makes a new face plate a pack file and a
+three-line layout.
+
+Not every button has art: the pack ships an Xbox logo but no PlayStation one, so the PS5 layout's
+guide button falls back to a drawn shape rather than borrowing another button's picture. Expect the
+same kind of gap in any pack, and prefer the fallback to a near-miss.
 
 The conversion is a text transform, not an SVG renderer, and it can be because these files are
 uniformly simple: a 64×64 canvas, one or two `<path>` elements, no strokes, a solid hex fill, and

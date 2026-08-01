@@ -18,10 +18,10 @@ import com.blugaemand.ui.theme.PadColors
  * Draws one resolved control. [pressed] drives the highlight, and [stickOffset] positions a
  * thumbstick's cap as a -1..1 displacement.
  *
- * A control with a glyph draws the glyph alone — no plate, no label — because the art pack's
- * prompts are whole buttons in their own right. Everything without one falls back to the drawn
- * shape, which is what keeps thumbsticks working in both modes and stops a layout missing a glyph
- * from rendering a hole.
+ * A control the layout's art pack has a picture for draws that alone — no plate, no label — because
+ * the pack's prompts are whole buttons in their own right. Everything else falls back to the drawn
+ * shape, which is what keeps thumbsticks working in both modes and what draws a button no pack has
+ * a picture of rather than leaving a hole.
  */
 fun DrawScope.drawControl(
     control: ResolvedControl,
@@ -30,7 +30,7 @@ fun DrawScope.drawControl(
     stickOffset: Pair<Float, Float>?,
     textMeasurer: TextMeasurer,
 ) {
-    val glyph = style.painter(control.spec.iconPressed.takeIf { pressed } ?: control.spec.icon)
+    val glyph = style.glyph(control.spec.id, pressed)
     if (glyph != null) {
         drawGlyph(control, glyph)
         return

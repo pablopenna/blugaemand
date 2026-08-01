@@ -30,23 +30,35 @@ turns up along the way.
 - [x] **One file per layout** — `input/layouts/`, with `Layouts.ALL` as the catalog. `XBOX_LAYOUT`
       derives its geometry from `DEFAULT_LAYOUT`, so tuning a position moves both
 - [x] **Two presentations** — `LayoutStyle` is `Colors` (drawn shapes and labels, in the layout's
-      own resting and pressed colours) or `Images` (a glyph per control, from an art pack). A layout
-      is in exactly one. Ships **Default** and **Xbox**; see the README for what the modes share
+      own resting and pressed colours) or `Images` (a picture per control, from an `ArtPack`). A
+      layout is in exactly one. See the README for what the modes share
+- [x] **Art packs are their own thing** — `ArtPack` is `ControlId → Glyph`, named once on
+      `LayoutStyle.Images` rather than written onto every `ControlSpec`, so a layout in image mode
+      is geometry plus a pack. Built-ins live in `input/art/`; a new face plate is a pack file and
+      a three-line layout
+- [x] **Ships Default, Xbox and PS5.** The PS5 plate is Kenney's PlayStation prompts, laid out the
+      way a DualSense is — D-pad up mirroring the face diamond and enlarged, left stick down level
+      with the right — over derived geometry everywhere else. Its guide button has no art in the
+      pack and falls back to a drawn *PS* shape
 - [ ] Serialise `GamepadLayout` (kotlinx.serialization); the data model is already normalised for
-      it, and `ControlIcon` is an enum of names rather than resource IDs for this reason
+      it, and `ControlIcon` is an enum of names rather than resource IDs for this reason. An image
+      layout now writes out one pack id rather than a picture per control — `ArtPack.id` exists for
+      that — with the built-in packs looked up by id on the way back in
 - [ ] Persist with DataStore; ship `DEFAULT_LAYOUT` as the seeded default
 - [ ] Remember the menu's layout choice across launches — it is session-only until the above lands
 - [ ] Editor screen: drag to move, pinch to resize, snap-to-grid. Picking a layout's two colours
       belongs here too — they are data already, just not editable
-- [ ] More built-in layouts to switch between; a Nintendo-style face plate is the obvious first one.
-      The art for PlayStation, Switch, Steam Deck and others is in the same Kenney pack, so an
-      image-mode layout is a geometry table plus a glyph table
+- [ ] More built-in layouts to switch between — Nintendo is the obvious next one, then Steam Deck.
+      The art is in the same Kenney pack, and since PS5 landed the shape is settled: convert the
+      SVGs, add the `ControlIcon` names, write one pack file and one layout. Nintendo's own A/B/X/Y
+      crossing is the part to think about, not the plumbing
 - [ ] D-pad glyph lighting the direction being pushed rather than the whole cross — the directional
       art exists, but `drawControl` is told only whether the control is held, not which way
 - [ ] Add / remove controls, and surface `missingButtons()` as a validation warning
 - [ ] Import / export layouts as JSON so they can be shared. User-supplied art cannot go through
-      `R.drawable` at all — it needs a file loaded at runtime, turning `ControlSpec.icon` into a
-      sealed `Builtin | File`. The enum is the seam that would grow along
+      `R.drawable` at all — it needs a file loaded at runtime, turning `ControlIcon` into a sealed
+      `Builtin | File`. `ArtPack` is the seam it arrives through: a hand-made layout names its own
+      pictures by carrying its own pack
 - [ ] Portrait layout variant — this is the real fix for the Android 16 orientation opt-out in
       `AndroidManifest.xml`, which stops working at targetSdk 37
 
@@ -90,8 +102,10 @@ Not bugs, and not fixable — recorded so they do not get rediscovered.
 
 - **No XInput on Windows.** Bluetooth HID cannot reach XInput; the pad is a DirectInput device.
 - **HID's X/Y are not Xbox's X/Y.** `BTN_X` aliases `BTN_NORTH` and `BTN_Y` aliases `BTN_WEST`, so
-  the Xbox layout puts its Y key on `GamepadButton.WEST` and its X key on `NORTH`. Every future
-  layout has to make the same decision for its own face plate. See Design decisions in the README.
+  the Xbox layout puts its Y key on `GamepadButton.WEST` and its X key on `NORTH`. Every art pack
+  has to make the same decision for its own face plate — `PLAYSTATION_ART` puts triangle on `WEST`
+  because triangle sits where Y does, not because both are named after a compass point. See Design
+  decisions in the README.
 - **No BLE.** Android blocks apps from registering the HID service UUID on its GATT server, so
   HID-over-GATT is unavailable.
 - **No VID/PID control.** See Iteration 4.
