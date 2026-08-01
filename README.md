@@ -5,10 +5,12 @@ driver, no companion app, no root.
 
 **Current state:** an Xbox-style pad (two sticks, D-pad, ABXY, four shoulder controls, the three
 centre buttons, two stick clicks), offered in three presentations — **Default**, drawn as shapes and
-labels, and **Xbox** and **PS5**, drawn with console button art. Verified end-to-end against a
-**Linux** host; Windows is the stated target but is **not yet tested**. Two pills sit at the top
-edge, each opening its panel on a 600 ms hold: the left one is connection status and pairing, the
-right one (**☰ Menu**) picks the layout and quits. Editable layouts and additional hosts are planned.
+labels, and **Xbox** and **PS5**, drawn with console button art. **You can also make your own**,
+from empty or as a copy of one of those, and move, resize, add and remove controls on it; layouts
+and the choice of one are saved between launches. Verified end-to-end against a **Linux** host;
+Windows is the stated target but is **not yet tested**. Two pills sit at the top edge, each opening
+its panel on a 600 ms hold: the left one is connection status and pairing, the right one
+(**☰ Menu**) picks or creates a layout, opens the editor, and quits.
 
 **[TODO.md](TODO.md) is the live backlog** — what is done, what is next, and a *Known constraints*
 section recording things that are permanently impossible so they do not get rediscovered. Read it
@@ -111,8 +113,9 @@ host. Only the service and the Compose layer touch the framework.
 | Package | Android-free | Contents |
 |---|---|---|
 | `hid/` | mostly | `GamepadState`, `GamepadProfile`, `GenericHidProfile` are pure Kotlin; `HidGamepadService` is not |
-| `input/` | yes | `ControlSpec`, `ControlIcon`, `ArtPack`, `GamepadLayout`, `LayoutStyle`, `ResolvedLayout`, `TouchRouter`, `art/`, `layouts/` |
-| `ui/` | no | `GamepadScreen`, `ControlRenderers`, `PadStyle`, `ControlIcons`, `TopBar`, `TopBarChrome`, `ConnectionBar`, `MenuBar`, `theme/` |
+| `input/` | yes | `ControlSpec`, `ControlIcon`, `ArtPack`, `GamepadLayout`, `LayoutStyle`, `LayoutJson`, `LayoutLibrary`, `LayoutEdits`, `ResolvedLayout`, `TouchRouter`, `art/`, `layouts/` |
+| `data/` | no | `LayoutStore` — the only file outside `hid/` and `ui/` that touches Android |
+| `ui/` | no | `GamepadScreen`, `EditorScreen`, `ControlRenderers`, `PadStyle`, `ControlIcons`, `TopBar`, `TopBarChrome`, `ConnectionBar`, `MenuBar`, `EditorBar`, `theme/` |
 
 **`hid/`**
 
@@ -133,8 +136,9 @@ host. Only the service and the Compose layer touch the framework.
 - `LayoutStyle` — which of the two presentations a layout uses, `Colors` or `Images`. A layout is in
   exactly one; see *Two presentations* below.
 - `ControlIcon` — one picture from an art pack, as an enum of names. Deliberately not a drawable
-  resource ID: those are reassigned every build, so a serialised layout holding one would come back
-  pointing at a different picture. A name identifies a *picture*, not a role — naming roles instead
+  resource ID: those are reassigned every build, so a saved layout holding one would come back
+  pointing at a different picture. That was a hypothetical when it was written and is now load-
+  bearing. A name identifies a *picture*, not a role — naming roles instead
   (a `FACE_TOP` resolved against whichever pack is in play) would drop the per-platform prefixes and
   cost the ability to name one specific picture, which a layout mixing packs and the planned editor
   both need.
@@ -147,17 +151,37 @@ host. Only the service and the Compose layer touch the framework.
 - `layouts/` — one file per built-in, plus `Layouts.ALL`, the catalog the menu lists. `XBOX_LAYOUT`
   and `PS5_LAYOUT` derive their geometry from `DEFAULT_LAYOUT` rather than copying it, so tuning a
   position moves all three; what is left in each file is which pack to draw with. `PS5_LAYOUT`
-  restates the left cluster on top of that — see *Two presentations*.
-- `ResolvedLayout` — converts a layout to pixels once per size change. Both the renderer and
-  hit-testing read from it, so what is drawn is exactly what is touchable. Untouched by the two
-  modes: presentation never changes where a touch lands.
+  restates the left cluster on top of that — see *Two presentations*. **The derivation happens at
+  class-load, so it does not extend to user layouts:** a copy of Default that is then edited moves
+  nothing but itself, which is what you want but is the opposite of what "moves all three" suggests.
+- `ResolvedLayout` — converts a layout to pixels once per size change. The renderer, hit-testing
+  *and the editor* all read from it, so what is drawn is exactly what is touchable and exactly what
+  a drag moves. Untouched by the two modes: presentation never changes where a touch lands.
 - `TouchRouter` — owns `pointerId → control` bindings and produces a `GamepadState`.
+- `LayoutJson` — the saved format, and the two small serialisers it needs. See *Layouts* below.
+- `LayoutLibrary` — the built-ins plus the user's own. Whether a layout can be edited is a fact
+  about where it came from, not about the layout, so `GamepadLayout` carries no flag saying so;
+  `isEditable` is the single place that line is drawn.
+- `LayoutEdits` — every edit the editor makes, as arithmetic on plain data. This is where the
+  editor is actually tested.
+
+**`data/`**
+
+- `LayoutStore` — a Preferences DataStore holding two keys: the user's layouts as JSON, and the id
+  of the selected one. Preferences rather than a typed `DataStore<T>` because the payload is already
+  one string. Stored JSON that will not parse is reported as an empty library and **left where it
+  is**: it is still the only copy of work someone did, and overwriting it on the next save would
+  destroy it with no way back.
 
 **`ui/`**
 
 - `GamepadScreen` takes the layout as a parameter and never reads a global. That is what lets the
-  menu switch layouts by handing it a different instance, and what will make the planned layout
-  editor the same trick.
+  menu switch layouts by handing it a different instance, and it is the same trick the editor uses.
+- `EditorScreen` — the pad with its wiring pulled out: same controls in the same places, but a
+  finger moves one instead of pressing it. A screen of its own rather than a mode on `GamepadScreen`
+  because the two share no input at all; the reuse is `drawControl`, one level down, which is where
+  it belongs — the editor has to draw a control exactly as the pad will or it is not showing you
+  what you are making.
 - `PadStyle` — a `LayoutStyle` resolved for drawing: ARGB `Int`s become Compose `Color`s, and glyph
   names become `Painter`s. It exists because `painterResource` is a composable while the pad draws
   inside a `Canvas` lambda, which is not composition — painters have to be resolved up front.
@@ -166,13 +190,16 @@ host. Only the service and the Compose layer touch the framework.
   state is one nullable `TopPanel`, not a boolean each, so "only one open at a time" is structural.
   The pills share a `Row` and the panels hang beneath it: side-by-side pill-and-panel columns would
   change width as a panel opened and slide the pills sideways every time.
-- `TopBarChrome` — `HoldPill` and `PanelCard`, the shape and gesture every pill and panel is built
-  from. A second pill that reimplemented the hold would drift from the first; see the trap below
-  for why that gesture is not worth writing twice.
+- `TopBarChrome` — `HoldPill`, `PanelCard`, `PanelEntry` and `PanelCaption`: the shape, the rows and
+  the gesture every pill and panel is built from. A second pill that reimplemented the hold would
+  drift from the first; see the trap below for why that gesture is not worth writing twice, and the
+  same goes for the rows now that two panels are lists of them.
 - `ConnectionBar` — `ConnectionPill` and `ConnectionPanel`: status, pairing and reconnection.
-- `MenuBar` — `MenuPill` and `MenuPanel`: the layout picker and quit. The panel's page state lives
-  inside the composable, which is only composed while open, so the menu reopens on its root page
-  without a reset that would visibly flip pages mid-close.
+- `MenuBar` — `MenuPill` and `MenuPanel`: picking a layout, making one, editing, and quitting. The
+  panel's page state lives inside the composable, which is only composed while open, so the menu
+  reopens on its root page without a reset that would visibly flip pages mid-close.
+- `EditorBar` — the editor's own panel. Deliberately not a `HoldPill`: the hold exists so a stray
+  tap cannot throw a panel up mid-game, and nothing being edited is connected to anything.
 
 ### Two presentations
 
@@ -217,13 +244,96 @@ Only the two fills that change with press state belong to the layout. Strokes, l
 well and the canvas stay in `PadColors`: they are the pad's chrome rather than the layout's
 identity, and a layout free to recolour its strokes is a layout free to make itself invisible.
 
+### Layouts, built-in and user-made
+
+**The built-ins are read-only.** `DEFAULT_LAYOUT`, `XBOX_LAYOUT` and `PS5_LAYOUT` are `val`s in the
+source; you make your own from empty or as a copy, and edit that. `LayoutLibrary.isEditable` is the
+only place that distinction is drawn, which is what keeps it from having to be remembered in every
+screen — the menu offers *Edit layout* only when it is true, so there is no disabled row to explain.
+
+A copy takes a fresh UUID rather than anything derived from its source, so a layout imported from
+someone else can never land on top of one already here. It keeps everything else, art pack included:
+a copy of the PS5 pad is a PlayStation-looking pad you can then rearrange.
+
+**Editing is four operations** — move, resize, add, remove — plus the two colours and a rename. All
+of the arithmetic is in `LayoutEdits`, which is plain Kotlin, so the editor is tested on the JVM and
+`EditorScreen` is nothing but gestures. Three decisions in there are easy to undo by accident:
+
+- **The grid is in pixels, off the layout unit.** Defined in normalised coordinates it would not be
+  square — x divides by width and y by height, so on a 16:9 screen the cells would be nearly twice
+  as wide as tall, and two controls both "on the grid" would not line up with each other. Sizes snap
+  against the same pixel grid, which is why `Rect.width` — a fraction of *screen width*, where every
+  other size is a fraction of the unit — is converted through its own reference rather than clamped
+  and snapped in the wrong units.
+- **Deltas accumulate across a gesture** and apply to the geometry as it was when the finger went
+  down, not to the result of the previous frame. The other way round, with snapping on, a drag
+  slower than half a grid step per frame rounds back to where it started every frame and the control
+  never moves at all.
+- **A move is clamped so the control stays wholly on screen**, not merely so its centre stays in
+  `0..1`. Half a button hanging over the edge cannot be touched, and reads as a bug.
+
+**A layout added by the editor lands where `DEFAULT_LAYOUT` has it**, size and label included, so
+building an empty layout up one control at a time reconstructs the default pad instead of piling
+everything in the middle. `L2` and `R2` are the only two of `ControlId.ALL` the default does not
+place — it reaches the triggers through `ControlId.Trigger` — and they are the only two with a
+fallback spec, derived rather than listed so that a control with no home fails at class-load.
+
+User layouts are deliberately allowed to be **incomplete, empty or overlapping**. The layout-sanity
+tests apply to `Layouts.ALL` only; `missingButtons()` is surfaced in the editor as a caption, which
+is a warning and not an error. A pad with no Start button is a strange pad, but it is allowed to be
+one.
+
+### The saved format
+
+`LayoutJson` writes `{"version": 1, "layouts": [...]}` — always a list, so saving the whole library
+and sharing a single layout are the same shape and there is one version number to reason about.
+`data/LayoutStore` keeps that string in a Preferences DataStore.
+
+```json
+{
+  "version": 1,
+  "layouts": [
+    {
+      "id": "8f3c…", "name": "My pad",
+      "controls": [
+        { "id": { "type": "button", "button": "WEST" },
+          "shape": { "type": "circle", "centerX": 0.87, "centerY": 0.295, "radius": 0.072 },
+          "label": "Y" }
+      ],
+      "style": { "type": "colors", "resting": "#FF262B36", "pressed": "#FF4C82F7" }
+    }
+  ]
+}
+```
+
+- **The names in there are a compatibility surface, not an implementation detail.** Every
+  `@SerialName`, every `GamepadButton` and `ControlId.Side` entry, every `ArtPack.id`: a layout on
+  someone's phone names them. Renaming one silently repoints it. `LayoutSerializationTest` pins the
+  lot against a golden file so that fails a test instead.
+- Every polymorphic variant therefore names its own discriminator. Left to itself kotlinx writes the
+  fully-qualified Kotlin name, and moving a file to another package would orphan every saved layout.
+- **An image layout writes one pack id**, not a picture per control — otherwise a saved layout could
+  disagree with the pack it claims to use. A pack that is not installed throws rather than degrading
+  to colours mode: decoding is all-or-nothing, because a layout arriving as a different-looking pad
+  than the one that was shared is the worse failure.
+- **Colours are `#AARRGGBB`.** As numbers they would be large negative integers — a full alpha byte
+  makes the `Int` negative — which is no use in a file meant to be shared and hand-edited. Reading
+  is lenient in the two ways someone editing one by hand would expect: the `#` is optional, and six
+  digits mean opaque.
+- `encodeDefaults` is on, so a layout keeps the values it was saved with even if a default later
+  moves. `ignoreUnknownKeys` is on too, so a field added by a newer build does not stop an older one
+  reading the rest.
+
 ### The two seams
 
 Everything on the roadmap goes through one of these:
 
 - **`GamepadProfile`** — supporting a fussier host (the Switch) means adding an implementation, not
   threading special cases through the service.
-- **`GamepadLayout`** — making layouts user-editable means serialising it and building an editor.
+- **`GamepadLayout`** — it needed no changes to become the saved format, because a user layout is a
+  variable-length list of controls under a name and that is what it always was. The one change still
+  queued is user-supplied art, which turns `ControlIcon` into a sealed `Builtin | File`; the version
+  in the saved file is there for exactly that.
 
 ### Design decisions that are easy to undo by accident
 
@@ -262,20 +372,22 @@ sdk.dir=/path/to/android-sdk
 ./gradlew installDebug      # install onto a connected phone
 ```
 
-Dependency versions are pinned deliberately (AGP 8.13.2, Kotlin 2.0.21, Compose BOM 2024.09.00) to
-what resolves from the local Gradle cache. Lint's "newer version available" family is disabled in
-`app/build.gradle.kts` because it is pure noise here.
+Dependency versions are pinned deliberately (AGP 8.13.2, Kotlin 2.0.21, Compose BOM 2024.09.00,
+kotlinx.serialization 1.7.3, DataStore 1.1.1). Lint's "newer version available" family is disabled
+in `app/build.gradle.kts` because it is pure noise here.
 
 ### Tests
 
-`app/src/test/` covers the encoder, descriptor structure, and touch routing on the JVM:
+`app/src/test/` covers the encoder, descriptor structure, touch routing, the saved format and every
+edit the layout editor makes — all on the JVM:
 
 - `GenericHidProfileTest` — exact report bytes, per-button bit positions, every hat direction, axis
   clamping, and a walk of the descriptor's item stream verifying it is structurally sound and
   declares exactly 9 bytes.
 - `TouchRouterTest` — pointer binding and release, multitouch independence, stick normalisation and
   circular clamping, D-pad sectors, and layout sanity (no overlaps, every button reachable, unique
-  ids). The sanity tests run over `Layouts.ALL`, so a new built-in is covered by adding it.
+  ids). The sanity tests run over `Layouts.ALL`, so a new built-in is covered by adding it — and
+  only over `Layouts.ALL`, since a user layout is entitled to be empty or to overlap.
 - `LayoutArtTest` — invariants for layouts drawn with art: the pack covers every control bar a
   declared list of exceptions (the sticks, and the PS button), anything falling back to its shape
   still has a label to draw, and the face buttons show the picture for the position they are
@@ -286,6 +398,16 @@ what resolves from the local Gradle cache. Lint's "newer version available" fami
   (only `Images` holds a pack). Nothing checks that a `ControlIcon` resolves to a real drawable —
   the mapping is an exhaustive `when` naming `R.drawable` constants, so both halves are already
   compile errors.
+- `LayoutSerializationTest` — round trips, leniency and refusals for the saved format, and the
+  **golden file**: one layout covering all four shapes, all four control kinds and both styles,
+  compared literally. It is the guard on every name the format is made of, so a `@SerialName` or an
+  enum entry cannot be renamed without a failing test. If it fails for a change that is genuinely
+  wanted, the fix is a format version and a migration in `decodeLayouts`, not a new expected string.
+- `LayoutLibraryTest` — the built-in/user line: no built-in is editable, `without` cannot reach one,
+  saving replaces in place and keeps its position rather than shuffling the menu under a thumb.
+- `LayoutEditsTest` — everything a drag, a pinch, an add and a remove do, on a 1000×500 surface that
+  makes the layout unit exactly 500 and the grid step exactly 25. The round-trip test (move by
+  `(dx, dy)`, then by `(-dx, -dy)`) is the one that catches an axis divided by the wrong dimension.
 
 ---
 
@@ -331,6 +453,27 @@ check still.
 
 ---
 
+## Making a layout
+
+The three built-ins cannot be changed — make your own instead:
+
+1. **Hold** the ☰ Menu pill, then **Layouts → New layout**, and pick either **Empty** or **Copy of**
+   whichever layout is showing. Either one is selected and opens the editor straight away.
+2. **Drag** a control to move it, **pinch** it to resize. **Grid** toggles snapping, which applies to
+   sizes as well as positions, so two buttons meant to match can be made to match.
+3. **Add control** places anything not already on the pad, where the default layout has it.
+   **Remove** takes out whatever is selected. A caption names any button left with no control — a
+   warning, not an error.
+4. **Colours** picks the resting and held fills, on a colours-mode layout. A layout copied from Xbox
+   or PS5 draws its art's own, so it has none to pick.
+5. **Done** goes back to the pad. Everything is saved as you go; **Delete layout** asks first,
+   because there is no undo.
+
+To reach the editor again later, select the layout in the menu — *Edit layout* appears on the root
+page for anything you made.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause |
@@ -341,6 +484,8 @@ check still.
 | Pairs but never connects | Almost always one of the two pairing gotchas above. Remove the pairing on the host and redo it with the app already showing **Ready to pair**. |
 | Buttons stick down after switching apps | Should not happen — the pad sends a neutral report on focus loss and on opening the panel. If you see it, it is a bug. |
 | Changed the HID descriptor but the host still sees the old one | Hosts cache the SDP record at pair time, and reconnecting does not refresh it. Remove the pairing on **both** ends and pair again. On Linux, `bluetoothctl remove <mac>` clears BlueZ's cache in `/var/lib/bluetooth/<adapter>/cache/`. |
+| My layouts vanished after an update | Stored JSON the app cannot parse is reported as an empty library, but is **not** overwritten — `adb logcat -s Blugaemand` will say so. The file is still there under `files/datastore/`, so a fixed build can still read it. |
+| *Edit layout* is not in the menu | The selected layout is a built-in, and those are read-only. **Layouts → New layout → Copy of…** gives you an editable one. |
 | `unknown main item tag 0x0` in `dmesg` | Expected and harmless. One `0x00` is appended to the descriptor in transit regardless of its length; see *Known constraints* in TODO.md. |
 
 To watch the app's own state transitions:
@@ -382,7 +527,10 @@ logic can be verified with `./gradlew test` instead.
 
 - **Cleanup after a suspension point in a keyed `pointerInput` does not run** when the key changes —
   and a gesture whose success changes that key cancels itself. Put anything that must happen in a
-  `finally`, or drive it from a `LaunchedEffect`. This caused two bugs in the hold-to-open pill.
+  `finally`, or drive it from a `LaunchedEffect`. This caused two bugs in the hold-to-open pill, and
+  it is why `EditorScreen` keys its gesture on the surface size rather than on the `ResolvedLayout`
+  it is editing: every frame of a drag builds a new one, so keying on that would cancel the drag
+  doing the editing. Read the changing value through `rememberUpdatedState` instead.
 - **`Modifier.then(...)` crashes lint** (`SuspiciousModifierThenDetector`). Restructure rather than
   suppress; a single `pointerInput` handling both branches was cleaner anyway.
 - **Adaptive icons need the `-v26` qualifier.** Lint's `ObsoleteSdkInt` suggests folding

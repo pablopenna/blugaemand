@@ -40,25 +40,42 @@ turns up along the way.
       way a DualSense is — D-pad up mirroring the face diamond and enlarged, left stick down level
       with the right — over derived geometry everywhere else. Its guide button has no art in the
       pack and falls back to a drawn *PS* shape
-- [ ] Serialise `GamepadLayout` (kotlinx.serialization); the data model is already normalised for
-      it, and `ControlIcon` is an enum of names rather than resource IDs for this reason. An image
-      layout now writes out one pack id rather than a picture per control — `ArtPack.id` exists for
-      that — with the built-in packs looked up by id on the way back in
-- [ ] Persist with DataStore; ship `DEFAULT_LAYOUT` as the seeded default
-- [ ] Remember the menu's layout choice across launches — it is session-only until the above lands
-- [ ] Editor screen: drag to move, pinch to resize, snap-to-grid. Picking a layout's two colours
-      belongs here too — they are data already, just not editable
+- [x] **Serialise `GamepadLayout`** (kotlinx.serialization). The data model needed no changes: a
+      user layout is a variable-length list of `ControlSpec`s under a name, which is what this
+      always was. An image layout writes one pack id rather than a picture per control, resolved
+      through the new `ArtPacks` catalog; an id that is not installed throws rather than degrading.
+      Colours are `#AARRGGBB`. Everything is wrapped in `{"version": 1, "layouts": [...]}` — always
+      a list, so sharing one layout and saving the whole library are the same shape
+- [x] **Persist with DataStore.** `data/LayoutStore` keeps the user's layouts and their choice of
+      one. `DEFAULT_LAYOUT` is the fallback rather than a seeded row: the built-ins are compiled in,
+      so first run writes nothing. Stored JSON that will not parse is reported as an empty library
+      and **left where it is** — it is still the only copy of someone's work
+- [x] **Remember the menu's layout choice across launches** — falls out of the above
+- [x] **Editor screen** — drag to move, pinch to resize, snap-to-grid, and the two colours from a
+      preset palette. `LayoutEdits` holds all of the arithmetic as plain Kotlin, so the editor is
+      tested on the JVM and `EditorScreen` is only gestures. **Built-ins are read-only**; you make
+      your own from empty or as a copy, and `LayoutLibrary.isEditable` is the one place that line
+      is drawn
+- [x] **Add / remove controls**, with `missingButtons()` surfaced as a caption in the editor. A
+      control is added where `DEFAULT_LAYOUT` has it, so building an empty layout up one control at
+      a time reconstructs the default pad
+- [ ] Editor extras that did not make the first cut: undo, duplicating a control, nudging a
+      selection with arrows, and a real colour picker rather than twelve presets
 - [ ] More built-in layouts to switch between — Nintendo is the obvious next one, then Steam Deck.
       The art is in the same Kenney pack, and since PS5 landed the shape is settled: convert the
       SVGs, add the `ControlIcon` names, write one pack file and one layout. Nintendo's own A/B/X/Y
       crossing is the part to think about, not the plumbing
 - [ ] D-pad glyph lighting the direction being pushed rather than the whole cross — the directional
       art exists, but `drawControl` is told only whether the control is held, not which way
-- [ ] Add / remove controls, and surface `missingButtons()` as a validation warning
-- [ ] Import / export layouts as JSON so they can be shared. User-supplied art cannot go through
+- [ ] Import / export layouts as JSON so they can be shared. The format exists and is versioned;
+      what is left is the file picker and the share sheet. Two things to decide there: what to do
+      with an incoming id that collides with a local layout (copies already take a fresh UUID, so
+      only a re-import of the same file can), and how to report a refusal — decoding is
+      all-or-nothing, so a missing art pack fails the whole file
+- [ ] User-supplied art, which is the one change still queued for the format. It cannot go through
       `R.drawable` at all — it needs a file loaded at runtime, turning `ControlIcon` into a sealed
-      `Builtin | File`. `ArtPack` is the seam it arrives through: a hand-made layout names its own
-      pictures by carrying its own pack
+      `Builtin | File`, which is what `version` in the saved file is there for. `ArtPack` is the
+      seam it arrives through: a hand-made layout names its own pictures by carrying its own pack
 - [ ] Portrait layout variant — this is the real fix for the Android 16 orientation opt-out in
       `AndroidManifest.xml`, which stops working at targetSdk 37
 
