@@ -19,6 +19,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,6 +100,12 @@ class MainActivity : ComponentActivity() {
             BlugaemandTheme {
                 var barExpanded by remember { mutableStateOf(false) }
                 val status by (service?.status ?: fallbackStatus).collectAsStateWithLifecycle()
+
+                // The panel only exists to get connected. Once that has happened it is just
+                // covering the pad, so fold it away rather than making the user dismiss it.
+                LaunchedEffect(status) {
+                    if (status is HidStatus.Connected) barExpanded = false
+                }
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     GamepadScreen(
