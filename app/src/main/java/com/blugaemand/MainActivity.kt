@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,11 +36,12 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.blugaemand.data.LayoutStore
 import com.blugaemand.hid.GamepadState
 import com.blugaemand.hid.HidGamepadService
 import com.blugaemand.hid.HidStatus
+import com.blugaemand.input.LayoutLibrary
 import com.blugaemand.input.layouts.DEFAULT_LAYOUT
-import com.blugaemand.input.layouts.Layouts
 import com.blugaemand.ui.GamepadScreen
 import com.blugaemand.ui.HostOption
 import com.blugaemand.ui.TopBar
@@ -47,6 +49,7 @@ import com.blugaemand.ui.TopPanel
 import com.blugaemand.ui.theme.BlugaemandTheme
 import com.blugaemand.ui.theme.OverlayColors
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * Hosts the pad and owns the connection to [HidGamepadService].
@@ -62,6 +65,8 @@ class MainActivity : ComponentActivity() {
     private val fallbackStatus = MutableStateFlow<HidStatus>(HidStatus.Initializing)
 
     private var bonded: List<HostOption> by mutableStateOf(emptyList())
+
+    private val layoutStore by lazy { LayoutStore(this) }
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -106,9 +111,17 @@ class MainActivity : ComponentActivity() {
         setContent {
             BlugaemandTheme {
                 var openPanel by remember { mutableStateOf<TopPanel?>(null) }
-                // Only for this session; remembering the choice waits on layout persistence.
-                var layout by remember { mutableStateOf(DEFAULT_LAYOUT) }
                 val status by (service?.status ?: fallbackStatus).collectAsStateWithLifecycle()
+
+                val scope = rememberCoroutineScope()
+                val library by layoutStore.library
+                    .collectAsStateWithLifecycle(initialValue = LayoutLibrary())
+                val selectedId by layoutStore.selectedId
+                    .collectAsStateWithLifecycle(initialValue = DEFAULT_LAYOUT.id)
+                // A selection can outlive the layout it names -- deleting the active layout is the
+                // obvious way, but so is a stored id whose layout failed to parse. Falling back
+                // rather than showing nothing keeps the pad usable either way.
+                val layout = library.byId(selectedId) ?: DEFAULT_LAYOUT
 
                 // The connection panel only exists to get connected. Once that has happened it is
                 // just covering the pad, so fold it away rather than making the user dismiss it.
@@ -147,7 +160,7 @@ class MainActivity : ComponentActivity() {
                     TopBar(
                         status = status,
                         hosts = bonded,
-                        layouts = Layouts.ALL,
+                        layouts = library.all,
                         selectedLayoutId = layout.id,
                         openPanel = openPanel,
                         onOpenPanelChange = { panel ->
@@ -171,7 +184,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onSelectLayout = { chosen ->
-                            layout = chosen
+                            scope.launch { layoutStore.select(chosen) }
                             // Switching rebuilds the router, which drops its pointer bindings
                             // without ever emitting a release — so whatever the last report
                             // asserted would stay asserted on the host.
