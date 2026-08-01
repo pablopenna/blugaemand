@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    All layers are pre-scaled nearest-neighbour exports of art/icon.png, one per density, so Android
+    never resamples the pixel art. Regenerate with art/generate-launcher-icons.py.
+
+    The monochrome layer is a derived silhouette rather than the art itself: themed icons use only
+    the alpha channel, and the art's alpha is a solid square, so a straight copy would render as a
+    featureless block.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background" />
-    <foreground android:drawable="@drawable/ic_launcher_foreground" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
 </adaptive-icon>

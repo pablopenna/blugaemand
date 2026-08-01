@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#12141A</color>
+    <!--
+        Matches the blue the icon art is drawn on. The art occupies the central 64dp of the 108dp
+        adaptive-icon canvas, so this colour is what fills the rest and bleeds to the edge under
+        every launcher mask. Keep the two in sync when the art changes.
+    -->
+    <color name="ic_launcher_background">#002EFF</color>
 </resources>

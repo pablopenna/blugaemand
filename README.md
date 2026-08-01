@@ -134,6 +134,15 @@ input/   ControlSpec / GamepadLayout (normalised data), ResolvedLayout (pixels),
 ui/      GamepadScreen (canvas + multitouch), ControlRenderers, ConnectionBar
 ```
 
+The launcher icon is pixel art. Source lives in `art/icon.aseprite`; export it to `art/icon.png`
+(54×54, RGBA) and run `python3 art/generate-launcher-icons.py` to regenerate the density assets.
+
+The 54×54 canvas is not arbitrary: it is the only convenient size that upscales to all five
+adaptive-icon buckets (108/162/216/324/432 px) on whole pixels, so every export can be nearest
+-neighbour and the pixel grid stays square. Pre-scaling also avoids Android's own bilinear filtering,
+which it applies both when decoding a bitmap into a mismatched density bucket and again when drawing
+it.
+
 Two seams carry the planned work:
 
 - **`GamepadProfile`** is everything host-specific — SDP metadata, descriptor, report encoding.

@@ -13,6 +13,7 @@ turns up along the way.
 - [x] Normalised layout data, `ResolvedLayout`, `TouchRouter`
 - [x] Compose pad with multitouch, connection bar, immersive landscape
 - [x] 34 JVM unit tests; lint clean
+- [x] Pixel-art launcher icon with derived monochrome layer for themed icons
 - [ ] **Verify on a physical phone** — install, confirm the status reaches *Ready to pair*
 - [ ] **Verify on Windows** — pair, then check every control in `joy.cpl` → Properties
 - [ ] Tune the default layout against a real thumb once it has been held in landscape
