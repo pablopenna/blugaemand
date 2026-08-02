@@ -142,11 +142,100 @@ turns up along the way.
 
 ## Iteration 4 — Nintendo Switch
 
-- [ ] Dedicated `GamepadProfile` with the report layout the Switch expects
-- [ ] Adapter rename via the existing `requiredAdapterName` hook, restoring the old name on exit
-- [ ] Document what the VID/PID limitation means in practice — Android's
-      `BluetoothHidDeviceAppSdpSettings` exposes no vendor or product ID, so hosts that fingerprint
-      controllers that way cannot be fully impersonated
+**The Switch does not accept HID gamepads. It accepts controllers it recognises.** Every other host
+on the roadmap reads the descriptor and believes it; this one wants a Pro Controller, which means a
+vendor-defined report format and a subcommand handshake, not another descriptor. So this is
+impersonation, and the first question is not how to build it but whether stock Android can reach the
+starting line at all: `BluetoothHidDeviceAppSdpSettings` exposes name, description, provider,
+subclass and descriptor, and **nothing that carries a vendor or product ID**. Stage 0 exists to find
+that out cheaply, before any of the rest is written.
+
+### Stage 0 — Does it get to the starting line?
+
+Throwaway work. Every later stage is gated on it.
+
+- [ ] **Read the reference controller first.** A third-party pad with a Switch mode is a device the
+      console demonstrably accepts, and unlike the console it will talk to a PC. Pair it and record
+      what it advertises: VID/PID, Bluetooth name, class of device, report descriptor. Windows gives
+      the IDs through Device Manager's hardware IDs or `Get-PnpDevice`; a Linux host gives the
+      descriptor through `/sys/bus/hid/devices/<id>/report_descriptor`, the same trick used to verify
+      ours. Two possible answers, both worth having:
+      - it carries Nintendo's `057E:2009` and the name `Pro Controller` → impersonation is the price
+        of entry, and the Android gap is real and probably fatal
+      - it carries its own IDs and the Switch takes it anyway → the console does not gate on VID/PID,
+        and the odds on this whole iteration improve sharply
+- [ ] Point a scratch profile's `requiredAdapterName` at `Pro Controller`, register the existing
+      `GenericHidProfile` unchanged, and try to pair from *Change Grip/Order*. Record which of three:
+      never pairs / pairs then drops / holds the connection and waits for a handshake
+- [ ] **Prove `onInterruptData` fires.** It is the callback output reports arrive on, the whole
+      handshake runs through it, and nothing in the app has ever overridden it — `hidCallback` in
+      `HidGamepadService` covers the other five. Add it, log it, poke the interrupt channel from a
+      Linux host. If it never fires, nothing after this is possible
+- [ ] Read back what Android actually published in SDP, from a Linux host — `sdptool records` and
+      BlueZ's cache under `/var/lib/bluetooth/<adapter>/cache/`, since the Switch will not tell us.
+      Is there a DeviceID/PnP record at all, and what class of device does `subclass` produce?
+- [ ] **Gate.** If the Switch will not open a connection to a device with no Nintendo VID/PID, stop
+      here: move the finding into *Known constraints*, replacing the "No VID/PID control. See
+      Iteration 4." forward-reference with the answer, and close the iteration. The reference
+      controller is what makes this a measurement rather than a guess
+
+### Stage 1 — What the seam needs before a Switch profile fits through it
+
+- [ ] **An output-report hook on `GamepadProfile`** — `handleOutput(reportId, data): List<ByteArray>`
+      or similar, defaulting to empty so `GenericHidProfile` is unaffected — with
+      `HidGamepadService` routing `onInterruptData` and `onSetReport` into it. Replies go out on the
+      existing `reportExecutor` rather than a thread of their own
+- [ ] **Decide how a stateful profile lives behind an interface built for an `object`.** A Pro
+      Controller starts in simple mode (`0x3F`) and only moves to full mode (`0x30`) when the host's
+      subcommand says so, so `ProControllerProfile` is a `class` and `encode` stops being pure
+- [ ] **Decide what `sendIfChanged` does when every report differs.** The standard report carries an
+      incrementing timer byte, so the dedupe stops suppressing anything — either the profile declares
+      whether dedupe applies or the send loop asks it. Worth recording the reasoning: coalescing is a
+      deliberate decision the README documents, and this is the first thing that needs it off
+
+### Stage 2 — The Pro Controller protocol
+
+- [ ] `hid/ProControllerProfile.kt` — vendor-defined descriptor, the `0x3F` simple and `0x30` full
+      input reports. Pure Kotlin, JVM-tested beside `GenericHidProfileTest`. Written against the
+      reference controller's dumped descriptor, and **Linux compatibility is explicitly not a goal
+      here** — that is what frees this one to be a byte-for-byte impersonation instead of a
+      compromise, and why the `hid-input` button order that shapes `GamepadButton` does not apply
+- [ ] The subcommand handshake over output report `0x01`, each answered by a `0x21` report carrying
+      an ACK: `0x02` device info, `0x03` input report mode, `0x08` shipment state, `0x30` player
+      lights, `0x40` IMU enable, `0x48` vibration enable, `0x38` home light
+- [ ] `0x10` SPI flash reads answered with plausible factory stick calibration and body colours. The
+      console reads these before it will treat the pad as usable
+- [ ] Out of scope and already on the polish backlog: motion, rumble. Also out: NFC, Joy-Con pairs
+
+### Stage 3 — The app around it
+
+- [ ] **Profile picker in the UI.** The Iteration 3 item; a second profile is what finally forces it.
+      `HidGamepadService.profile` is a hardcoded `GenericHidProfile` today
+- [ ] **Adapter rename** through `requiredAdapterName`, restoring the previous name on exit. This
+      renames the phone's Bluetooth adapter globally and visibly, so it needs a story for the app
+      being killed mid-session, not only for a clean exit
+- [ ] **`GamepadButton.CAPTURE` on HID 16.** 3, 6 and 16 are skipped to keep 1..15 aligned with
+      `hid-input`'s order, and appending a 14th entry disturbs nothing — there is no entry after it
+      to push out of place. It is sent on every profile: the number is read only by
+      `GenericHidProfile`, since the Switch profile has its own bit layout, so masking it off there
+      would be a special case in the most safety-critical file in the repo bought for nothing — and a
+      control that visibly does nothing is worse for whoever placed it than one another host can bind
+- [ ] **The two consequences of a 14th button**, neither avoided by Capture being a Switch control,
+      because both are about the shared `GamepadButton` vocabulary rather than either profile:
+      `missingButtons()` subtracts only `L2` and `R2`, so all five plates fail *every built-in layout
+      exposes every button the profile declares* until it excuses Capture too; and `FALLBACK_SPECS`
+      keys its position on `if (id.button == L2) … else …`, so a new button silently arrives stacked
+      on R2's fallback unless given a place of its own
+- [ ] `SWITCH_LAYOUT` places Capture, and `SWITCH_ART` gets a glyph if Kenney's pack has one — no
+      capture SVG is in `art/input/` today. Without one it falls back to shape and label, which is
+      already what the PS5 guide button does
+- [ ] **ZL/ZR go out digital.** A Pro Controller's are, and its report has nowhere to put the analog
+      range the pad and the generic descriptor carry, so the Switch profile thresholds them the way
+      `TRIGGER_DIGITAL_THRESHOLD` already does for the digital companions
+
+Worth attempting despite the risk, because the same impersonation is known to work from BlueZ hosts
+that can publish a DeviceID record. The question is squarely whether Android's five SDP fields leave
+enough surface — and Stage 0 is a day's work that starts by reading a controller which already works.
 
 ## Polish backlog
 
