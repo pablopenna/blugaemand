@@ -9,8 +9,9 @@ labels, and **Xbox**, **PS5**, **Switch** and **Steam Deck**, drawn with each co
 and laid out the way that console lays its buttons out. **You can also make your own**,
 from empty or as a copy of one of those, and move, resize, add and remove controls on it — including
 whole arrangements dropped as **one control**, so a face diamond is a single plate that sends A, B,
-X or Y depending on where you touch it. Layouts and the choice of one are saved between launches. Verified end-to-end against a **Linux** host;
-Windows is the stated target but is **not yet tested**. Two pills sit at the top edge, each opening
+X or Y depending on where you touch it. Layouts and the choice of one are saved between launches. 
+Verified end-to-end against **Linux** and **Windows**.
+Two pills sit at the top edge, each opening
 its panel on a 600 ms hold: the left one is connection status and pairing, the right one
 (**☰ Menu**) picks or creates a layout, opens the editor, and quits.
 
