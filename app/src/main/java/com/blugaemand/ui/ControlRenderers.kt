@@ -22,6 +22,10 @@ import com.blugaemand.ui.theme.PadColors
  * the pack's prompts are whole buttons in their own right. Everything else falls back to the drawn
  * shape, which is what keeps thumbsticks working in both modes and what draws a button no pack has
  * a picture of rather than leaving a hole.
+ *
+ * A cluster draws as its members, each of which is an ordinary control with an ordinary id — which
+ * is the whole reason art needed nothing adding for them. [heldMembers] says which of them are
+ * down, by ordinal within the plate; a plate itself is never drawn, only what is on it.
  */
 fun DrawScope.drawControl(
     control: ResolvedControl,
@@ -29,7 +33,11 @@ fun DrawScope.drawControl(
     pressed: Boolean,
     stickOffset: Pair<Float, Float>?,
     textMeasurer: TextMeasurer,
+    heldMembers: Set<Int> = emptySet(),
 ) {
+    // Asked before the shape is looked at, so a member's own picture is found by its own id. A
+    // cluster's id is never in a pack -- ArtPack.glyph is a map lookup, so it simply misses and
+    // falls through to the branch below, which is what should happen and not a thing to shortcut.
     val glyph = style.glyph(control.spec.id, pressed)
     if (glyph != null) {
         drawGlyph(control, glyph)
@@ -41,6 +49,15 @@ fun DrawScope.drawControl(
         is ControlSpec.Shape.Rect -> drawRectControl(control, style, pressed, textMeasurer)
         is ControlSpec.Shape.Stick -> drawStick(control, style, pressed, stickOffset)
         is ControlSpec.Shape.Dpad -> drawDpad(control, style, shape, pressed)
+        is ControlSpec.Shape.Cluster -> for (member in control.members) {
+            drawControl(
+                control = member,
+                style = style,
+                pressed = member.index in heldMembers,
+                stickOffset = null,
+                textMeasurer = textMeasurer,
+            )
+        }
     }
 }
 

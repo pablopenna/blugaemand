@@ -121,7 +121,100 @@ class ControlGroupsTest {
         }
     }
 
+    // -- Clustered ------------------------------------------------------------------------
+
+    @Test
+    fun `every group can go down as one control carrying the same members`() {
+        // The catalog is one list either way round. If the two ever diverge it is because a group
+        // was added somewhere that only one of the paths reads.
+        for (group in ControlGroups.ALL) {
+            val plate = ControlGroups.clustered(group).controls.single()
+            val members = (plate.shape as ControlSpec.Shape.Cluster).members
+            assertEquals(group.name, ControlId.Cluster, plate.id)
+            assertEquals(group.name, group.controls.map { it.id }, members.map { it.id })
+        }
+    }
+
+    @Test
+    fun `a clustered group is centred on the origin like a loose one`() {
+        // Same reason as for a loose group: the offset is from the drop point, so a plate whose
+        // own centre is not zero lands beside the thumb rather than under it.
+        for (group in ControlGroups.ALL) {
+            val plate = ControlGroups.clustered(group).controls.single()
+            assertTrue("${group.name} x", abs(plate.shape.centerX) < TOLERANCE)
+            assertTrue("${group.name} y", abs(plate.shape.centerY) < TOLERANCE)
+        }
+    }
+
+    @Test
+    fun `clustering restates the arrangement in units without changing it`() {
+        // Going in, a group's screen-relative numbers are stretched by 16/9 -- the aspect it was
+        // authored against -- so that measured against the unit they describe the same arrangement.
+        val loose = ControlGroups.ALL.first { it.name == "Face buttons" }
+        val members =
+            (ControlGroups.clustered(loose).controls.single().shape
+                as ControlSpec.Shape.Cluster).members
+
+        for ((was, now) in loose.controls.zip(members)) {
+            assertEquals(was.shape.centerX * 16f / 9f, now.shape.centerX, TOLERANCE)
+            assertEquals(was.shape.centerY, now.shape.centerY, TOLERANCE)
+        }
+    }
+
+    @Test
+    fun `every group drawn as a plate looks the same as the loose one on 16 by 9`() {
+        // The conversion has to be a change of units and nothing else: on the screen the geometry
+        // was authored for, a plate must put its members in exactly the pixels the loose group
+        // would have. Off 16:9 the two deliberately part company -- the plate stays in shape and
+        // the loose group stretches -- which is the whole reason the plate measures in units.
+        for (group in ControlGroups.ALL) {
+            val loose = ResolvedLayout(
+                GamepadLayout("loose", "Loose", group.at(0.5f, 0.5f)),
+                1600f,
+                900f,
+            ).controls
+
+            val plated = ResolvedLayout(
+                GamepadLayout("plated", "Plated", ControlGroups.clustered(group).at(0.5f, 0.5f)),
+                1600f,
+                900f,
+            ).controls.single().members
+
+            for ((was, now) in loose.zip(plated)) {
+                assertEquals(group.name, was.centerX, now.centerX, PIXEL_TOLERANCE)
+                assertEquals(group.name, was.centerY, now.centerY, PIXEL_TOLERANCE)
+                assertEquals(group.name, was.extentX, now.extentX, PIXEL_TOLERANCE)
+                assertEquals(group.name, was.extentY, now.extentY, PIXEL_TOLERANCE)
+            }
+        }
+    }
+
+    @Test
+    fun `a clustered shoulder pair keeps both controls and its arrangement`() {
+        // The pair that made a plate have to be more than a diamond of circles: these are
+        // rectangles, and a rectangle's width changes what it is measured against on the way in.
+        for (side in listOf("Left", "Right")) {
+            val loose = ControlGroups.ALL.first { it.name == "$side shoulders, stacked" }
+            val members =
+                (ControlGroups.clustered(loose).controls.single().shape
+                    as ControlSpec.Shape.Cluster).members
+
+            assertEquals(2, members.size)
+            assertEquals("$side shares a column", 1, members.map { it.shape.centerX }.toSet().size)
+            assertEquals("$side uses two rows", 2, members.map { it.shape.centerY }.toSet().size)
+            for ((was, now) in loose.controls.zip(members)) {
+                val old = was.shape as ControlSpec.Shape.Rect
+                val new = now.shape as ControlSpec.Shape.Rect
+                assertEquals(old.width * 16f / 9f, new.width, TOLERANCE)
+                assertEquals(old.height, new.height, TOLERANCE)
+            }
+        }
+    }
+
     private companion object {
         const val TOLERANCE = 1e-5f
+
+        /** A twentieth of a pixel — the float error in dividing by 16/9 and multiplying back. */
+        const val PIXEL_TOLERANCE = 0.05f
     }
 }

@@ -1,5 +1,6 @@
 package com.blugaemand.ui
 
+import androidx.annotation.DrawableRes
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -9,7 +10,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
+import com.blugaemand.R
 import com.blugaemand.input.GamepadLayout
+import com.blugaemand.input.LayoutLibrary
 import com.blugaemand.ui.theme.OverlayColors
 
 /** Which page of the menu is showing. */
@@ -40,16 +43,20 @@ fun MenuPill(
  * purpose — the panel is only composed while it is open, so the menu reopens on the root page by
  * itself, without a reset that would visibly flip the page during the closing animation.
  *
- * *Edit layout* appears only when [canEdit], which is how the built-ins stay read-only from here:
- * there is no disabled row to explain, because a layout you cannot edit simply does not offer it.
- * Making a copy is the route to editing one, and it sits on the page where layouts are chosen.
+ * *Edit layout* appears only when the selected layout is one of the user's, which is how the
+ * built-ins stay read-only from here: there is no disabled row to explain, because a layout you
+ * cannot edit simply does not offer it. Making a copy is the route to editing one, and it sits on
+ * the page where layouts are chosen.
+ *
+ * The whole [LayoutLibrary] rather than its list of layouts, because the list on its own cannot say
+ * which half a row is in — and that is what the rule between them and the two joystick marks are
+ * drawn from. It also means the *Edit layout* test is made here rather than passed in.
  */
 @Composable
 fun MenuPanel(
-    layouts: List<GamepadLayout>,
+    library: LayoutLibrary,
     selectedLayoutId: String,
     currentLayoutName: String,
-    canEdit: Boolean,
     onSelectLayout: (GamepadLayout) -> Unit,
     onNewEmptyLayout: () -> Unit,
     onCopyCurrentLayout: () -> Unit,
@@ -63,25 +70,33 @@ fun MenuPanel(
         when (page) {
             MenuPage.Root -> {
                 PanelEntry(label = "Layouts", trailing = "›") { page = MenuPage.Layouts }
-                if (canEdit) PanelEntry(label = "Edit layout", onClick = onEditLayout)
+                if (library.isEditable(selectedLayoutId)) {
+                    PanelEntry(label = "Edit layout", onClick = onEditLayout)
+                }
                 PanelEntry(label = "Quit", onClick = onQuit)
             }
 
             MenuPage.Layouts -> {
                 PanelEntry(label = "Layouts", leading = "‹") { page = MenuPage.Root }
-                layouts.forEach { layout ->
-                    val active = layout.id == selectedLayoutId
-                    PanelEntry(
-                        label = layout.name,
-                        // A fixed slot for the tick rather than a prefix on the name, so the
-                        // names still line up under each other.
-                        leading = if (active) "✓" else "",
-                        // The tick alone is easy to miss at 12.sp; dimming the rest makes the
-                        // active layout the one row that stands out.
-                        color = if (active) Color.Unspecified else OverlayColors.Caption,
-                        onClick = { onSelectLayout(layout) },
+
+                LayoutRows(
+                    layouts = library.builtIn,
+                    icon = R.drawable.generic_joystick,
+                    selectedLayoutId = selectedLayoutId,
+                    onSelectLayout = onSelectLayout,
+                )
+                // Suppressed on a fresh install, where there is nothing under it and a rule would
+                // read as a row that failed to draw.
+                if (library.user.isNotEmpty()) {
+                    PanelDivider()
+                    LayoutRows(
+                        layouts = library.user,
+                        icon = R.drawable.generic_joystick_red,
+                        selectedLayoutId = selectedLayoutId,
+                        onSelectLayout = onSelectLayout,
                     )
                 }
+
                 PanelEntry(label = "New layout", trailing = "›") { page = MenuPage.New }
             }
 
@@ -94,5 +109,34 @@ fun MenuPanel(
                 PanelEntry(label = "Copy of $currentLayoutName", onClick = onCopyCurrentLayout)
             }
         }
+    }
+}
+
+/**
+ * One half of the layouts list — the built-ins or the user's own — each row marked with [icon].
+ *
+ * Its own composable rather than a loop written twice, so the two halves cannot drift into looking
+ * like different kinds of row when the only thing that differs between them is the mark on the end.
+ */
+@Composable
+private fun LayoutRows(
+    layouts: List<GamepadLayout>,
+    @DrawableRes icon: Int,
+    selectedLayoutId: String,
+    onSelectLayout: (GamepadLayout) -> Unit,
+) {
+    layouts.forEach { layout ->
+        val active = layout.id == selectedLayoutId
+        PanelEntry(
+            label = layout.name,
+            // A fixed slot for the tick rather than a prefix on the name, so the names still line
+            // up under each other.
+            leading = if (active) "✓" else "",
+            trailingIcon = icon,
+            // The tick alone is easy to miss at 12.sp; dimming the rest makes the active layout
+            // the one row that stands out.
+            color = if (active) Color.Unspecified else OverlayColors.Caption,
+            onClick = { onSelectLayout(layout) },
+        )
     }
 }

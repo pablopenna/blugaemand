@@ -1,6 +1,7 @@
 package com.blugaemand.input
 
 import com.blugaemand.hid.GamepadButton
+import com.blugaemand.input.art.ArtPacks
 import com.blugaemand.input.layouts.Layouts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -146,6 +147,45 @@ class LayoutArtTest {
                 assertTrue("${layout.id}: ${spec.id} is blank", spec.label.isNotEmpty())
             }
         }
+    }
+
+    @Test
+    fun `a group placed as one control still draws every pack's own art`() {
+        // The reason a cluster needed nothing adding to ArtPack: a plate draws as its members, and
+        // a member carries an ordinary ControlId, which is exactly what a pack is keyed by. So
+        // every existing pack already has a picture for every button on a plate, pressed included,
+        // and would go on doing so for a plate nobody has thought of yet.
+        val members = ControlGroups.ALL
+            .flatMap { group ->
+                (ControlGroups.clustered(group).controls.single().shape
+                    as ControlSpec.Shape.Cluster).members
+            }
+            .map { it.id }
+            .toSet()
+            // The one exception, and not a new one: no ControlIcon names a single D-pad arm, so
+            // the four-arm group falls back to the arrows the specs carry. A plate is what would
+            // make per-arm art worth having -- each member knows its own direction, which a
+            // one-piece cross does not -- so this line is what to delete when that art arrives.
+            .filterNot { it is ControlId.DpadButton }
+
+        for ((layout, pack) in imageLayouts) {
+            for (id in members - drawnAsShapes.getValue(layout.id)) {
+                assertTrue("${pack.id} has no picture for $id", pack.glyph(id, held = false) != null)
+            }
+        }
+    }
+
+    @Test
+    fun `every pack has a distinct id and a distinct name to be picked by`() {
+        // The editor's Appearance page lists these, so a blank or repeated name is a row you cannot
+        // tell from the one above it. Ids are separately unique because that is what a saved layout
+        // resolves its pack through, and two packs answering to one id is a layout that loads as
+        // the wrong pad.
+        val packs = ArtPacks.ALL
+        assertTrue(packs.isNotEmpty())
+        for (pack in packs) assertTrue(pack.id, pack.name.isNotBlank())
+        assertEquals(packs.size, packs.map { it.id }.toSet().size)
+        assertEquals(packs.size, packs.map { it.name }.toSet().size)
     }
 
     @Test

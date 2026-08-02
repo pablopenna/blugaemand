@@ -53,6 +53,19 @@ sealed interface ControlId {
     @SerialName("dpad_button")
     data class DpadButton(val direction: Direction) : ControlId
 
+    /**
+     * A plate of several controls that behaves as one: what it sends depends on where within itself
+     * it is touched, which is what [Dpad] already does for the hat, generalised.
+     *
+     * This is a **marker only** — the members and their arrangement live on
+     * [ControlSpec.Shape.Cluster], because everything in the app that asks how big a control is or
+     * where its parts are asks its shape. Putting them here instead would make extent a function of
+     * the id, and [Placement], [LayoutEdits] and [ResolvedLayout] all assume it is not.
+     */
+    @Serializable
+    @SerialName("cluster")
+    data object Cluster : ControlId
+
     @Serializable
     enum class Direction { UP, DOWN, LEFT, RIGHT }
 
@@ -68,6 +81,10 @@ sealed interface ControlId {
          * layouts reach them through [Trigger] instead: they are the digital companions to the
          * analog axes, and a layout is free to place one as a plain button. That is also why
          * [missingButtons] excuses them.
+         *
+         * [Cluster] is deliberately absent: there is no such thing as *the* cluster, only a
+         * particular arrangement of members, so it has no default spec to be added from. It arrives
+         * through [ControlGroups] instead.
          */
         val ALL: List<ControlId> = buildList {
             add(Dpad)
@@ -152,5 +169,62 @@ data class ControlSpec(
             val radius: Float,
             val deadZone: Float = 0.25f,
         ) : Shape
+
+        /**
+         * A plate of [members] that is one control: one entry in the layout, one thing to select,
+         * move and resize, resolving a touch to whichever member it landed nearest.
+         *
+         * **Every number inside a plate is a fraction of [ResolvedLayout.unit]** — the members'
+         * offsets from the plate's centre as well as their sizes, including a member
+         * [Rect.width]. At top level positions are fractions of screen width and height and a
+         * rectangle's width is a fraction of screen width, and both of those exist for reasons that
+         * stop at this edge: a layout should spread with the screen, and a shoulder button should
+         * stretch the top of it. A plate is a compact object whose parts have to hold their
+         * arrangement, which is the argument already made for sizes generally — measured against the
+         * unit, a face diamond is the same diamond on 16:9 and on 4:3, where screen fractions would
+         * stretch it vertically. It also makes resizing one factor applied to every member number,
+         * whatever mixture of shapes they are.
+         *
+         * Members are plain buttons, triggers and D-pad arms. A [Stick] is excluded because a
+         * stick's cap is positioned through `stickOffset`, which is keyed by top-level control; a
+         * nested plate and a one-piece [Dpad] are excluded because neither adds anything a flat list
+         * of members does not already do.
+         */
+        @Serializable
+        @SerialName("cluster")
+        data class Cluster(
+            override val centerX: Float,
+            override val centerY: Float,
+            val members: List<ControlSpec>,
+        ) : Shape {
+            init {
+                // Checked here rather than trusted because this also runs on deserialise, and a
+                // hand-edited file is the one place these can be false. An empty plate would throw
+                // from the bounding-box arithmetic in ResolvedLayout instead -- during composition,
+                // with nothing left to say which layout was at fault.
+                require(members.isNotEmpty()) { "a cluster needs at least one member" }
+                require(members.all { it.id.canBeClustered() }) {
+                    "a cluster holds buttons, triggers and D-pad arms, not " +
+                        members.first { !it.id.canBeClustered() }.id
+                }
+            }
+        }
     }
+}
+
+/** Whether this control is one a [ControlSpec.Shape.Cluster] may hold; see there for why. */
+private fun ControlId.canBeClustered(): Boolean = when (this) {
+    is ControlId.Button, is ControlId.Trigger, is ControlId.DpadButton -> true
+    is ControlId.Stick, ControlId.Dpad, ControlId.Cluster -> false
+}
+
+/**
+ * Every control this one drives: itself, or a plate's members.
+ *
+ * Anything asking what a layout can actually send has to go through this rather than reading
+ * [ControlSpec.id], or a placed face plate would look like a pad with no face buttons on it.
+ */
+fun ControlSpec.leafIds(): List<ControlId> = when (val shape = shape) {
+    is ControlSpec.Shape.Cluster -> shape.members.flatMap { it.leafIds() }
+    else -> listOf(id)
 }

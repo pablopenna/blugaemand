@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.blugaemand.hid.HidStatus
 import com.blugaemand.input.GamepadLayout
+import com.blugaemand.input.LayoutLibrary
 
 /** The panels the top bar can have open. Exactly one at a time, or none. */
 enum class TopPanel { Connection, Menu }
@@ -35,10 +36,9 @@ enum class TopPanel { Connection, Menu }
 fun TopBar(
     status: HidStatus,
     hosts: List<HostOption>,
-    layouts: List<GamepadLayout>,
+    library: LayoutLibrary,
     selectedLayoutId: String,
     currentLayoutName: String,
-    canEditLayout: Boolean,
     openPanel: TopPanel?,
     onOpenPanelChange: (TopPanel?) -> Unit,
     onFixBlocker: () -> Unit,
@@ -102,10 +102,9 @@ fun TopBar(
                 .weight(1f, fill = false),
         ) {
             MenuPanel(
-                layouts = layouts,
+                library = library,
                 selectedLayoutId = selectedLayoutId,
                 currentLayoutName = currentLayoutName,
-                canEdit = canEditLayout,
                 onSelectLayout = { layout ->
                     onSelectLayout(layout)
                     onOpenPanelChange(null)

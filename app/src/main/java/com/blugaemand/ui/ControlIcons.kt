@@ -5,7 +5,7 @@ import com.blugaemand.R
 import com.blugaemand.input.ControlIcon
 
 /**
- * The drawable behind each [ControlIcon]. The only place in the app that mentions `R.drawable`,
+ * The drawable behind each [ControlIcon]. The only place in the app that maps one to a drawable,
  * which is what keeps resource IDs — reassigned on every build — out of the serialisable layout
  * model.
  *

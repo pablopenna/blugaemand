@@ -1,8 +1,10 @@
 package com.blugaemand.ui
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -15,12 +17,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -218,6 +223,11 @@ fun PanelEntry(
     modifier: Modifier = Modifier,
     leading: String? = null,
     trailing: String? = null,
+    /**
+     * A picture in the trailing slot rather than a glyph. Trailing and not leading because the
+     * gutter is where the tick marking a chosen row goes, and that is the more important of the two.
+     */
+    @DrawableRes trailingIcon: Int? = null,
     color: Color = Color.Unspecified,
     enabled: Boolean = true,
     onClick: () -> Unit,
@@ -244,11 +254,35 @@ fun PanelEntry(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            if (trailingIcon != null) {
+                Image(
+                    painter = painterResource(trailingIcon),
+                    // The label beside it already says what the row is; a screen reader announcing
+                    // the picture as well would only say it twice.
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
             if (trailing != null) {
                 Text(text = trailing, fontSize = 12.sp, color = color)
             }
         }
     }
+}
+
+/**
+ * A hairline between two runs of rows that mean different things — the built-in layouts and your
+ * own, a setting and the list it applies to.
+ *
+ * Here beside [PanelEntry] and [PanelCaption] for the same reason they are: three panels are lists
+ * of these, and a line drawn by hand in one of them would drift from the one drawn in the next.
+ */
+@Composable
+fun PanelDivider(modifier: Modifier = Modifier) {
+    HorizontalDivider(
+        modifier = modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+        color = OverlayColors.Caption.copy(alpha = 0.3f),
+    )
 }
 
 /** A line of explanation under a panel's rows, in the quieter of the two overlay text colours. */

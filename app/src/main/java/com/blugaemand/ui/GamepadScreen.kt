@@ -106,6 +106,7 @@ fun GamepadScreen(
                     pressed = control.index in active,
                     stickOffset = stickOffset,
                     textMeasurer = textMeasurer,
+                    heldMembers = router.activeMembers(control.index),
                 )
             }
         }

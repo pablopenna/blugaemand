@@ -50,7 +50,17 @@ fun encodeLayouts(layouts: List<GamepadLayout>): String =
  * worse than one that refuses to load and says so.
  */
 fun decodeLayouts(text: String): List<GamepadLayout> {
-    val file = json.decodeFromString<LayoutFile>(text)
+    val file = try {
+        json.decodeFromString<LayoutFile>(text)
+    } catch (e: IllegalArgumentException) {
+        // A file can be valid JSON of the right shape and still describe something that cannot
+        // exist -- a cluster with no members. Those are caught by `require` in the control's own
+        // constructor and arrive as plain IllegalArgumentExceptions, which would sail past every
+        // caller: SerializationException is what this promises to throw and what LayoutStore
+        // catches. Note the order is not a choice -- SerializationException *is* an
+        // IllegalArgumentException, so this catches both kinds and only converts the other one.
+        throw e as? SerializationException ?: SerializationException(e.message, e)
+    }
     // Only one version exists so far. A second one is handled here, by migrating the older shape
     // forward -- not by loosening this check.
     if (file.version != LAYOUT_FORMAT_VERSION) {

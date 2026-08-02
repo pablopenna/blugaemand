@@ -20,6 +20,7 @@ import com.blugaemand.input.Glyph
  */
 val XBOX_ART: ArtPack = ArtPack(
     id = "xbox",
+    name = "Xbox",
     glyphs = mapOf(
         // Face buttons — crossed, see above.
         ControlId.Button(GamepadButton.WEST) to

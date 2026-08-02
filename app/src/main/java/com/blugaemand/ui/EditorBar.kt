@@ -30,15 +30,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.blugaemand.input.ControlGroups
 import com.blugaemand.input.ControlId
+import com.blugaemand.input.ControlSpec
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutStyle
 import com.blugaemand.input.Placement
+import com.blugaemand.input.art.ArtPacks
 import com.blugaemand.input.describe
 import com.blugaemand.input.missingButtons
 import com.blugaemand.ui.theme.OverlayColors
 
 /** Which page of the editor is showing. */
-private enum class EditorPage { Root, Add, AddGroup, Colours, Rename, ConfirmDelete }
+private enum class EditorPage { Root, Add, AddGroup, Appearance, Rename, ConfirmDelete }
 
 /**
  * The editor's controls: a pill, and its panel when opened.
@@ -63,12 +65,18 @@ fun EditorBar(
     onExpandedChange: (Boolean) -> Unit,
     snapToGrid: Boolean,
     onSnapToGridChange: (Boolean) -> Unit,
+    /** Whether a control group goes down as one control. */
+    asOneControl: Boolean,
+    onAsOneControlChange: (Boolean) -> Unit,
+    /** The colours to go back to when leaving an art pack; see [EditorPage.Appearance]. */
+    lastColors: LayoutStyle.Colors,
     onLayoutChange: (GamepadLayout) -> Unit,
     /** Waiting to be dropped, if anything is. */
     pending: Placement?,
     onStartPlacing: (Placement) -> Unit,
     onCancelPlacing: () -> Unit,
     onRemoveSelected: () -> Unit,
+    onUngroupSelected: () -> Unit,
     onDeleteLayout: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
@@ -114,9 +122,13 @@ fun EditorBar(
                 selected = selected,
                 snapToGrid = snapToGrid,
                 onSnapToGridChange = onSnapToGridChange,
+                asOneControl = asOneControl,
+                onAsOneControlChange = onAsOneControlChange,
+                lastColors = lastColors,
                 onLayoutChange = onLayoutChange,
                 onStartPlacing = onStartPlacing,
                 onRemoveSelected = onRemoveSelected,
+                onUngroupSelected = onUngroupSelected,
                 onDeleteLayout = onDeleteLayout,
                 onDone = onDone,
                 modifier = Modifier.width(240.dp),
@@ -136,9 +148,14 @@ private fun EditorPanel(
     selected: Int?,
     snapToGrid: Boolean,
     onSnapToGridChange: (Boolean) -> Unit,
+    asOneControl: Boolean,
+    onAsOneControlChange: (Boolean) -> Unit,
+    /** The colours to go back to when leaving an art pack; see [EditorPage.Appearance]. */
+    lastColors: LayoutStyle.Colors,
     onLayoutChange: (GamepadLayout) -> Unit,
     onStartPlacing: (Placement) -> Unit,
     onRemoveSelected: () -> Unit,
+    onUngroupSelected: () -> Unit,
     onDeleteLayout: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
@@ -155,23 +172,28 @@ private fun EditorPanel(
                 }
                 val selectedSpec = selected?.let { layout.controls.getOrNull(it) }
                 PanelEntry(
-                    label = selectedSpec?.let { "Remove ${it.id.describe()}" } ?: "Remove control",
+                    label = selectedSpec?.let { "Remove ${it.describe()}" } ?: "Remove control",
                     // Nothing selected means nothing to remove, and a row that acted on whichever
                     // control happened to be last would be worse than one that waits.
                     enabled = selectedSpec != null,
                     color = if (selectedSpec != null) Color.Unspecified else OverlayColors.Caption,
                     onClick = onRemoveSelected,
                 )
+                // Only shown for a plate, because for anything else there is nothing to break up.
+                // This is the way back out of one: a member is not separately selectable, by
+                // design, so ungrouping is how a single button in a group gets tuned.
+                if (selectedSpec?.shape is ControlSpec.Shape.Cluster) {
+                    PanelEntry(label = "Ungroup", onClick = onUngroupSelected)
+                }
                 PanelEntry(
                     label = "Grid",
                     trailing = if (snapToGrid) "on" else "off",
                     onClick = { onSnapToGridChange(!snapToGrid) },
                 )
-                // Only a colours layout has colours to pick. An images layout draws its art's own,
-                // so the row is absent rather than present and inert.
-                if (layout.style is LayoutStyle.Colors) {
-                    PanelEntry(label = "Colours", trailing = "›") { page = EditorPage.Colours }
-                }
+                // One row for the whole of how a pad looks, and unconditional. A row that vanished
+                // the moment the layout took an art pack would be missing at exactly the point
+                // someone went looking for the way back off it.
+                PanelEntry(label = "Appearance", trailing = "›") { page = EditorPage.Appearance }
                 PanelEntry(label = "Rename", trailing = "›") { page = EditorPage.Rename }
                 PanelEntry(
                     label = "Delete layout",
@@ -200,26 +222,66 @@ private fun EditorPanel(
 
             EditorPage.AddGroup -> {
                 PanelEntry(label = "Add control group", leading = "‹") { page = EditorPage.Root }
-                PanelCaption("Placed together, then moved separately.")
+                // A switch rather than a second list of the same seven arrangements: which way a
+                // group goes down is one decision about it, not a different thing to place. Held
+                // by the caller and not here, alongside the grid: this panel is destroyed every
+                // time it closes -- which placing something does -- and someone laying out a pad
+                // of plates should not have to set it again for each one.
+                PanelEntry(
+                    label = "As one control",
+                    trailing = if (asOneControl) "on" else "off",
+                    onClick = { onAsOneControlChange(!asOneControl) },
+                )
+                PanelCaption(
+                    if (asOneControl) {
+                        "One control. Which button it sends depends on where it is touched."
+                    } else {
+                        "Placed together, then moved separately."
+                    },
+                )
+                // The switch is a setting about the list below it, not the first thing in it.
+                PanelDivider()
                 ControlGroups.ALL.forEach { group ->
                     PanelEntry(label = group.name) {
-                        onStartPlacing(group)
+                        onStartPlacing(if (asOneControl) ControlGroups.clustered(group) else group)
                         page = EditorPage.Root
                     }
                 }
             }
 
-            EditorPage.Colours -> {
-                PanelEntry(label = "Colours", leading = "‹") { page = EditorPage.Root }
-                val colors = layout.style as LayoutStyle.Colors
+            EditorPage.Appearance -> {
+                PanelEntry(label = "Appearance", leading = "‹") { page = EditorPage.Root }
 
-                PanelCaption("At rest")
-                Swatches(selected = colors.resting) {
-                    onLayoutChange(layout.copy(style = colors.copy(resting = it)))
+                val colors = layout.style as? LayoutStyle.Colors
+                PanelEntry(
+                    label = "Shapes and colours",
+                    // Not the layout's own colours but the ones it last had, so a look at a pack
+                    // and back does not quietly hand someone the defaults instead of their choice.
+                    trailing = if (colors != null) "✓" else null,
+                    onClick = { onLayoutChange(layout.copy(style = lastColors)) },
+                )
+                ArtPacks.ALL.forEach { pack ->
+                    val current = (layout.style as? LayoutStyle.Images)?.pack
+                    PanelEntry(
+                        label = pack.name,
+                        trailing = if (pack == current) "✓" else null,
+                        onClick = { onLayoutChange(layout.copy(style = LayoutStyle.Images(pack))) },
+                    )
                 }
-                PanelCaption("Held")
-                Swatches(selected = colors.pressed) {
-                    onLayoutChange(layout.copy(style = colors.copy(pressed = it)))
+
+                // The swatches belong to one of the choices above rather than to the page, so they
+                // are shown under the line while that choice is the one in force and absent
+                // otherwise -- an image layout draws its art's colours and has none to pick.
+                if (colors != null) {
+                    PanelDivider()
+                    PanelCaption("At rest")
+                    Swatches(selected = colors.resting) {
+                        onLayoutChange(layout.copy(style = colors.copy(resting = it)))
+                    }
+                    PanelCaption("Held")
+                    Swatches(selected = colors.pressed) {
+                        onLayoutChange(layout.copy(style = colors.copy(pressed = it)))
+                    }
                 }
             }
 

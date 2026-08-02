@@ -32,6 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -44,10 +46,13 @@ import com.blugaemand.hid.HidStatus
 import com.blugaemand.input.ControlId
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutLibrary
+import com.blugaemand.input.LayoutStyle
 import com.blugaemand.input.Placement
+import com.blugaemand.input.ResolvedLayout
 import com.blugaemand.input.copyAsUser
 import com.blugaemand.input.emptyUserLayout
 import com.blugaemand.input.layouts.DEFAULT_LAYOUT
+import com.blugaemand.input.ungroupedControl
 import com.blugaemand.input.withControlAdded
 import com.blugaemand.input.withControlRemovedAt
 import com.blugaemand.ui.EditorBar
@@ -138,6 +143,20 @@ class MainActivity : ComponentActivity() {
                 // than its ControlId -- the same control may be on the layout twice.
                 var selectedControl by remember { mutableStateOf<Int?>(null) }
                 var snapToGrid by remember { mutableStateOf(true) }
+                // Whether a control group goes down as one control. Here beside the grid rather
+                // than in the panel that shows it, because that panel is destroyed every time it
+                // closes -- which placing something does -- and both of these are settings about
+                // how the editor works rather than about the group being placed.
+                var asOneControl by remember { mutableStateOf(false) }
+                // The colours to restore when a layout comes back off an art pack. A layout in
+                // image mode has none saved -- the two styles are alternatives, not layers -- so
+                // without this, looking at a pack and changing your mind would hand back the
+                // defaults rather than the colours you picked. Session state on purpose: keeping
+                // them would mean a format change for a convenience.
+                var lastColors by remember { mutableStateOf(LayoutStyle.Colors()) }
+                LaunchedEffect(layout.style) {
+                    (layout.style as? LayoutStyle.Colors)?.let { lastColors = it }
+                }
                 // What is waiting to be dropped on the pad, if anything.
                 var pendingPlacement by remember { mutableStateOf<Placement?>(null) }
                 var editorPanelOpen by remember { mutableStateOf(false) }
@@ -179,7 +198,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Box(modifier = Modifier.fillMaxSize()) {
+                // The surface both screens fill, tracked here because ungrouping needs it: a
+                // cluster's members are stored against the layout unit, and the unit is a pixel
+                // size. Every other edit is arithmetic in one coordinate space and does not care.
+                var padSize by remember { mutableStateOf(IntSize.Zero) }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .onSizeChanged { padSize = it },
+                ) {
                     if (editing) {
                         EditorScreen(
                             layout = layout,
@@ -222,6 +250,9 @@ class MainActivity : ComponentActivity() {
                             onExpandedChange = { editorPanelOpen = it },
                             snapToGrid = snapToGrid,
                             onSnapToGridChange = { snapToGrid = it },
+                            asOneControl = asOneControl,
+                            onAsOneControlChange = { asOneControl = it },
+                            lastColors = lastColors,
                             onLayoutChange = ::saveEdit,
                             pending = pendingPlacement,
                             onStartPlacing = {
@@ -233,6 +264,21 @@ class MainActivity : ComponentActivity() {
                             onCancelPlacing = { pendingPlacement = null },
                             onRemoveSelected = {
                                 selectedControl?.let { saveEdit(layout.withControlRemovedAt(it)) }
+                                selectedControl = null
+                            },
+                            onUngroupSelected = {
+                                val index = selectedControl
+                                if (index != null && padSize != IntSize.Zero) {
+                                    saveEdit(
+                                        ResolvedLayout(
+                                            layout,
+                                            padSize.width.toFloat(),
+                                            padSize.height.toFloat(),
+                                        ).ungroupedControl(index),
+                                    )
+                                }
+                                // The plate is gone and the indices after it have shifted, so
+                                // whatever was selected no longer names what it used to.
                                 selectedControl = null
                             },
                             onDeleteLayout = {
@@ -283,10 +329,9 @@ class MainActivity : ComponentActivity() {
                     TopBar(
                         status = status,
                         hosts = bonded,
-                        layouts = library.all,
+                        library = library,
                         selectedLayoutId = layout.id,
                         currentLayoutName = layout.name,
-                        canEditLayout = library.isEditable(layout.id),
                         openPanel = openPanel,
                         onOpenPanelChange = { panel ->
                             openPanel = panel

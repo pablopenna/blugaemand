@@ -35,6 +35,7 @@ import com.blugaemand.input.Glyph
  */
 val SWITCH_ART: ArtPack = ArtPack(
     id = "switch",
+    name = "Switch",
     glyphs = mapOf(
         // Face buttons — by position, and both pairs swapped relative to Xbox. See above.
         ControlId.Button(GamepadButton.WEST) to

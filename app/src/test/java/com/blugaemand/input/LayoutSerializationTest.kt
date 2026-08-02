@@ -159,6 +159,64 @@ class LayoutSerializationTest {
         assertEquals(GOLDEN_LAYOUT, decodeLayouts(GOLDEN).single())
     }
 
+    // -- Clusters -------------------------------------------------------------------------
+
+    @Test
+    fun `a cluster refuses to exist with no members`() {
+        // Written by hand rather than through the type, because the type is what is being tested:
+        // an empty plate would otherwise get as far as ResolvedLayout's bounding box and throw
+        // from there, during composition, with nothing left to say which layout was at fault.
+        val message = assertThrowsSerialization {
+            decodeLayouts(
+                layoutFileOf(
+                    """
+                    {"id": "empty", "name": "Empty", "controls": [{
+                        "id": {"type": "cluster"},
+                        "shape": {"type": "cluster", "centerX": 0.5, "centerY": 0.5, "members": []}
+                    }]}
+                    """.trimIndent(),
+                ),
+            )
+        }
+        assertTrue(message, message.contains("at least one member"))
+    }
+
+    @Test
+    fun `a cluster refuses to hold a thumbstick`() {
+        val message = assertThrowsSerialization {
+            decodeLayouts(
+                layoutFileOf(
+                    """
+                    {"id": "sticky", "name": "Sticky", "controls": [{
+                        "id": {"type": "cluster"},
+                        "shape": {"type": "cluster", "centerX": 0.5, "centerY": 0.5, "members": [
+                            {"id": {"type": "stick", "side": "LEFT"},
+                             "shape": {"type": "stick", "centerX": 0.0, "centerY": 0.0,
+                                       "radius": 0.2, "knobRadius": 0.09}}
+                        ]}
+                    }]}
+                    """.trimIndent(),
+                ),
+            )
+        }
+        assertTrue(message, message.contains("buttons, triggers and D-pad arms"))
+    }
+
+    @Test
+    fun `every group the editor offers survives a round trip as one control`() {
+        // The catalog goes through the format, not just the one plate the golden file pins. A
+        // cluster is the only nested thing the format has, so this is where a serializer that
+        // cannot see its own children would show up.
+        val clustered = ControlGroups.ALL.map { group ->
+            GamepadLayout(
+                id = group.name,
+                name = group.name,
+                controls = ControlGroups.clustered(group).controls,
+            )
+        }
+        assertEquals(clustered, decodeLayouts(encodeLayouts(clustered)))
+    }
+
     // -- Helpers --------------------------------------------------------------------------
 
     private fun layoutFileOf(layout: String): String =
@@ -200,6 +258,25 @@ class LayoutSerializationTest {
                     id = ControlId.DpadButton(ControlId.Direction.UP),
                     shape = ControlSpec.Shape.Circle(0.13f, 0.75f, radius = 0.055f),
                     label = "▲",
+                ),
+                ControlSpec(
+                    id = ControlId.Cluster,
+                    shape = ControlSpec.Shape.Cluster(
+                        0.75f,
+                        0.35f,
+                        members = listOf(
+                            ControlSpec(
+                                id = ControlId.Button(GamepadButton.EAST),
+                                shape = ControlSpec.Shape.Circle(0.1f, 0f, radius = 0.06f),
+                                label = "B",
+                            ),
+                            ControlSpec(
+                                id = ControlId.Button(GamepadButton.SOUTH),
+                                shape = ControlSpec.Shape.Circle(0f, 0.1f, radius = 0.06f),
+                                label = "A",
+                            ),
+                        ),
+                    ),
                 ),
             ),
             style = LayoutStyle.Colors(),
@@ -279,6 +356,45 @@ class LayoutSerializationTest {
                                     "radius": 0.055
                                 },
                                 "label": "▲"
+                            },
+                            {
+                                "id": {
+                                    "type": "cluster"
+                                },
+                                "shape": {
+                                    "type": "cluster",
+                                    "centerX": 0.75,
+                                    "centerY": 0.35,
+                                    "members": [
+                                        {
+                                            "id": {
+                                                "type": "button",
+                                                "button": "EAST"
+                                            },
+                                            "shape": {
+                                                "type": "circle",
+                                                "centerX": 0.1,
+                                                "centerY": 0.0,
+                                                "radius": 0.06
+                                            },
+                                            "label": "B"
+                                        },
+                                        {
+                                            "id": {
+                                                "type": "button",
+                                                "button": "SOUTH"
+                                            },
+                                            "shape": {
+                                                "type": "circle",
+                                                "centerX": 0.0,
+                                                "centerY": 0.1,
+                                                "radius": 0.06
+                                            },
+                                            "label": "A"
+                                        }
+                                    ]
+                                },
+                                "label": ""
                             }
                         ],
                         "style": {

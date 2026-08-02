@@ -24,7 +24,19 @@ class TouchRouter(private val layout: ResolvedLayout) {
         val control: ResolvedControl,
         var x: Float,
         var y: Float,
-    )
+    ) {
+        /**
+         * The control this pointer is actually driving: the one it bound to, or — if that is a
+         * cluster — whichever member it is currently over.
+         *
+         * Worked out here and nowhere else so that the state sent to the host and the member drawn
+         * as held can never disagree about which one it is. Re-read on every event rather than
+         * fixed at touch-down, so a thumb rolling across a plate changes button without lifting,
+         * the same way it does across a D-pad cross.
+         */
+        fun target(): ResolvedControl =
+            if (control.members.isEmpty()) control else control.memberAt(x, y) ?: control
+    }
 
     private val bindings = LinkedHashMap<Long, Binding>()
 
@@ -61,6 +73,16 @@ class TouchRouter(private val layout: ResolvedLayout) {
     fun activeControls(): Set<Int> = bindings.values.mapTo(mutableSetOf()) { it.control.index }
 
     /**
+     * Which members of the cluster at [controlIndex] are held, by their ordinal within it.
+     *
+     * The union across every pointer, not the first one found: two thumbs on one face plate are two
+     * bindings onto the same control, and they are meant to light — and send — two buttons.
+     */
+    fun activeMembers(controlIndex: Int): Set<Int> = bindings.values
+        .filter { it.control.index == controlIndex && it.control.members.isNotEmpty() }
+        .mapTo(mutableSetOf()) { it.target().index }
+
+    /**
      * Displacement of a stick's knob as a -1..1 pair, or null when nothing is touching it. The
      * renderer scales this by the stick radius to place the cap.
      *
@@ -81,8 +103,10 @@ class TouchRouter(private val layout: ResolvedLayout) {
         var crossHat: Hat? = null
         val directions = mutableSetOf<ControlId.Direction>()
 
-        for (binding in bindings.values) {
-            val control = binding.control
+        // Declared here rather than lifted out of the class so it keeps writing straight into the
+        // two accumulators above. A cluster member goes through exactly this, so a member drives a
+        // button, an axis or the hat by the same rules a control of its own would.
+        fun apply(control: ResolvedControl, x: Float, y: Float) {
             state = when (val id = control.id) {
                 is ControlId.Button -> state.withButton(id.button, true)
 
@@ -98,7 +122,7 @@ class TouchRouter(private val layout: ResolvedLayout) {
                 }
 
                 is ControlId.Stick -> {
-                    val (dx, dy) = control.normalisedOffset(binding.x, binding.y)
+                    val (dx, dy) = control.normalisedOffset(x, y)
                     if (id.side == ControlId.Side.LEFT) {
                         state.copy(
                             leftStickX = GamepadState.axisFromUnit(dx),
@@ -112,11 +136,18 @@ class TouchRouter(private val layout: ResolvedLayout) {
                     }
                 }
 
-                ControlId.Dpad -> state.also { crossHat = control.hatFor(binding.x, binding.y) }
+                ControlId.Dpad -> state.also { crossHat = control.hatFor(x, y) }
 
                 is ControlId.DpadButton -> state.also { directions += id.direction }
+
+                // Unreachable: Binding.target() resolves a plate to one of its members, and a plate
+                // always has one. Named rather than caught by an else so that adding a control kind
+                // still breaks this `when` and has to be thought about.
+                ControlId.Cluster -> state
             }
         }
+
+        for (binding in bindings.values) apply(binding.target(), binding.x, binding.y)
 
         // A held cross wins. A layout carrying both is a layout where the cross is the deliberate
         // one, and letting a stray arm override a thumb already on the cross would be worse than
@@ -173,8 +204,16 @@ class TouchRouter(private val layout: ResolvedLayout) {
     }
 }
 
-/** Buttons that have no on-screen control in a layout, useful for validating custom layouts later. */
+/**
+ * Buttons that have no on-screen control in a layout, useful for validating custom layouts later.
+ *
+ * Through [ControlSpec.leafIds], so a button reached as a member of a cluster counts as placed —
+ * otherwise dropping a face plate would leave the editor still reporting that A, B, X and Y are
+ * missing from a pad that plainly has them.
+ */
 fun GamepadLayout.missingButtons(): Set<GamepadButton> {
-    val present = controls.mapNotNull { (it.id as? ControlId.Button)?.button }.toSet()
+    val present = controls.flatMap { it.leafIds() }
+        .mapNotNull { (it as? ControlId.Button)?.button }
+        .toSet()
     return GamepadButton.entries.toSet() - present - setOf(GamepadButton.L2, GamepadButton.R2)
 }

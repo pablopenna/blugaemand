@@ -374,6 +374,187 @@ class LayoutEditsTest {
         for (id in ControlId.ALL) assertTrue(id.toString(), id.describe().isNotEmpty())
     }
 
+    // -- Clusters -------------------------------------------------------------------------
+
+    /**
+     * A layout of one face plate at (500, 250), members 100 px out with a radius of 50 — the same
+     * fixture the router tests use, and for the same reason: the unit is 500, so every fraction
+     * inside the plate is a round number of pixels.
+     */
+    private val plated = GamepadLayout(
+        id = "plated",
+        name = "Plated",
+        controls = listOf(
+            ControlSpec(
+                ControlId.Cluster,
+                ControlSpec.Shape.Cluster(
+                    0.5f,
+                    0.5f,
+                    members = listOf(
+                        clusterMember(GamepadButton.WEST, -0.2f, 0f),
+                        clusterMember(GamepadButton.NORTH, 0f, -0.2f),
+                        clusterMember(GamepadButton.EAST, 0.2f, 0f),
+                        clusterMember(GamepadButton.SOUTH, 0f, 0.2f),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    @Test
+    fun `a plate moves as one and its members keep their arrangement`() {
+        val moved = resolve(plated).movedControl(0, dxPixels = -100f, dyPixels = 50f, snap = false)
+        assertEquals(400f, moved.pixelCenterX(0), TOLERANCE)
+        assertEquals(300f, moved.pixelCenterY(0), TOLERANCE)
+        // Untouched: members are offsets from the plate, so moving it moves them for free.
+        assertEquals(plated.cluster(0).members, moved.cluster(0).members)
+    }
+
+    @Test
+    fun `a plate scales as one, offsets and sizes together`() {
+        val grown = resolve(plated).resizedControl(0, factor = 1.5f, snap = false)
+        val members = grown.cluster(0).members
+        for ((before, after) in plated.cluster(0).members.zip(members)) {
+            val was = before.shape as ControlSpec.Shape.Circle
+            val now = after.shape as ControlSpec.Shape.Circle
+            assertEquals(was.centerX * 1.5f, now.centerX, TOLERANCE)
+            assertEquals(was.centerY * 1.5f, now.centerY, TOLERANCE)
+            assertEquals(was.radius * 1.5f, now.radius, TOLERANCE)
+        }
+    }
+
+    @Test
+    fun `a plate holds its shape on a screen that is not 16 by 9`() {
+        // The reason everything inside a plate is measured against the unit rather than against the
+        // screen. A loose group cannot do this: its members' vertical gaps follow the height while
+        // their sizes follow the unit, so the arrangement stretches on a squarer screen. Compared
+        // in units, because that is the space a plate is rigid in -- 4:3 is 1333x1000, unit 750.
+        val wide = ResolvedLayout(plated, 1000f, 500f).controls.single()
+        val square = ResolvedLayout(plated, 1333f, 1000f).controls.single()
+
+        for ((a, b) in wide.members.zip(square.members)) {
+            assertEquals(
+                (a.centerX - wide.centerX) / 500f,
+                (b.centerX - square.centerX) / 750f,
+                TOLERANCE,
+            )
+            assertEquals(
+                (a.centerY - wide.centerY) / 500f,
+                (b.centerY - square.centerY) / 750f,
+                TOLERANCE,
+            )
+            assertEquals(a.radius / 500f, b.radius / 750f, TOLERANCE)
+        }
+    }
+
+    @Test
+    fun `a plate cannot be scaled until a member is too small to hit`() {
+        // The floor is set by the smallest member, not by the plate: what a thumb aims at is a
+        // button, so that is what has to stay grabbable.
+        val shrunk = resolve(plated).resizedControl(0, factor = 0.01f, snap = false)
+        val radius = (shrunk.cluster(0).members.first().shape as ControlSpec.Shape.Circle).radius
+        assertEquals(MIN_CONTROL_EXTENT, radius, TOLERANCE)
+    }
+
+    @Test
+    fun `a plate cannot be scaled until a member is bigger than the limit`() {
+        val grown = resolve(plated).resizedControl(0, factor = 100f, snap = false)
+        val radius = (grown.cluster(0).members.first().shape as ControlSpec.Shape.Circle).radius
+        assertEquals(MAX_CONTROL_EXTENT, radius, TOLERANCE)
+    }
+
+    @Test
+    fun `a plate scaled on the grid lands on it as a unit`() {
+        // Snapped once, by the plate's own extent, rather than per member -- rounding each of them
+        // separately is what would pull the arrangement out of shape.
+        val grown = resolve(plated).resizedControl(0, factor = 1.4f, snap = true)
+        val resolved = ResolvedLayout(grown, width, height).controls.single()
+        assertOnGrid(resolved.halfWidth)
+    }
+
+    @Test
+    fun `a plate grown near an edge is pulled back on screen`() {
+        // A single control can only ever hang over by half a radius; a plate hangs over by half a
+        // plate, which is the size at which nobody would call it anything but a bug.
+        val atEdge = plated.copy(
+            controls = listOf(
+                plated.controls[0].copy(shape = plated.cluster(0).copy(centerX = 0.85f)),
+            ),
+        )
+        val grown = ResolvedLayout(atEdge, width, height).resizedControl(0, 1.8f, snap = false)
+        val resolved = ResolvedLayout(grown, width, height).controls.single()
+        assertTrue(
+            "right edge at ${resolved.centerX + resolved.halfWidth}",
+            resolved.centerX + resolved.halfWidth <= width + TOLERANCE,
+        )
+    }
+
+    @Test
+    fun `ungrouping leaves the members exactly where the plate drew them`() {
+        val before = ResolvedLayout(plated, width, height).controls.single().members
+        val loose = ResolvedLayout(plated, width, height).ungroupedControl(0)
+        val after = ResolvedLayout(loose, width, height).controls
+
+        assertEquals(4, after.size)
+        for ((was, now) in before.zip(after)) {
+            assertEquals(was.centerX, now.centerX, TOLERANCE)
+            assertEquals(was.centerY, now.centerY, TOLERANCE)
+            assertEquals(was.radius, now.radius, TOLERANCE)
+            assertEquals(was.spec.id, now.spec.id)
+        }
+    }
+
+    @Test
+    fun `ungrouping a rectangle keeps its width, which changes reference on the way out`() {
+        // The one number that means something different inside a plate and outside it: a
+        // rectangle's width is a fraction of the unit in there and of the screen out here.
+        val shoulders = GamepadLayout(
+            id = "shoulders",
+            name = "Shoulders",
+            controls = listOf(
+                ControlSpec(
+                    ControlId.Cluster,
+                    ControlSpec.Shape.Cluster(
+                        0.5f,
+                        0.5f,
+                        members = listOf(
+                            ControlSpec(
+                                ControlId.Button(GamepadButton.R1),
+                                ControlSpec.Shape.Rect(0f, 0f, width = 0.4f, height = 0.2f),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val before = ResolvedLayout(shoulders, width, height).controls.single().members.single()
+        val loose = ResolvedLayout(shoulders, width, height).ungroupedControl(0)
+        val after = ResolvedLayout(loose, width, height).controls.single()
+
+        assertEquals(before.halfWidth, after.halfWidth, TOLERANCE)
+        assertEquals(before.halfHeight, after.halfHeight, TOLERANCE)
+    }
+
+    @Test
+    fun `ungrouping keeps the plate's place in the list and leaves everything else alone`() {
+        val mixed = layout.copy(controls = layout.controls + plated.controls)
+        val loose = ResolvedLayout(mixed, width, height).ungroupedControl(layout.controls.size)
+        assertEquals(layout.controls, loose.controls.take(layout.controls.size))
+        assertEquals(layout.controls.size + 4, loose.controls.size)
+    }
+
+    @Test
+    fun `ungrouping anything that is not a plate is not an edit`() {
+        assertEquals(layout, resolve().ungroupedControl(south))
+        assertEquals(layout, resolve().ungroupedControl(99))
+    }
+
+    @Test
+    fun `a plate is named by what is on it`() {
+        assertEquals("Y / X / B / A", plated.controls.single().describe())
+        assertEquals("A", layout.controls[south].describe())
+    }
+
     // -- Helpers --------------------------------------------------------------------------
 
     private fun assertOnGrid(pixels: Float) {
@@ -381,8 +562,16 @@ class LayoutEditsTest {
         assertTrue("$pixels is not a multiple of $step", offGrid < TOLERANCE)
     }
 
+    /** One member of a cluster: offsets and radius are fractions of the layout unit. */
+    private fun clusterMember(button: GamepadButton, dx: Float, dy: Float) = ControlSpec(
+        ControlId.Button(button),
+        ControlSpec.Shape.Circle(dx, dy, radius = 0.1f),
+        button.name.first().toString(),
+    )
+
     private fun GamepadLayout.shapeOf(index: Int) = controls[index].shape
     private fun GamepadLayout.circle(index: Int) = shapeOf(index) as ControlSpec.Shape.Circle
+    private fun GamepadLayout.cluster(index: Int) = shapeOf(index) as ControlSpec.Shape.Cluster
     private fun GamepadLayout.stick(index: Int) = shapeOf(index) as ControlSpec.Shape.Stick
     private fun GamepadLayout.rect(index: Int) = shapeOf(index) as ControlSpec.Shape.Rect
     private fun GamepadLayout.pixelCenterX(index: Int) = shapeOf(index).centerX * width

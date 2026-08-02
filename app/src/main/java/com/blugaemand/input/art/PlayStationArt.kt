@@ -31,6 +31,7 @@ import com.blugaemand.input.Glyph
  */
 val PLAYSTATION_ART: ArtPack = ArtPack(
     id = "playstation",
+    name = "PlayStation",
     glyphs = mapOf(
         // Face buttons — by position, see above.
         ControlId.Button(GamepadButton.WEST) to

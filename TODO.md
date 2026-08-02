@@ -65,11 +65,35 @@ turns up along the way.
       four-button D-pad, the centre three, and each shoulder pair side by side or stacked. A
       placement shortcut only; once dropped the members are ordinary controls, so a layout stays a
       flat list and the editor keeps one selection model
+- [x] **A group can be one control** — `ControlSpec.Shape.Cluster`, offered as an *As one control*
+      switch on the group page. `ControlId.Dpad` was already a control resolving a touch to an
+      output from where inside itself it landed, so this generalises it rather than inventing
+      anything, and every one of the seven arrangements clusters — the shoulder pairs were the ones
+      that made a plate have to be more than a diamond of circles. The member a touch means is the
+      one whose own area it is in, else the nearest centre: pure nearest splits at the midpoint
+      between centres and would put the line inside the middle of the centre cluster's Home glyph.
+      **Art needed no change at all** — a plate draws as its members and a member carries an
+      ordinary `ControlId`, which is what `ArtPack` is keyed by. The part worth remembering is that
+      everything inside a plate is a fraction of the layout unit, offsets included: in screen
+      fractions a diamond stretches vertically off 16:9 exactly as a loose group does, and in unit
+      fractions it is rigid and resizing collapses to one factor. *Ungroup* is the way back out
 - [x] **A D-pad can be four separate buttons** as well as one cross, both sending one hat.
       `Hat.of` was already there and unused, so the router folds the held arms through it
-- [ ] Editor extras that did not make the first cut: undo, moving a group as a unit after it has
-      been placed, nudging a selection with arrows, and a real colour picker rather than twelve
-      presets
+- [x] **Pick the art pack from the editor** — the *Colours* page becomes *Appearance*: *Shapes and
+      colours* plus every pack in `ArtPacks.ALL`, with the swatches under a rule while colours mode
+      is in force. Unconditional now, where the old row vanished the moment a layout took a pack.
+      `ArtPack` gained a display `name` for the list; the format writes the id and is unaffected.
+      Leaving a pack restores the colours the layout last had, held for as long as the editor is
+      open rather than saved
+- [x] **The layout menu shows its two halves** — `LayoutLibrary.builtIn` and `.user` rendered as two
+      runs separated by a rule, each row marked with a Kenney joystick, plain for built-in and red
+      for yours. `MenuPanel` takes the whole library rather than a list, which is also what let
+      `canEdit` stop being threaded down from `MainActivity`. The shared `PanelDivider` is used
+      again under the group page's *As one control* switch
+- [ ] Editor extras that did not make the first cut: undo, nudging a selection with arrows, and a
+      real colour picker rather than twelve presets. *Moving a group as a unit after it has been
+      placed* is off this list — a cluster is that, and more directly than a second selection model
+      over loose controls would have been
 - [x] **More built-in layouts** — **Switch** and **Steam Deck** both ship. As predicted, the
       plumbing was the easy part and Nintendo's A/B/X/Y crossing was the part to think about: it
       swaps *both* pairs, so the key drawn A sends what an Xbox pad's B sends. Unlike Xbox and PS5
@@ -82,7 +106,9 @@ turns up along the way.
       art exists, but `drawControl` is told only whether the control is held, not which way. The
       four-button D-pad needs the same art and does not have it either: each arm is one control, so
       *it* knows its direction, but no `ControlIcon` names a single arm yet. One conversion run
-      covers both
+      covers both — and now a third case, since the clustered four-arm group is a cross whose
+      members each know their own direction and is the only one of the three that would light
+      correctly the moment the art lands. `LayoutArtTest` has the one `filterNot` to delete
 - [ ] Import / export layouts as JSON so they can be shared. The format exists and is versioned;
       what is left is the file picker and the share sheet. Two things to decide there: what to do
       with an incoming id that collides with a local layout (copies already take a fresh UUID, so

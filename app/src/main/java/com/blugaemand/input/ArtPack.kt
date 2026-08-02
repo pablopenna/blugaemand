@@ -28,6 +28,14 @@ data class ArtPack(
      * changing one orphans every layout already using it; see [ArtPackSerializer].
      */
     val id: String,
+    /**
+     * What the pack is called where someone has to read it, which is the editor's *Appearance* page.
+     *
+     * Separate from [id] because that is a slug and a compatibility surface: `steamdeck` is the
+     * right thing to write in a file and the wrong thing to put in front of a person, and deriving
+     * one from the other is a guess that gets *Steam Deck* wrong. Free to change, unlike the id.
+     */
+    val name: String,
     val glyphs: Map<ControlId, Glyph>,
 ) {
     /** The picture [control] draws while [held], or null if this pack has none for it. */

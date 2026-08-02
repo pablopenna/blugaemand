@@ -21,6 +21,7 @@ import com.blugaemand.input.Glyph
  */
 val STEAM_DECK_ART: ArtPack = ArtPack(
     id = "steamdeck",
+    name = "Steam Deck",
     glyphs = mapOf(
         // Face buttons — same arrangement as Xbox, so the same slots.
         ControlId.Button(GamepadButton.WEST) to

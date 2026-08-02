@@ -6,10 +6,12 @@ import com.blugaemand.input.layouts.DEFAULT_LAYOUT
 /**
  * Arrangements of several controls that are placed in one go.
  *
- * A group is **a placement shortcut and nothing more**. Once dropped, its members are ordinary
- * controls that move and resize on their own — nothing records that they arrived together, and
- * nothing in the saved layout says so. That is deliberate: a layout stays a flat list of controls,
- * which is what it serialises as, and the editor keeps one selection model rather than two.
+ * A group goes down one of two ways, and the editor offers both because they answer different
+ * wants. **Loose** — the original — is a placement shortcut and nothing more: once dropped its
+ * members are ordinary controls that move and resize on their own, which is what you want when the
+ * arrangement is a starting point to be tuned. **Clustered**, through [clustered], is one control
+ * that happens to have several buttons on it, which is what you want when the arrangement is the
+ * point and dragging four things into line again is not.
  *
  * Most groups take their geometry from [DEFAULT_LAYOUT], so a position tuned there moves them too.
  * The exceptions are the ones the default has no arrangement for — the stacked shoulder pairs, and
@@ -29,6 +31,48 @@ object ControlGroups {
         Placement.of("Right shoulders, side by side", DEFAULT_LAYOUT.specsFor(RIGHT_SHOULDERS)),
         Placement.of("Right shoulders, stacked", stacked(RIGHT_SHOULDERS)),
     )
+
+    /**
+     * The same arrangement as one control instead of several.
+     *
+     * Every entry in [ALL] can go down either way, because a [Placement]'s members are already
+     * offsets from the point it will be dropped on — which is exactly what a cluster's members are,
+     * bar the units. So this is a change of coordinates and a wrapper, not a second catalog.
+     *
+     * The conversion is the one constant in the file: a plate measures everything against the
+     * layout unit, and on the 16:9 screen the built-in geometry is authored for, one unit of height
+     * is `16/9` units of width. Widths therefore stretch by that and heights pass through, which is
+     * what makes the plate come out on any screen as the arrangement drawn here.
+     */
+    fun clustered(placement: Placement): Placement = Placement(
+        placement.name,
+        listOf(
+            ControlSpec(
+                id = ControlId.Cluster,
+                shape = ControlSpec.Shape.Cluster(
+                    centerX = 0f,
+                    centerY = 0f,
+                    members = placement.controls.map { it.copy(shape = it.shape.inUnits()) },
+                ),
+            ),
+        ),
+    )
+}
+
+/** Height as a fraction of width on the 16:9 screen the built-in geometry is authored for. */
+private const val REFERENCE_ASPECT = 9f / 16f
+
+/** A shape's screen-relative numbers — its X offset, and a rectangle's width — restated in units. */
+private fun ControlSpec.Shape.inUnits(): ControlSpec.Shape = when (this) {
+    is ControlSpec.Shape.Circle -> copy(centerX = centerX / REFERENCE_ASPECT)
+    is ControlSpec.Shape.Stick -> copy(centerX = centerX / REFERENCE_ASPECT)
+    is ControlSpec.Shape.Dpad -> copy(centerX = centerX / REFERENCE_ASPECT)
+    is ControlSpec.Shape.Rect -> copy(
+        centerX = centerX / REFERENCE_ASPECT,
+        width = width / REFERENCE_ASPECT,
+    )
+
+    is ControlSpec.Shape.Cluster -> this
 }
 
 private val FACE_BUTTONS = listOf(

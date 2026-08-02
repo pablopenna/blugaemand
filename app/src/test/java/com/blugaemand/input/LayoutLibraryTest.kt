@@ -58,6 +58,25 @@ class LayoutLibraryTest {
     }
 
     @Test
+    fun `the catalog is exactly its two halves, and they do not overlap`() {
+        // The menu draws a rule between them and marks each half with its own icon, so the halves
+        // have to account for the whole list -- a layout in neither would simply not be listed.
+        val library = LayoutLibrary().with(mine)
+        assertEquals(library.builtIn + library.user, library.all)
+        assertEquals(Layouts.ALL, library.builtIn)
+        assertTrue((library.builtIn.map { it.id } intersect library.user.map { it.id }).isEmpty())
+    }
+
+    @Test
+    fun `the two halves are exactly the read-only one and the editable one`() {
+        // Which is what makes the icons honest: the plain joystick means built-in and the red one
+        // means yours, and "yours" is the same thing as "editable" or the marks say the wrong thing.
+        val library = LayoutLibrary().with(mine)
+        for (layout in library.builtIn) assertFalse(layout.id, library.isEditable(layout.id))
+        for (layout in library.user) assertTrue(layout.id, library.isEditable(layout.id))
+    }
+
+    @Test
     fun `layouts are found by id across both halves`() {
         val library = LayoutLibrary().with(mine)
         assertEquals(PS5_LAYOUT, library.byId("ps5"))

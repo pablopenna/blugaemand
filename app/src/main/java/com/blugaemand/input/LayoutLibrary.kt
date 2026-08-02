@@ -16,8 +16,15 @@ import java.util.UUID
  */
 data class LayoutLibrary(val user: List<GamepadLayout> = emptyList()) {
 
+    /**
+     * The ones that ship with the app, which are exactly the ones [isEditable] refuses. Named here
+     * rather than reached through [Layouts] at the call site so the menu can draw the line between
+     * the two halves without knowing where either comes from.
+     */
+    val builtIn: List<GamepadLayout> get() = Layouts.ALL
+
     /** The catalog the menu lists, built-ins first so they keep their familiar order. */
-    val all: List<GamepadLayout> get() = Layouts.ALL + user
+    val all: List<GamepadLayout> get() = builtIn + user
 
     fun byId(id: String): GamepadLayout? = all.firstOrNull { it.id == id }
 

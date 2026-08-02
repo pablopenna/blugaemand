@@ -58,6 +58,13 @@ class TouchRouterTest {
     private companion object {
         const val STICK = 0
         const val SOUTH_BUTTON = 1
+
+        /** One member of a cluster: offsets and radius are fractions of the layout unit. */
+        fun member(button: GamepadButton, dx: Float, dy: Float, radius: Float = 0.1f) =
+            ControlSpec(
+                ControlId.Button(button),
+                ControlSpec.Shape.Circle(dx, dy, radius = radius),
+            )
     }
 
     // -- Binding behaviour ----------------------------------------------------------------
@@ -404,6 +411,211 @@ class TouchRouterTest {
         assertFalse("just past the right edge", router.down(1, 551f, 50f))
         router.reset()
         assertFalse("just past the bottom edge", router.down(1, 500f, 76f))
+    }
+
+    // -- Clusters -------------------------------------------------------------------------
+
+    /**
+     * A face plate at (500, 250) on the same 1000x500 surface, where the unit is 500.
+     *
+     * Everything inside a plate is a fraction of that unit, so the members land 100 px out with a
+     * radius of 50: Y at (400, 250), X at (500, 150), B at (600, 250), A at (500, 350). The plate's
+     * own touch area is their bounding box, x 350..650 by y 100..400.
+     */
+    private val plated = GamepadLayout(
+        id = "plated",
+        name = "Plated",
+        controls = listOf(
+            ControlSpec(
+                ControlId.Cluster,
+                ControlSpec.Shape.Cluster(
+                    0.5f,
+                    0.5f,
+                    members = listOf(
+                        member(GamepadButton.WEST, -0.2f, 0f),
+                        member(GamepadButton.NORTH, 0f, -0.2f),
+                        member(GamepadButton.EAST, 0.2f, 0f),
+                        member(GamepadButton.SOUTH, 0f, 0.2f),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    private fun platedRouter() = TouchRouter(ResolvedLayout(plated, 1000f, 500f))
+
+    @Test
+    fun `a touch on one member of a plate sends that member's button`() {
+        val router = platedRouter()
+        assertTrue(router.down(1, 600f, 250f))
+        assertTrue(router.state().isPressed(GamepadButton.EAST))
+        assertFalse(router.state().isPressed(GamepadButton.WEST))
+    }
+
+    @Test
+    fun `a plate has no dead spots in it`() {
+        // The whole bounding box is live, corners included -- the same choice the D-pad cross
+        // makes, and the reason a plate is one control rather than four with gaps between them.
+        val router = platedRouter()
+        assertTrue("dead centre", router.down(1, 500f, 250f))
+        assertFalse("dead centre sends nothing", router.state() == GamepadState.NEUTRAL)
+
+        router.reset()
+        // Up and left of everything, inside no member's own circle, but nearest X's centre.
+        assertTrue("the top-left corner", router.down(1, 380f, 115f))
+        assertTrue(router.state().isPressed(GamepadButton.NORTH))
+    }
+
+    @Test
+    fun `a thumb rolled across a plate changes button without lifting`() {
+        // What the plate buys over four separate buttons, and why the member is re-read on every
+        // event rather than fixed when the pointer went down.
+        val router = platedRouter()
+        router.down(1, 600f, 250f)
+        assertTrue(router.state().isPressed(GamepadButton.EAST))
+
+        router.move(1, 500f, 350f)
+        assertTrue(router.state().isPressed(GamepadButton.SOUTH))
+        assertFalse("the one rolled off is released", router.state().isPressed(GamepadButton.EAST))
+    }
+
+    @Test
+    fun `two thumbs on one plate hold two buttons`() {
+        val router = platedRouter()
+        router.down(1, 600f, 250f)
+        router.down(2, 500f, 350f)
+
+        val state = router.state()
+        assertTrue(state.isPressed(GamepadButton.EAST))
+        assertTrue(state.isPressed(GamepadButton.SOUTH))
+        assertEquals(setOf(2, 3), router.activeMembers(0))
+    }
+
+    @Test
+    fun `a member's own area beats the midpoint between centres`() {
+        // The centre cluster's shape: a large Home between two small buttons. Nearest centre alone
+        // would split at 62 px from the middle, which is inside Home's own 75 px circle -- so
+        // touching the edge of the picture of Home would have sent Back.
+        val uneven = GamepadLayout(
+            id = "uneven",
+            name = "Uneven",
+            controls = listOf(
+                ControlSpec(
+                    ControlId.Cluster,
+                    ControlSpec.Shape.Cluster(
+                        0.5f,
+                        0.5f,
+                        members = listOf(
+                            member(GamepadButton.BACK, -0.25f, 0f, radius = 0.05f),
+                            member(GamepadButton.GUIDE, 0f, 0f, radius = 0.15f),
+                            member(GamepadButton.START, 0.25f, 0f, radius = 0.05f),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val router = TouchRouter(ResolvedLayout(uneven, 1000f, 500f))
+
+        // 70 px left of centre: still inside Home, but Back's centre is 55 px away and Home's 70.
+        router.down(1, 430f, 250f)
+        assertTrue(router.state().isPressed(GamepadButton.GUIDE))
+        assertFalse(router.state().isPressed(GamepadButton.BACK))
+
+        // Past Home's edge and in the gap, where nearest centre is all there is to go on.
+        router.move(1, 415f, 250f)
+        assertTrue(router.state().isPressed(GamepadButton.BACK))
+    }
+
+    @Test
+    fun `a trigger on a plate drives its axis`() {
+        // Members are not all buttons, which is what the shoulder pairs need: a plate resolves to
+        // whatever the member is and then routes it exactly as a control of its own would.
+        val shoulders = GamepadLayout(
+            id = "shoulders",
+            name = "Shoulders",
+            controls = listOf(
+                ControlSpec(
+                    ControlId.Cluster,
+                    ControlSpec.Shape.Cluster(
+                        0.5f,
+                        0.5f,
+                        members = listOf(
+                            ControlSpec(
+                                ControlId.Trigger(Side.RIGHT),
+                                ControlSpec.Shape.Rect(0f, -0.15f, width = 0.4f, height = 0.2f),
+                            ),
+                            ControlSpec(
+                                ControlId.Button(GamepadButton.R1),
+                                ControlSpec.Shape.Rect(0f, 0.15f, width = 0.4f, height = 0.2f),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val router = TouchRouter(ResolvedLayout(shoulders, 1000f, 500f))
+
+        router.down(1, 500f, 175f) // the upper half, which is the trigger
+        assertEquals(GamepadState.AXIS_MAX, router.state().rightTrigger)
+
+        router.move(1, 500f, 325f) // the lower half, which is the bumper
+        assertEquals(GamepadState.AXIS_MIN, router.state().rightTrigger)
+        assertTrue(router.state().isPressed(GamepadButton.R1))
+    }
+
+    @Test
+    fun `D-pad arms on a plate still fold into one hat`() {
+        val arms = GamepadLayout(
+            id = "arms",
+            name = "Arms",
+            controls = listOf(
+                ControlSpec(
+                    ControlId.Cluster,
+                    ControlSpec.Shape.Cluster(
+                        0.5f,
+                        0.5f,
+                        members = ControlId.Direction.entries.map { direction ->
+                            val x = when (direction) {
+                                ControlId.Direction.LEFT -> -0.2f
+                                ControlId.Direction.RIGHT -> 0.2f
+                                else -> 0f
+                            }
+                            val y = when (direction) {
+                                ControlId.Direction.UP -> -0.2f
+                                ControlId.Direction.DOWN -> 0.2f
+                                else -> 0f
+                            }
+                            ControlSpec(
+                                ControlId.DpadButton(direction),
+                                ControlSpec.Shape.Circle(x, y, radius = 0.1f),
+                            )
+                        },
+                    ),
+                ),
+            ),
+        )
+        val router = TouchRouter(ResolvedLayout(arms, 1000f, 500f))
+
+        router.down(1, 500f, 150f) // up
+        assertEquals(Hat.NORTH, router.state().hat)
+
+        router.down(2, 600f, 250f) // and right, on the same plate
+        assertEquals(Hat.NORTH_EAST, router.state().hat)
+    }
+
+    @Test
+    fun `a plate counts as placing the buttons on it`() {
+        // Otherwise dropping a face plate would leave the editor still reporting that A, B, X and
+        // Y are missing from a pad that plainly has them.
+        val missing = plated.missingButtons()
+        assertFalse("$missing", GamepadButton.SOUTH in missing)
+        assertFalse("$missing", GamepadButton.WEST in missing)
+        assertTrue("nothing else is placed", GamepadButton.START in missing)
+    }
+
+    @Test
+    fun `nothing on a plate lights until it is touched`() {
+        assertEquals(emptySet<Int>(), platedRouter().activeMembers(0))
     }
 
     // -- Layout sanity --------------------------------------------------------------------

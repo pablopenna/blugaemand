@@ -67,9 +67,7 @@ fun ResolvedLayout.withPlacement(
     val x = if (snap) snapToGrid(atXPixels, gridStep) else atXPixels
     val y = if (snap) snapToGrid(atYPixels, gridStep) else atYPixels
 
-    val placed = placement.at(x / width, y / height).map { spec ->
-        spec.copy(shape = spec.shape.clampedOnScreen(this))
-    }
+    val placed = placement.at(x / width, y / height).map { it.clampedOnScreen(this) }
     return layout.copy(controls = layout.controls + placed)
 }
 
@@ -90,30 +88,31 @@ fun ResolvedLayout.previewOf(
 
 private fun ControlSpec.centredOnOrigin(): ControlSpec = copy(shape = shape.movedTo(0f, 0f))
 
-private fun ControlSpec.Shape.movedTo(x: Float, y: Float): ControlSpec.Shape = when (this) {
-    is ControlSpec.Shape.Circle -> copy(centerX = x, centerY = y)
-    is ControlSpec.Shape.Rect -> copy(centerX = x, centerY = y)
-    is ControlSpec.Shape.Stick -> copy(centerX = x, centerY = y)
-    is ControlSpec.Shape.Dpad -> copy(centerX = x, centerY = y)
-}
+private fun ControlSpec.Shape.movedTo(x: Float, y: Float): ControlSpec.Shape = withCenter(x, y)
 
 /**
- * This shape pulled back onto the screen by its own extent, so a control dropped near an edge is
- * fully reachable rather than half over the side.
+ * This control pulled back onto the screen by its own extent, so one dropped near an edge is fully
+ * reachable rather than half over the side.
  */
-private fun ControlSpec.Shape.clampedOnScreen(layout: ResolvedLayout): ControlSpec.Shape {
+internal fun ControlSpec.clampedOnScreen(layout: ResolvedLayout): ControlSpec {
     // Resolving a single-control layout is the cheapest way to reuse the extent arithmetic that
-    // ResolvedLayout already owns, rather than restating which field measures against what.
+    // ResolvedLayout already owns, rather than restating which field measures against what. The
+    // whole spec goes in and not just the shape, because a cluster's extent comes from the members
+    // it carries and the two have to arrive together.
     val probe = ResolvedLayout(
-        GamepadLayout("probe", "probe", listOf(ControlSpec(ControlId.Dpad, this))),
+        GamepadLayout("probe", "probe", listOf(this)),
         layout.width,
         layout.height,
     ).controls.single()
 
-    val insetX = if (probe.radius > 0f) probe.radius else probe.halfWidth
-    val insetY = if (probe.radius > 0f) probe.radius else probe.halfHeight
+    val x = probe.centerX.coerceIn(probe.extentX, maxOf(probe.extentX, layout.width - probe.extentX))
+    val y = probe.centerY
+        .coerceIn(probe.extentY, maxOf(probe.extentY, layout.height - probe.extentY))
 
-    val x = (probe.centerX.coerceIn(insetX, maxOf(insetX, layout.width - insetX)) / layout.width)
-    val y = (probe.centerY.coerceIn(insetY, maxOf(insetY, layout.height - insetY)) / layout.height)
-    return movedTo(x.coerceIn(0f, 1f), y.coerceIn(0f, 1f))
+    return copy(
+        shape = shape.movedTo(
+            (x / layout.width).coerceIn(0f, 1f),
+            (y / layout.height).coerceIn(0f, 1f),
+        ),
+    )
 }

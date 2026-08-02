@@ -7,8 +7,9 @@ driver, no companion app, no root.
 centre buttons, two stick clicks), offered in five presentations — **Default**, drawn as shapes and
 labels, and **Xbox**, **PS5**, **Switch** and **Steam Deck**, drawn with each console's button art
 and laid out the way that console lays its buttons out. **You can also make your own**,
-from empty or as a copy of one of those, and move, resize, add and remove controls on it; layouts
-and the choice of one are saved between launches. Verified end-to-end against a **Linux** host;
+from empty or as a copy of one of those, and move, resize, add and remove controls on it — including
+whole arrangements dropped as **one control**, so a face diamond is a single plate that sends A, B,
+X or Y depending on where you touch it. Layouts and the choice of one are saved between launches. Verified end-to-end against a **Linux** host;
 Windows is the stated target but is **not yet tested**. Two pills sit at the top edge, each opening
 its panel on a 600 ms hold: the left one is connection status and pairing, the right one
 (**☰ Menu**) picks or creates a layout, opens the editor, and quits.
@@ -169,7 +170,8 @@ host. Only the service and the Compose layer touch the framework.
 - `LayoutEdits` — every edit the editor makes, as arithmetic on plain data. This is where the
   editor is actually tested.
 - `Placement` / `ControlGroups` — controls waiting to be dropped, positioned relative to the point
-  they will land on, and the built-in arrangements of several at once.
+  they will land on, and the built-in arrangements of several at once. `ControlGroups.clustered`
+  restates one of those arrangements as a single control; see *A cluster* below.
 
 **`data/`**
 
@@ -224,6 +226,23 @@ layers, so nothing has to decide what a glyph on a coloured plate would mean.
 | Controls | drawn shapes, text labels | a picture per control, from an `ArtPack` |
 | Colours | two ARGB values on the layout: resting and pressed | none — the art carries its own |
 | Pressed | the fill changes | a second picture swaps in, if the pack has one |
+
+**Which mode a layout is in is a choice you make in the editor**, on *Appearance*: the page lists
+*Shapes and colours* and every pack in `ArtPacks.ALL`, and the colour swatches sit under a rule below
+it while colours mode is the one in force. One row rather than the two it replaces, and
+unconditional — the old *Colours* row disappeared the moment a layout took a pack, which is exactly
+when someone goes looking for the way back off it.
+
+`ArtPack` carries a display `name` beside its `id` for that list. The id is a slug and a
+compatibility surface (`steamdeck`), so it is the wrong thing to show a person and deriving one from
+the other gets *Steam Deck* wrong. The saved format is unaffected — `ArtPackSerializer` writes the id
+and nothing else.
+
+Leaving a pack restores **the colours the layout last had**, held by `MainActivity` for as long as
+the editor is open. An image layout genuinely has no colours saved — the two styles are alternatives,
+not layers — so without that, a look at the Xbox art and back would hand over the defaults instead of
+the two colours someone picked. It is deliberately not persisted: keeping it would mean changing the
+format for a convenience.
 
 Consequences worth knowing:
 
@@ -311,6 +330,14 @@ A copy takes a fresh UUID rather than anything derived from its source, so a lay
 someone else can never land on top of one already here. It keeps everything else, art pack included:
 a copy of the PS5 pad is a PlayStation-looking pad you can then rearrange.
 
+**The menu draws the same line the code does.** `LayoutLibrary.builtIn` and `.user` are the two
+halves of `.all`, and the Layouts page renders them as two runs separated by a rule, each row marked
+with a Kenney joystick — plain for what ships, red for what you made. That is also why `MenuPanel`
+takes the whole `LayoutLibrary` rather than a list of layouts: a flat list cannot say which half a
+row is in, and having it means *Edit layout* asks `isEditable` where it is used instead of being told
+the answer from two screens up. The rule is suppressed when you have made nothing, or a fresh install
+shows a line with an empty half under it.
+
 **Editing is four operations** — move, resize, add, remove — plus the two colours and a rename. All
 of the arithmetic is in `LayoutEdits` and `Placement`, which are plain Kotlin, so the editor is
 tested on the JVM and `EditorScreen` is nothing but gestures.
@@ -327,12 +354,75 @@ one, so nothing is created until the drop point is known, and a preview of what 
 the finger. `Placement` is the shape of that: controls positioned relative to the point they will be
 dropped on, which makes a single control a placement of one and lets groups reuse the whole path.
 
-**A control group is a placement shortcut and nothing more.** `ControlGroups.ALL` holds seven — the
-face diamond, a four-arm D-pad, the centre three, and each shoulder pair in both arrangements — most
-derived from `DEFAULT_LAYOUT` so tuning it moves them. Once dropped, the members are ordinary
-controls: nothing records that they arrived together, and nothing in the saved layout says so. That
-keeps a layout a flat list of controls, which is what it serialises as, and the editor down to one
-selection model.
+**A control group goes down one of two ways.** `ControlGroups.ALL` holds seven arrangements — the
+face diamond, a four-arm D-pad, the centre three, and each shoulder pair side by side or stacked —
+most derived from `DEFAULT_LAYOUT` so tuning it moves them. The editor's *Add control group* page
+has an **As one control** switch that picks which way the chosen one lands:
+
+- **Loose**, the original. The members are ordinary controls the moment they are dropped: nothing
+  records that they arrived together and nothing in the saved layout says so. What you want when the
+  arrangement is a starting point to be tuned.
+- **Clustered**, through `ControlGroups.clustered`. One control that has several buttons on it. What
+  you want when the arrangement is the point — see below.
+
+The switch is held by `MainActivity` alongside **Grid**, not by the panel that shows it. The panel is
+destroyed every time it closes — which placing something does — so state living there would reset
+after every drop, and laying out a pad of plates would mean setting it again for each one. Both are
+settings about how the editor works rather than about the thing being placed.
+
+### A cluster: one control with several buttons on it
+
+`ControlId.Dpad` was already a control that resolves a touch to an output from *where inside itself*
+it landed. `ControlSpec.Shape.Cluster` generalises that: a plate of members, one entry in
+`layout.controls`, one thing to select, move, resize and delete.
+
+**Which member a touch means: the one whose own area it is in, else the nearest centre.** Nearest
+centre alone splits the plate at the midpoint between two members and ignores how big either is — on
+the centre cluster, where Home is larger than the buttons beside it, that line falls inside Home's
+own glyph and touching the edge of the picture would send Back. Falling back to nearest afterwards
+is what leaves the plate with no dead spots in it, so a thumb anywhere on it sends something and can
+roll from one member to the next without lifting, exactly as it can across a cross. The member is
+re-read on every pointer event, not fixed at touch-down, which is what makes the roll work; two
+thumbs on one plate are two bindings and hold two buttons.
+
+**Everything inside a plate is a fraction of the layout unit** — the members' offsets from its centre
+as well as their sizes, including a member `Rect.width`. At top level a position is a fraction of
+screen width or height and a rectangle's width a fraction of screen width, and both exist for reasons
+that stop at the plate's edge: a layout should spread with the screen, and a shoulder button should
+stretch the top of it. A plate is a compact object whose parts have to hold their arrangement. In
+screen fractions a face diamond's vertical gap is 1.74 radii on 16:9 and 2.31 on 4:3 — it stretches,
+exactly as a loose group does. In unit fractions it is rigid on every screen, and resizing becomes
+one factor applied to every number every member has, whatever mixture of shapes they are.
+`ControlGroups.clustered` does the conversion, which is one constant: the built-in geometry is
+authored against 16:9, so widths stretch by `16/9` going in and heights pass through.
+
+**Members live on the shape, not on the id.** `ControlId.Cluster` is a marker and carries nothing.
+Everything in the app that asks how big a control is or where its parts are asks its shape —
+`movedTo`, `withCenter`, `scaledBy`, `clampedOnScreen`, `ResolvedLayout`, `drawControl` — and putting
+the members on the id would make extent a function of the id instead. `ControlId.Cluster` is
+deliberately absent from `ControlId.ALL`: there is no such thing as *the* cluster, only a particular
+arrangement, so it has no default spec and cannot appear on the *Add control* page.
+
+**Art needed nothing adding.** A plate draws as its members, and a member carries an ordinary
+`ControlId` — which is exactly what `ArtPack.glyphs` is keyed by. Every pack already has a picture
+for every button on a plate, pressed art included, and will for a plate nobody has thought of yet.
+Two existing details make that free and are worth not undoing: `rememberPadStyle` resolves every
+`ControlIcon` regardless of what the layout holds, and `ArtPack.glyph` is a map lookup, so a plate's
+own id simply misses and falls through to drawing the members.
+
+Members are plain buttons, triggers and D-pad arms; a `require` in the shape's constructor — which
+runs on deserialise too, so a hand-edited file is caught — rejects anything else and rejects an empty
+plate. A `Stick` is out because a stick's cap is positioned through `stickOffset`, which is keyed by
+top-level control; a nested plate and a one-piece cross are out because neither adds anything a flat
+list of members does not. `decodeLayouts` converts those `require` failures into
+`SerializationException`, which is what it promises to throw and what `LayoutStore` catches — without
+that, a bad stored file would crash rather than report an empty library.
+
+**Ungroup is the way back out.** A member is not separately selectable, by design — one plate, one
+selection — so *Ungroup* on a selected plate replaces it with its members, each left exactly where
+the plate was drawing it and converted back out of unit fractions on the way. It is also why the
+plate does not need a second selection model inside it: anyone who wants to tune one button ungroups,
+moves it, and is back to controls that behave like every other control.
 
 Decisions in there that are easy to undo by accident:
 
@@ -354,6 +444,13 @@ Decisions in there that are easy to undo by accident:
 - **A group centres on its bounding box, not on the average of its positions.** With an odd member
   out — the centre three, where two are small and one is not — an average drifts towards the
   crowded side and the group lands beside the thumb rather than under it.
+- **A plate scales by one factor, clamped by its smallest and largest member.** The size limits
+  exist so nothing becomes too small to grab hold of, and what a thumb aims at is a button, not the
+  plate. Snapping applies to the plate's own extent once, not to each member — rounding them
+  separately is what would pull the arrangement out of shape — and a resized plate is pulled back on
+  screen afterwards, because it grows about its centre by half a plate rather than half a radius.
+- **Clamping on screen takes the whole `ControlSpec`, not the bare shape.** A plate's extent comes
+  from the members it carries, so the id and the shape have to arrive together.
 
 **A control arrives at the size and label `DEFAULT_LAYOUT` gives it** — only the position is chosen,
 which is what stops a fresh control turning up as an unlabelled speck. Six of `ControlId.ALL` are not
@@ -527,6 +624,15 @@ edit the layout editor makes — all on the JVM:
   duplicates within a group, nothing stacked on anything else, and every group centred on the
   origin. Most groups derive from `DEFAULT_LAYOUT`, so these also fail if a control is renamed or
   dropped from the default pad, rather than at the moment someone taps the group that wanted it.
+  Every group is also checked clustered, the load-bearing one being that on 16:9 — the aspect the
+  geometry is authored against — a plate puts its members in exactly the pixels the loose group
+  would. Off 16:9 the two deliberately part company, which is the point of the unit fractions.
+- Cluster behaviour is tested where the rest of that behaviour lives rather than in a file of its
+  own: routing and the no-dead-spots rule in `TouchRouterTest`, moving, scaling and ungrouping in
+  `LayoutEditsTest` — including that a plate resolves to the same arrangement on 16:9 and on 4:3,
+  which is the one thing a loose group cannot do — dropping and clamping in `PlacementTest`, the
+  nested shape and its `require`s in `LayoutSerializationTest`, and that every pack already has art
+  for every member in `LayoutArtTest`.
 
 ---
 
@@ -585,11 +691,17 @@ The three built-ins cannot be changed — make your own instead:
    lift. Any control can be added more than once. **Add control group** does the same for several at
    a time: the face diamond, a four-button D-pad, the centre three, or a shoulder pair side by side
    or stacked. Once dropped they are ordinary controls and move separately.
-5. **Remove** takes out whatever is selected. A caption names any button left with no control — a
+5. **As one control**, on the group page, drops that arrangement as a *single* control instead — the
+   face diamond as one plate that sends A, B, X or Y depending on where you touch it. It moves,
+   resizes and deletes as one, keeps its shape on any screen, and rolling a thumb across it changes
+   button without lifting. **Ungroup** on a selected plate breaks it back into separate controls,
+   each where the plate was drawing it.
+6. **Remove** takes out whatever is selected. A caption names any button left with no control — a
    warning, not an error.
-6. **Colours** picks the resting and held fills, on a colours-mode layout. A layout copied from Xbox
-   or PS5 draws its art's own, so it has none to pick.
-7. **Done** goes back to the pad. Everything is saved as you go; **Delete layout** asks first,
+7. **Appearance** picks how the pad is drawn: *Shapes and colours*, or one of the four art packs.
+   In colours mode the resting and held fills are below the rule; in image mode the art carries its
+   own, so there is nothing there to pick. Going back to shapes returns the colours you had.
+8. **Done** goes back to the pad. Everything is saved as you go; **Delete layout** asks first,
    because there is no undo.
 
 To reach the editor again later, select the layout in the menu — *Edit layout* appears on the root
@@ -690,6 +802,13 @@ SVGs actually used live in `art/input/` alongside the licence, so the drawables 
 a clean checkout; run `python3 art/input/convert-input-art.py` after changing them. The pack itself
 also covers Switch, Steam Deck and others, which is what makes a new face plate a pack file and a
 three-line layout.
+
+Two of those files are **chrome rather than control art**: `generic_joystick` and
+`generic_joystick_red` mark the two halves of the menu's layout list. They deliberately do **not**
+become `ControlIcon` entries — that enum is a saved-layout compatibility surface, and a menu icon has
+no business being renameable only at the cost of orphaning someone's layouts. They are referenced as
+`R.drawable` from `MenuBar` instead, which is why `ControlIcons` is described as the only place that
+maps a `ControlIcon` to a drawable rather than the only place that mentions `R.drawable`.
 
 Not every button has art: the pack ships an Xbox logo but no PlayStation one, so the PS5 layout's
 guide button falls back to a drawn shape rather than borrowing another button's picture. The Switch

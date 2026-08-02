@@ -130,6 +130,37 @@ class PlacementTest {
         }
     }
 
+    @Test
+    fun `every group can be placed as one control instead`() {
+        // One control arriving where several would have, which is the only thing the placement
+        // machinery has to know about a plate -- its members are inside it and never appear here.
+        for (group in ControlGroups.ALL) {
+            val placed = resolve().withPlacement(ControlGroups.clustered(group), 500f, 250f, true)
+            assertEquals(group.name, 1, placed.controls.size)
+
+            val plate = resolve(placed).controls.single()
+            assertEquals(group.name, group.controls.size, plate.members.size)
+            assertEquals(group.name, 500f, plate.centerX, TOLERANCE)
+            assertEquals(group.name, 250f, plate.centerY, TOLERANCE)
+        }
+    }
+
+    @Test
+    fun `a plate dropped in the corner keeps its whole spread on screen`() {
+        // Clamping asks the spec and not the shape for a reason: a plate's extent is the box its
+        // members occupy, and only the two of them together know what that is.
+        val plate = ControlGroups.clustered(ControlGroups.ALL.first { it.name == "Face buttons" })
+        val placed = resolve().withPlacement(plate, -400f, -400f, false)
+        val resolved = resolve(placed).controls.single()
+
+        assertTrue("left edge", resolved.centerX - resolved.halfWidth >= -TOLERANCE)
+        assertTrue("top edge", resolved.centerY - resolved.halfHeight >= -TOLERANCE)
+        for (member in resolved.members) {
+            assertTrue("member left edge", member.centerX - member.extentX >= -TOLERANCE)
+            assertTrue("member top edge", member.centerY - member.extentY >= -TOLERANCE)
+        }
+    }
+
     // -- Edges ----------------------------------------------------------------------------
 
     @Test
