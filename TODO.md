@@ -162,7 +162,10 @@ Unordered; pull from here whenever.
 - [ ] Handle host-initiated output reports if any target ever sends rumble or LED data
 - [ ] Reconnect automatically to the last host on launch
 - [ ] Instrumented test for the service's registration lifecycle
-- [ ] Release signing config and a CI workflow
+- [x] **CI workflow** — `.github/workflows/build.yml` runs `test`, `lint` and `assemble` on every
+      push and pull request to `main`, and uploads the APK as an artifact. A manual run picks Debug
+      or Release; anything automatic is Debug
+- [ ] Release signing config, so the workflow's Release APK is installable rather than unsigned
 
 ---
 

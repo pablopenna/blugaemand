@@ -602,6 +602,25 @@ Dependency versions are pinned deliberately (AGP 8.13.2, Kotlin 2.0.21, Compose 
 kotlinx.serialization 1.7.3, DataStore 1.1.1). Lint's "newer version available" family is disabled
 in `app/build.gradle.kts` because it is pure noise here.
 
+### CI
+
+`.github/workflows/build.yml` runs the same three commands the section above documents — `test`,
+then `lint` and `assemble` for one variant — on every push and pull request to `main`, and on demand
+from the Actions tab. The APK is uploaded as a build artifact, so a phone can be fed a build without
+a toolchain on the machine holding it; the test and lint reports go up too, and on failure as well,
+which is the point of having them.
+
+**Running it by hand takes a Debug/Release choice.** Automatic runs are always Debug — `inputs` is
+null outside a manual dispatch, and the fallback in the *Resolve build type* step is what makes one
+workflow serve both. The variant is a `choice` input rather than free text, so the value that ends
+up spliced into a Gradle task name can only ever be one of two.
+
+**Release comes out unsigned** until there is a signing config (it is the open half of the backlog
+item this landed under): `assembleRelease` produces `app-release-unsigned.apk`, which is fine for
+inspection and useless for installing. Sign it by hand, or use Debug. The runner's Android SDK
+arrives with its licences accepted, so AGP fetches platform 36 itself and no `local.properties` is
+written.
+
 ### Tests
 
 `app/src/test/` covers the encoder, descriptor structure, touch routing, the saved format and every

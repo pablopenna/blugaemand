@@ -1,0 +1,80 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Which build to produce'
+        type: choice
+        default: Debug
+        options: [Debug, Release]
+
+# A newer push to the same branch makes the running build irrelevant.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # `inputs` is null on push and pull_request, so those always take Debug.
+      - name: Resolve build type
+        id: variant
+        env:
+          BUILD_TYPE: ${{ inputs.build_type || 'Debug' }}
+        run: |
+          echo "name=$BUILD_TYPE" >> "$GITHUB_OUTPUT"
+          echo "lower=${BUILD_TYPE,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Caches the Gradle user home and the configuration cache between runs.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # The runner image ships an Android SDK with the licences already accepted, so
+      # AGP downloads platform 36 and the build tools itself. ANDROID_HOME is set for
+      # us, which is what local.properties would otherwise be for.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Unit tests
+        run: ./gradlew test --stacktrace
+
+      - name: Lint
+        run: ./gradlew lint${{ steps.variant.outputs.name }} --stacktrace
+
+      # With no signing config in the project, Release comes out as
+      # app-release-unsigned.apk and will not install without being signed by hand.
+      - name: Build ${{ steps.variant.outputs.name }} APK
+        run: ./gradlew assemble${{ steps.variant.outputs.name }} --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: blugaemand-${{ steps.variant.outputs.lower }}-${{ github.sha }}
+          path: app/build/outputs/apk/${{ steps.variant.outputs.lower }}/*.apk
+          if-no-files-found: error
+
+      # Kept separate from the APK so a red build still hands over the reports that
+      # say why.
+      - name: Upload test and lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-${{ steps.variant.outputs.lower }}-${{ github.sha }}
+          path: |
+            app/build/reports/
+          if-no-files-found: ignore
