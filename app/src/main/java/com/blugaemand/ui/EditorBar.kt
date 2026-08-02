@@ -1,29 +1,23 @@
 package com.blugaemand.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -41,6 +35,9 @@ import com.blugaemand.ui.theme.OverlayColors
 
 /** Which page of the editor is showing. */
 private enum class EditorPage { Root, Add, AddGroup, Appearance, Rename, ConfirmDelete }
+
+/** Which of a layout's two colours the picker on the *Appearance* page is aimed at. */
+private enum class ColorTarget { Resting, Pressed }
 
 /**
  * The editor's controls: a pill, and its panel when opened.
@@ -71,6 +68,8 @@ fun EditorBar(
     /** The colours to go back to when leaving an art pack; see [EditorPage.Appearance]. */
     lastColors: LayoutStyle.Colors,
     onLayoutChange: (GamepadLayout) -> Unit,
+    /** Moves the selection one step, in units of -1, 0 or 1 per axis. */
+    onNudge: (dx: Int, dy: Int) -> Unit,
     /** Waiting to be dropped, if anything is. */
     pending: Placement?,
     onStartPlacing: (Placement) -> Unit,
@@ -100,14 +99,25 @@ fun EditorBar(
             return@Column
         }
 
-        TapPill(onClick = { onExpandedChange(!expanded) }) {
-            Text("☰", color = OverlayColors.Label, fontSize = 12.sp)
-            Text(
-                text = if (expanded) "Close" else "Edit",
-                color = OverlayColors.Label,
-                fontSize = 12.sp,
-                maxLines = 1,
-            )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TapPill(onClick = { onExpandedChange(!expanded) }) {
+                Text("☰", color = OverlayColors.Label, fontSize = 12.sp)
+                Text(
+                    text = if (expanded) "Close" else "Edit",
+                    color = OverlayColors.Label,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                )
+            }
+
+            // Beside the pill rather than on a panel page, because nudging is something you watch:
+            // the panel covers the top middle of the pad, and arrows on it would be moving a control
+            // that may well be underneath it. Here they work with the panel shut, which is how the
+            // editor sits most of the time. Shown only when there is something to move.
+            if (selected != null) NudgePad(onNudge)
         }
 
         AnimatedVisibility(
@@ -269,18 +279,46 @@ private fun EditorPanel(
                     )
                 }
 
-                // The swatches belong to one of the choices above rather than to the page, so they
-                // are shown under the line while that choice is the one in force and absent
-                // otherwise -- an image layout draws its art's colours and has none to pick.
+                // The picker belongs to one of the choices above rather than to the page, so it is
+                // shown under the line while that choice is the one in force and absent otherwise —
+                // an image layout draws its art's own colours and has none to pick.
                 if (colors != null) {
                     PanelDivider()
-                    PanelCaption("At rest")
-                    Swatches(selected = colors.resting) {
-                        onLayoutChange(layout.copy(style = colors.copy(resting = it)))
-                    }
-                    PanelCaption("Held")
-                    Swatches(selected = colors.pressed) {
-                        onLayoutChange(layout.copy(style = colors.copy(pressed = it)))
+
+                    var target by remember { mutableStateOf(ColorTarget.Resting) }
+                    ColorTargetRow(
+                        label = "At rest",
+                        color = colors.resting,
+                        selected = target == ColorTarget.Resting,
+                        onClick = { target = ColorTarget.Resting },
+                    )
+                    ColorTargetRow(
+                        label = "Held",
+                        color = colors.pressed,
+                        selected = target == ColorTarget.Pressed,
+                        onClick = { target = ColorTarget.Pressed },
+                    )
+
+                    // Keyed on the target so that switching between the two rebuilds the picker.
+                    // It holds a hue of its own for colours that have none — see ColorPicker — and
+                    // that is a fact about one colour, not something to carry to the other.
+                    key(target) {
+                        ColorPicker(
+                            color = when (target) {
+                                ColorTarget.Resting -> colors.resting
+                                ColorTarget.Pressed -> colors.pressed
+                            },
+                            onColorChange = { picked ->
+                                onLayoutChange(
+                                    layout.copy(
+                                        style = when (target) {
+                                            ColorTarget.Resting -> colors.copy(resting = picked)
+                                            ColorTarget.Pressed -> colors.copy(pressed = picked)
+                                        },
+                                    ),
+                                )
+                            },
+                        )
                     }
                 }
             }
@@ -307,57 +345,41 @@ private fun EditorPanel(
 }
 
 /**
- * A row of preset colours, the current one ringed.
+ * Four arrows that move the selection one step at a time.
  *
- * Presets rather than a full picker: the pad's whole chrome is two pills and a card, and a hue
- * wheel in the middle of it would be the largest thing in the app. What lands in the layout is a
- * plain ARGB [Int] either way, so nothing outside this file knows the difference.
+ * What a drag cannot do is move a control by an amount smaller than the thumb doing the moving —
+ * and with the grid on it cannot reliably move one by exactly a cell either, since the finger has to
+ * travel more than half a step before anything happens. Both are what the arrows are for, and it is
+ * why the step they take is the grid's when snapping is on; see `ResolvedLayout.nudgeStep`.
+ *
+ * Laid out ◀▲▼▶ in a line rather than as a cross: a cross would be three rows tall next to a pill
+ * that is one, and this is the same order the cursor keys on a keyboard sit in.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Swatches(selected: Int, onPick: (Int) -> Unit) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+private fun NudgePad(onNudge: (dx: Int, dy: Int) -> Unit) {
+    Row(
+        modifier = Modifier.pillSurface().padding(horizontal = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        for (color in SWATCHES) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(Color(color))
-                    .border(
-                        width = if (color == selected) 2.dp else 1.dp,
-                        color = if (color == selected) {
-                            OverlayColors.Accent
-                        } else {
-                            OverlayColors.Caption
-                        },
-                        shape = CircleShape,
-                    )
-                    .clickable { onPick(color) },
-            )
-        }
+        NudgeArrow("◀", onClick = { onNudge(-1, 0) })
+        NudgeArrow("▲", onClick = { onNudge(0, -1) })
+        NudgeArrow("▼", onClick = { onNudge(0, 1) })
+        NudgeArrow("▶", onClick = { onNudge(1, 0) })
     }
 }
 
 /**
- * Six muted fills and six vivid ones. Resting and pressed pick from the same list rather than from
- * two curated halves — which of the two a colour suits is obvious on sight, and splitting them
- * would rule out the dark-on-darker pads that some people want.
+ * One arrow. The padding is inside the clickable rather than outside it, so the touch target is the
+ * whole cell and not just the glyph — these sit in a pill six millimetres tall.
  */
-private val SWATCHES: List<Int> = listOf(
-    0xFF262B36.toInt(), // the default resting slate
-    0xFF1D2129.toInt(),
-    0xFF2E2A33.toInt(),
-    0xFF23302A.toInt(),
-    0xFF33291F.toInt(),
-    0xFF2B2B2B.toInt(),
-    0xFF4C82F7.toInt(), // the default pressed blue
-    0xFF3DC98A.toInt(),
-    0xFFF7B84C.toInt(),
-    0xFFF76C6C.toInt(),
-    0xFFB07CF7.toInt(),
-    0xFF4CD3F7.toInt(),
-)
+@Composable
+private fun NudgeArrow(glyph: String, onClick: () -> Unit) {
+    Text(
+        text = glyph,
+        color = OverlayColors.Label,
+        fontSize = 12.sp,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    )
+}

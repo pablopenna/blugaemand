@@ -85,7 +85,7 @@ object ArgbColorSerializer : KSerializer<Int> {
         PrimitiveSerialDescriptor("ArgbColor", PrimitiveKind.STRING)
 
     override fun serialize(encoder: Encoder, value: Int) {
-        encoder.encodeString("#%08X".format(value))
+        encoder.encodeString(value.asHexColor())
     }
 
     override fun deserialize(decoder: Decoder): Int {
@@ -99,6 +99,15 @@ object ArgbColorSerializer : KSerializer<Int> {
 
     private const val OPAQUE = 0xFF000000L
 }
+
+/**
+ * An ARGB [Int] written the way a saved layout writes it.
+ *
+ * Here rather than inline in [ArgbColorSerializer] because the editor's colour picker shows the
+ * colour it is on, and the useful thing to show is the string someone would find in the file — two
+ * formats for the same colour is one of them being wrong somewhere.
+ */
+fun Int.asHexColor(): String = "#%08X".format(this)
 
 /**
  * An [ArtPack] as its id alone, resolved back through [ArtPacks].

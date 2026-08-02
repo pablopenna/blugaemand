@@ -90,10 +90,21 @@ turns up along the way.
       for yours. `MenuPanel` takes the whole library rather than a list, which is also what let
       `canEdit` stop being threaded down from `MainActivity`. The shared `PanelDivider` is used
       again under the group page's *As one control* switch
-- [ ] Editor extras that did not make the first cut: undo, nudging a selection with arrows, and a
-      real colour picker rather than twelve presets. *Moving a group as a unit after it has been
-      placed* is off this list — a cluster is that, and more directly than a second selection model
-      over loose controls would have been
+- [x] **Editor extras** — the two that were worth having. **Nudge arrows** sit beside the ☰ Edit
+      pill whenever something is selected, and move it by a whole grid cell with snapping on or a
+      fifth of one with it off; `ResolvedLayout.nudgeStep` is the one new piece of arithmetic and it
+      is derived from `gridStep` rather than stated. They are *beside* the pill and not on a panel
+      page because the panel covers the part of the pad the control being nudged may well be under.
+      **A real colour picker** replaces the twelve presets: a saturation/value square over a hue bar,
+      with the two colours as rows above it that pick which one it is aimed at — one picker rather
+      than two, since a 240 dp panel has room for one square. The conversions are plain Kotlin in
+      `ui/ColorMath.kt` and JVM-tested; the picker holds a hue of its own, because black and every
+      grey have none and a colour dragged to the bottom of the square would otherwise come back red.
+      **Undo was dropped on purpose** — coalescing it is the whole job (a drag is one step, not one
+      per frame) and that is a stack, a rule about when to clear it, and a hook on every edit site,
+      for actions that are all one tap to reverse by hand. *Moving a group as a unit after it has
+      been placed* was already off this list — a cluster is that, and more directly than a second
+      selection model over loose controls would have been
 - [x] **More built-in layouts** — **Switch** and **Steam Deck** both ship. As predicted, the
       plumbing was the easy part and Nintendo's A/B/X/Y crossing was the part to think about: it
       swaps *both* pairs, so the key drawn A sends what an Xbox pad's B sends. Unlike Xbox and PS5

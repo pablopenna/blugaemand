@@ -35,6 +35,19 @@ const val MAX_CONTROL_EXTENT: Float = 0.40f
 val ResolvedLayout.gridStep: Float get() = unit / 20f
 
 /**
+ * How far one press of a nudge arrow moves the selection, in **pixels**.
+ *
+ * A whole grid step while snapping is on, so a nudge moves a control from one line to the next
+ * rather than part-way and then onto the same one it started on. A fifth of a step otherwise, which
+ * is the fine adjustment the arrows exist for — a drag can already put a control roughly where it
+ * goes, and what it cannot do is move it by an amount smaller than a thumb can feel.
+ *
+ * Derived from [gridStep] rather than stated, so it stays in proportion on any screen for the same
+ * reason the grid does.
+ */
+fun ResolvedLayout.nudgeStep(snap: Boolean): Float = if (snap) gridStep else gridStep / 5f
+
+/**
  * [layout] with one control's centre moved by a pixel delta.
  *
  * Clamped so the control stays wholly on screen. Clamping the centre alone would let half a button

@@ -117,7 +117,7 @@ host. Only the service and the Compose layer touch the framework.
 | `hid/` | mostly | `GamepadState`, `GamepadProfile`, `GenericHidProfile` are pure Kotlin; `HidGamepadService` is not |
 | `input/` | yes | `ControlSpec`, `ControlIcon`, `ArtPack`, `GamepadLayout`, `LayoutStyle`, `LayoutJson`, `LayoutLibrary`, `LayoutEdits`, `Placement`, `ControlGroups`, `ResolvedLayout`, `TouchRouter`, `art/`, `layouts/` |
 | `data/` | no | `LayoutStore` — the only file outside `hid/` and `ui/` that touches Android |
-| `ui/` | no | `GamepadScreen`, `EditorScreen`, `ControlRenderers`, `PadStyle`, `ControlIcons`, `TopBar`, `TopBarChrome`, `ConnectionBar`, `MenuBar`, `EditorBar`, `theme/` |
+| `ui/` | mostly | `GamepadScreen`, `EditorScreen`, `ControlRenderers`, `PadStyle`, `ControlIcons`, `TopBar`, `TopBarChrome`, `ConnectionBar`, `MenuBar`, `EditorBar`, `ColorPicker`, `theme/`; `ColorMath` is plain Kotlin |
 
 **`hid/`**
 
@@ -210,6 +210,9 @@ host. Only the service and the Compose layer touch the framework.
 - `MenuBar` — `MenuPill` and `MenuPanel`: picking a layout, making one, editing, and quitting. The
   panel's page state lives inside the composable, which is only composed while open, so the menu
   reopens on its root page without a reset that would visibly flip pages mid-close.
+- `ColorPicker` — a saturation/value square over a hue bar, plus the two rows that pick which of a
+  layout's colours it is aimed at. `ColorMath` beside it is the ARGB↔HSV conversion, with no Compose
+  and no Android in it so it is tested on the JVM like the rest of the editor's arithmetic.
 - `EditorBar` — the editor's own pill and panel. **Collapsed by default**, because an always-open
   panel covers the top centre and makes the controls under it unselectable. Built on `TapPill`
   rather than `HoldPill`: the hold exists so a stray tap cannot throw a panel up mid-game, and
@@ -228,10 +231,23 @@ layers, so nothing has to decide what a glyph on a coloured plate would mean.
 | Pressed | the fill changes | a second picture swaps in, if the pack has one |
 
 **Which mode a layout is in is a choice you make in the editor**, on *Appearance*: the page lists
-*Shapes and colours* and every pack in `ArtPacks.ALL`, and the colour swatches sit under a rule below
+*Shapes and colours* and every pack in `ArtPacks.ALL`, and the colour picker sits under a rule below
 it while colours mode is the one in force. One row rather than the two it replaces, and
 unconditional — the old *Colours* row disappeared the moment a layout took a pack, which is exactly
 when someone goes looking for the way back off it.
+
+**The picker is a real one**, not the twelve presets it started as: a saturation/value square over a
+hue bar, with *At rest* and *Held* as rows above that pick which of the two it is adjusting. One
+picker and a choice of target rather than a picker each, because a 240 dp panel on a landscape phone
+has room for one square. Two things about it are load-bearing:
+
+- **It holds a hue of its own.** Black and every grey have no hue at all, so a colour read back out
+  of the layout at the bottom of the square reports hue zero — and dragging the brightness down and
+  up again would silently turn a blue pad red. The picker is therefore keyed on which colour it is
+  editing, so switching targets rebuilds it rather than carrying one colour's hue to the other.
+- **Alpha is carried through, never picked.** A translucent control is a real thing to want and a
+  separate one — see the opacity item on the backlog — and doing it here would mean the colour
+  picker quietly deciding how see-through someone's pad is.
 
 `ArtPack` carries a display `name` beside its `id` for that list. The id is a slug and a
 compatibility surface (`steamdeck`), so it is the wrong thing to show a person and deriving one from
@@ -338,7 +354,10 @@ row is in, and having it means *Edit layout* asks `isEditable` where it is used 
 the answer from two screens up. The rule is suppressed when you have made nothing, or a fresh install
 shows a line with an empty half under it.
 
-**Editing is four operations** — move, resize, add, remove — plus the two colours and a rename. All
+**Editing is four operations** — move, resize, add, remove — plus the two colours and a rename. A
+nudge is a move by an exact amount rather than a fifth operation: the arrows call `movedControl` with
+`nudgeStep` for a delta, so everything a drag is clamped and snapped by applies to them unchanged.
+All
 of the arithmetic is in `LayoutEdits` and `Placement`, which are plain Kotlin, so the editor is
 tested on the JVM and `EditorScreen` is nothing but gestures.
 
@@ -611,9 +630,13 @@ edit the layout editor makes — all on the JVM:
   wanted, the fix is a format version and a migration in `decodeLayouts`, not a new expected string.
 - `LayoutLibraryTest` — the built-in/user line: no built-in is editable, `without` cannot reach one,
   saving replaces in place and keeps its position rather than shuffling the menu under a thumb.
-- `LayoutEditsTest` — everything a drag, a pinch, an add and a remove do, on a 1000×500 surface that
-  makes the layout unit exactly 500 and the grid step exactly 25. The round-trip test (move by
-  `(dx, dy)`, then by `(-dx, -dy)`) is the one that catches an axis divided by the wrong dimension,
+- `ColorMathTest` — the colour picker's arithmetic: every corner of the RGB cube round trips through
+  hue/saturation/value unchanged, alpha is carried rather than picked, hue wraps at both ends while
+  saturation and value clamp, and — stated as a test rather than found as a bug — *hue is lost on
+  the way to a grey*, which is why the picker holds one of its own.
+- `LayoutEditsTest` — everything a drag, a pinch, a nudge, an add and a remove do, on a 1000×500
+  surface that makes the layout unit exactly 500 and the grid step exactly 25. The round-trip tests
+  (move by `(dx, dy)`, then by `(-dx, -dy)`) catch an axis divided by the wrong dimension,
   and several exist only to hold the line that controls are addressed by index — *moving one copy
   leaves the other where it is* is the one that fails if that slips.
 - `PlacementTest` — that something lands centred on the point it was dropped on, that a group keeps
@@ -686,7 +709,9 @@ The three built-ins cannot be changed — make your own instead:
    whichever layout is showing. Either one is selected and opens the editor straight away.
 2. The **☰ Edit** pill opens the menu and closes again, so the pad underneath stays reachable.
 3. **Drag** a control to move it, **pinch** it to resize. **Grid** toggles snapping, which applies to
-   sizes as well as positions, so two buttons meant to match can be made to match.
+   sizes as well as positions, so two buttons meant to match can be made to match. The **◀▲▼▶
+   arrows** beside the pill move whatever is selected one step at a time — a whole grid cell with
+   snapping on, a fifth of one with it off, which is finer than a thumb can place anything.
 4. **Add control** then **tap the pad where it should go** — a preview follows your finger until you
    lift. Any control can be added more than once. **Add control group** does the same for several at
    a time: the face diamond, a four-button D-pad, the centre three, or a shoulder pair side by side
@@ -699,8 +724,9 @@ The three built-ins cannot be changed — make your own instead:
 6. **Remove** takes out whatever is selected. A caption names any button left with no control — a
    warning, not an error.
 7. **Appearance** picks how the pad is drawn: *Shapes and colours*, or one of the four art packs.
-   In colours mode the resting and held fills are below the rule; in image mode the art carries its
-   own, so there is nothing there to pick. Going back to shapes returns the colours you had.
+   In colours mode a picker sits below the rule — tap *At rest* or *Held* to say which fill it is
+   adjusting, then drag on the square and the hue bar; in image mode the art carries its own colours,
+   so there is nothing there to pick. Going back to shapes returns the colours you had.
 8. **Done** goes back to the pad. Everything is saved as you go; **Delete layout** asks first,
    because there is no undo.
 

@@ -52,6 +52,8 @@ import com.blugaemand.input.ResolvedLayout
 import com.blugaemand.input.copyAsUser
 import com.blugaemand.input.emptyUserLayout
 import com.blugaemand.input.layouts.DEFAULT_LAYOUT
+import com.blugaemand.input.movedControl
+import com.blugaemand.input.nudgeStep
 import com.blugaemand.input.ungroupedControl
 import com.blugaemand.input.withControlAdded
 import com.blugaemand.input.withControlRemovedAt
@@ -160,6 +162,11 @@ class MainActivity : ComponentActivity() {
                 // What is waiting to be dropped on the pad, if anything.
                 var pendingPlacement by remember { mutableStateOf<Placement?>(null) }
                 var editorPanelOpen by remember { mutableStateOf(false) }
+                // The surface both screens fill, tracked here because two edits need it: ungrouping,
+                // since a cluster's members are stored against the layout unit and the unit is a
+                // pixel size, and nudging, whose step is a pixel distance. Every other edit is
+                // arithmetic in one coordinate space and does not care.
+                var padSize by remember { mutableStateOf(IntSize.Zero) }
 
                 /** Saves an edit and keeps it showing, which is one write per drag frame. */
                 fun saveEdit(edited: GamepadLayout) {
@@ -182,6 +189,19 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                /** Moves the selected control one step, in units of -1, 0 or 1 per axis. */
+                fun nudgeSelected(dx: Int, dy: Int) {
+                    val index = selectedControl ?: return
+                    if (padSize == IntSize.Zero) return
+                    val resolved = ResolvedLayout(
+                        layout,
+                        padSize.width.toFloat(),
+                        padSize.height.toFloat(),
+                    )
+                    val step = resolved.nudgeStep(snapToGrid)
+                    saveEdit(resolved.movedControl(index, dx * step, dy * step, snapToGrid))
+                }
+
                 // A layout can stop being editable underneath the editor -- deleting it is the way
                 // that happens -- and staying in there would be editing something that is gone.
                 LaunchedEffect(selectedId, library) {
@@ -197,11 +217,6 @@ class MainActivity : ComponentActivity() {
                         openPanel = null
                     }
                 }
-
-                // The surface both screens fill, tracked here because ungrouping needs it: a
-                // cluster's members are stored against the layout unit, and the unit is a pixel
-                // size. Every other edit is arithmetic in one coordinate space and does not care.
-                var padSize by remember { mutableStateOf(IntSize.Zero) }
 
                 Box(
                     modifier = Modifier
@@ -254,6 +269,7 @@ class MainActivity : ComponentActivity() {
                             onAsOneControlChange = { asOneControl = it },
                             lastColors = lastColors,
                             onLayoutChange = ::saveEdit,
+                            onNudge = ::nudgeSelected,
                             pending = pendingPlacement,
                             onStartPlacing = {
                                 pendingPlacement = it

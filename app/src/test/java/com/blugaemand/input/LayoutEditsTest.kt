@@ -145,6 +145,41 @@ class LayoutEditsTest {
         assertEquals(813f, moved.pixelCenterX(south), TOLERANCE)
     }
 
+    // -- Nudging --------------------------------------------------------------------------
+
+    @Test
+    fun `a nudge with the grid on moves one whole cell`() {
+        // The A button starts at (800, 250), both already multiples of 25, so a step of exactly one
+        // cell has to land on the next line rather than round back onto the one it left.
+        val resolved = resolve()
+        assertEquals(step, resolved.nudgeStep(snap = true), TOLERANCE)
+
+        val nudged = resolved.movedControl(south, resolved.nudgeStep(snap = true), 0f, snap = true)
+        assertEquals(825f, nudged.pixelCenterX(south), TOLERANCE)
+        assertEquals(250f, nudged.pixelCenterY(south), TOLERANCE)
+    }
+
+    @Test
+    fun `a nudge with the grid off moves a fraction of one`() {
+        // The fine adjustment the arrows exist for: smaller than a thumb can place a control, and
+        // not rounded to anything, or it would be the same as the snapped nudge.
+        val resolved = resolve()
+        assertEquals(step / 5f, resolved.nudgeStep(snap = false), TOLERANCE)
+
+        val nudged = resolved.movedControl(south, 0f, resolved.nudgeStep(snap = false), snap = false)
+        assertEquals(255f, nudged.pixelCenterY(south), TOLERANCE)
+    }
+
+    @Test
+    fun `nudging back and forth returns a control to where it started`() {
+        // Same guard as the move round trip: an axis scaled through the wrong dimension shows up
+        // here rather than as a control that drifts a little every time it is tapped.
+        val out = resolve().movedControl(south, step, -step, snap = true)
+        val back = resolve(out).movedControl(south, -step, step, snap = true)
+        assertEquals(800f, back.pixelCenterX(south), TOLERANCE)
+        assertEquals(250f, back.pixelCenterY(south), TOLERANCE)
+    }
+
     // -- Resizing -------------------------------------------------------------------------
 
     @Test
