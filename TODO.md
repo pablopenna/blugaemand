@@ -195,10 +195,30 @@ Throwaway work. Every later stage is gated on it.
 - [ ] Point a scratch profile's `requiredAdapterName` at `Pro Controller`, register the existing
       `GenericHidProfile` unchanged, and try to pair from *Change Grip/Order*. Record which of three:
       never pairs / pairs then drops / holds the connection and waits for a handshake
-- [ ] **Prove `onInterruptData` fires.** It is the callback output reports arrive on, the whole
-      handshake runs through it, and nothing in the app has ever overridden it — `hidCallback` in
-      `HidGamepadService` covers the other five. Add it, log it, poke the interrupt channel from a
-      Linux host. If it never fires, nothing after this is possible
+- [x] **`onInterruptData` fires.** The one Stage 0 answer that came back *for* the iteration. The
+      override is in `hidCallback` and logs only. Both probes landed:
+
+      ```
+      onInterruptData: reportId=0x01 data=de ad be ef
+      onInterruptData: reportId=0x10 data=01 02 03
+      ```
+
+      Android splits the report ID out of the payload for us, and **`0x10` arrived even though the
+      descriptor never declares it** — nothing is filtered against the descriptor, which is what a
+      subcommand handshake needs. The phone answered on the same link with
+      `a1 01 80 80 80 80 00 00 08 00 00`: HIDP DATA/INPUT, report 1, sticks centred, hat `0x08`
+
+      **How to poke it, because none of this is obvious.** Be a HID host over raw L2CAP rather
+      than going through `/dev/hidraw`, which is root-only: connect PSM 17 then 19 and send
+      `0xA2 <reportId> <payload…>` (`0xA0` DATA | `0x02` OUTPUT). Two traps, both of which cost
+      an hour here:
+      - **The socket needs `BT_SECURITY_HIGH`** (`setsockopt(SOL_BLUETOOTH=274, BT_SECURITY=4, …)`)
+        or the connect fails `EACCES` — as root too, so it reads like a capability problem and is
+        not one. The kernel requires an authenticated link for the HID PSMs
+      - **A one-sided bond fails silently.** The phone had dropped its bond while BlueZ still held
+        a link key, so the phone refused authentication *without ever showing a pairing dialog*,
+        and the connect timed out. `bluetoothctl remove <phone>` and pair again from the phone.
+        Both sides must be clean; only the host side shows a prompt when they are not
 - [x] Read back what Android actually published in SDP, from a Linux host. Done with
       `sdptool browse --raw <phone>` while the app was registered — BlueZ's cache under
       `/var/lib/bluetooth/` needs root and is stale anyway, and the live browse is the same data.

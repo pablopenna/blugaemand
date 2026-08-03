@@ -325,6 +325,18 @@ class HidGamepadService : Service() {
             }
         }
 
+        /**
+         * Output reports arriving on the interrupt channel.
+         *
+         * Nothing in this profile uses them, and this override exists only to prove the callback
+         * fires at all: a Pro Controller impersonation would run its entire subcommand handshake
+         * through here, so Iteration 4 is gated on it. Logging only — see TODO.md.
+         */
+        override fun onInterruptData(device: BluetoothDevice?, reportId: Byte, data: ByteArray?) {
+            val bytes = data?.joinToString(" ") { "%02x".format(it) } ?: "(none)"
+            Log.i(TAG, "onInterruptData: reportId=0x%02x data=$bytes".format(reportId))
+        }
+
         override fun onVirtualCableUnplug(device: BluetoothDevice?) {
             Log.i(TAG, "Host unplugged the virtual cable")
             connectedHost = null
