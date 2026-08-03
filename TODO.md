@@ -154,16 +154,44 @@ that out cheaply, before any of the rest is written.
 
 Throwaway work. Every later stage is gated on it.
 
-- [ ] **Read the reference controller first.** A third-party pad with a Switch mode is a device the
-      console demonstrably accepts, and unlike the console it will talk to a PC. Pair it and record
-      what it advertises: VID/PID, Bluetooth name, class of device, report descriptor. Windows gives
-      the IDs through Device Manager's hardware IDs or `Get-PnpDevice`; a Linux host gives the
-      descriptor through `/sys/bus/hid/devices/<id>/report_descriptor`, the same trick used to verify
-      ours. Two possible answers, both worth having:
-      - it carries Nintendo's `057E:2009` and the name `Pro Controller` → impersonation is the price
-        of entry, and the Android gap is real and probably fatal
-      - it carries its own IDs and the Switch takes it anyway → the console does not gate on VID/PID,
-        and the odds on this whole iteration improve sharply
+- [x] **Read the reference controller first.** Done, against a Manba pad in Switch mode from a
+      BlueZ host. **It came out on the impersonation branch:** Nintendo's `057E:2009`, the name
+      `Pro Controller`, and Nintendo's SDP strings — so impersonation is the price of entry and the
+      Android gap is real. Everything it advertises:
+
+      | Property | Value |
+      |---|---|
+      | Modalias | `usb:v057Ep2009d0001` — VID `0x057E` Nintendo, PID `0x2009` Pro Controller, ver `0x0001` |
+      | Bluetooth name | `Pro Controller` while advertising (reverts to the vendor's own name once connected) |
+      | Class of Device | `0x002508` — Peripheral / Gamepad |
+      | SDP strings | name `Wireless Gamepad`, description `Gamepad`, provider `Nintendo` |
+      | UUIDs | HID `0x1124`, PnP Information `0x1200` |
+      | HID SDP attrs | subclass `0x08`, country `0x21`, parser `0x0111`, VirtualCable + ReconnectInitiate + BatteryPower + RemoteWake true, NormallyConnectable false, BootDevice false, supervision timeout `0x0C80` |
+
+      **The descriptor did not come from `/sys/bus/hid/devices/<id>/report_descriptor`** as this
+      plan assumed. BlueZ pairs and holds the ACL link but never forms a HIDP session, so no HID
+      device is created and the pad never becomes an input device on Linux at all — which is also
+      why Steam does not see it. SDP attribute `0x0206` carries the same bytes and is the better
+      source anyway: it is what a host caches at pair time, upstream of the kernel. Read it with
+      `sdptool browse --raw <addr>`. The 171 bytes, for Stage 2 to be written against:
+
+      ```
+      05 01 09 05 a1 01 06 01 ff 85 21 09 21 75 08 95 30 81 02 85 30 09 30 75 08 95 30 81 02
+      85 31 09 31 75 08 96 69 01 81 02 85 32 09 32 75 08 96 69 01 81 02 85 33 09 33 75 08 96
+      69 01 81 02 85 3f 05 09 19 01 29 10 15 00 25 01 75 01 95 10 81 02 05 01 09 39 15 00 25
+      07 75 04 95 01 81 42 05 09 75 04 95 01 81 01 05 01 09 30 09 31 09 33 09 34 16 00 00 27
+      ff ff 00 00 75 10 95 04 81 02 06 01 ff 85 01 09 01 75 08 95 30 91 02 85 10 09 10 75 08
+      95 30 91 02 85 11 09 11 75 08 95 30 91 02 85 12 09 12 75 08 95 30 91 02 c0 00
+      ```
+
+      Decoded: one Game Pad application collection holding vendor-defined page `0xFF01`. Input
+      reports `0x21` and `0x30` are 48 bytes, `0x31`/`0x32`/`0x33` are 361; output reports `0x01`,
+      `0x10`, `0x11`, `0x12` are 48 each. **Report `0x3F` is the only one a driverless host can
+      read** — 16 one-bit buttons, a 4-bit hat, 4 bits padding, then X/Y/Rx/Ry as 16-bit `0..65535`.
+      Three things worth carrying into Stage 2: the hat uses the **same null-state flag** (`81 42`)
+      `GenericHidProfile` does; there are **no trigger axes at all**, confirming the ZL/ZR-go-digital
+      item below; and the descriptor **ends `c0 00`**, a trailing zero after End Collection, the same
+      artefact *Known constraints* records for ours
 - [ ] Point a scratch profile's `requiredAdapterName` at `Pro Controller`, register the existing
       `GenericHidProfile` unchanged, and try to pair from *Change Grip/Order*. Record which of three:
       never pairs / pairs then drops / holds the connection and waits for a handshake
