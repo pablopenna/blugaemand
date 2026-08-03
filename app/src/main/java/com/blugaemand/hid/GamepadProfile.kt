@@ -26,9 +26,17 @@ interface GamepadProfile {
     val sdpProvider: String
 
     /**
-     * HID device subclass byte, which drives the class-of-device the host sees and therefore the
-     * icon and category it files the phone under. Matches the `BluetoothHidDevice.SUBCLASS*`
-     * constants; kept as a plain byte so this file stays Android-free.
+     * HID device subclass byte, published as SDP attribute `0x0202`.
+     *
+     * It does **not** change the class-of-device the host sees, which is the adapter's and stays
+     * *Phone* however this is set — measured against a BlueZ host, see TODO.md. So it does not
+     * decide the icon or category the phone is filed under either. What it is, per the HID
+     * profile, is a copy of the low byte of a Class of Device: device kind at bits 7-6, device
+     * type at bits 5-2.
+     *
+     * Kept as a plain byte so this file stays Android-free — and note the
+     * `BluetoothHidDevice.SUBCLASS2_*` constants are *not* shifted into place, so they are the
+     * wrong thing to assign here.
      */
     val subclass: Byte
 

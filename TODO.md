@@ -242,14 +242,19 @@ Throwaway work. Every later stage is gated on it.
         Grip/Order* screen appears to work — the phone is never a candidate, and no SDP field can
         change that
 
-- [ ] **Cheap thing to try before writing anything off: `subclass` is arguably wrong.** The HID spec
-      defines attribute `0x0202` as *the low byte of the Class of Device*, where the device type
-      sits at bits 5-2 — the Pro Controller's `0x08` is `0b000010 << 2`, gamepad. Android's
-      `SUBCLASS2_GAMEPAD` is `0x02`, the nibble **unshifted**, and the stack passes it through
-      verbatim: our record reads `0x02`, which decodes as device type `0b0000`, *unspecified*. So
-      `GenericHidProfile.subclass` is publishing "uncategorised peripheral" where the reference pad
-      publishes "gamepad". Windows and Linux never noticed because they read the descriptor. Try
-      `0x08` and see whether anything downstream cares — one byte, and it costs nothing to measure
+- [x] **`subclass` was wrong, and is now `0x08`.** Verified on the wire: attribute `0x0202` reads
+      `UINT8 0x08`, and the phone still accepts both HID channels and answers with its usual
+      `a1 01 80 80 80 80 00 00 08 00 00`. As expected it changed nothing else — the phone still
+      inquires as `0x5A420C`, major Phone, so this only stops us contradicting ourselves in the one
+      field we control. Whether the console cares is still open. The reasoning, for the record:
+      the HID profile defines attribute `0x0202` as *the low byte of the Class of Device*, where
+      the device type sits at bits 5-2, so the Pro Controller's `0x08` is `0b000010 << 2`, gamepad.
+      `BluetoothHidDevice.SUBCLASS2_GAMEPAD` is `0x02` — the same nibble **unshifted** — and the
+      stack writes it verbatim, so we published device type `0b0000`, *unspecified*. The
+      neighbouring `SUBCLASS1_*` constants are positioned correctly for a CoD (`KEYBOARD` `0x40`,
+      `MOUSE` `0x80`) and are meant to be OR'd with one of these, which only works if these are
+      shifted too; they are not. **Do not use the `SUBCLASS2_*` constants here.** Windows and Linux
+      never noticed the old value because both read the descriptor instead
 - [ ] **Gate.** If the Switch will not open a connection to a device with no Nintendo VID/PID, stop
       here: move the finding into *Known constraints*, replacing the "No VID/PID control. See
       Iteration 4." forward-reference with the answer, and close the iteration. The reference

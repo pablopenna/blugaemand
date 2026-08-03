@@ -30,8 +30,18 @@ object GenericHidProfile : GamepadProfile {
     override val sdpDescription: String = "Virtual Bluetooth Gamepad"
     override val sdpProvider: String = "Blugaemand"
 
-    /** `BluetoothHidDevice.SUBCLASS2_GAMEPAD`. */
-    override val subclass: Byte = 0x02
+    /**
+     * Gamepad, as the *low byte of a Class of Device* — which is what the HID profile defines SDP
+     * attribute `0x0202` to be, with the device type at bits 5-2. Gamepad is `0b0010` there, so
+     * `0x08`, and a real Pro Controller publishes exactly that against its `0x002508` CoD.
+     *
+     * Deliberately **not** `BluetoothHidDevice.SUBCLASS2_GAMEPAD`, which is `0x02` — the same
+     * nibble unshifted, written to SDP verbatim by the stack, and decoding to device type
+     * `0b0000`, unspecified. The neighbouring `SUBCLASS1_*` constants are positioned correctly
+     * for a CoD (`KEYBOARD` `0x40`, `MOUSE` `0x80`) and are meant to be OR'd with one of these,
+     * which only works if these are shifted too. They are not.
+     */
+    override val subclass: Byte = 0x08
 
     override val reportId: Int = 1
 
