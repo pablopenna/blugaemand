@@ -3,7 +3,6 @@ package com.blugaemand
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -42,10 +41,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.blugaemand.data.LayoutStore
 import com.blugaemand.hid.GamepadState
-import com.blugaemand.hid.GenericHidProfile
 import com.blugaemand.hid.HidGamepadService
 import com.blugaemand.hid.HidStatus
-import com.blugaemand.hid.SwitchProbeProfile
 import com.blugaemand.input.ControlId
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutLibrary
@@ -64,7 +61,6 @@ import com.blugaemand.ui.EditorBar
 import com.blugaemand.ui.EditorScreen
 import com.blugaemand.ui.GamepadScreen
 import com.blugaemand.ui.HostOption
-import com.blugaemand.ui.SwitchProbe
 import com.blugaemand.ui.TopBar
 import com.blugaemand.ui.TopPanel
 import com.blugaemand.ui.theme.BlugaemandTheme
@@ -84,9 +80,6 @@ class MainActivity : ComponentActivity() {
 
     /** Stands in for the service's status flow until the bind lands. */
     private val fallbackStatus = MutableStateFlow<HidStatus>(HidStatus.Initializing)
-
-    /** The same, for the Stage 0 scratch inquiry results. See TODO.md. */
-    private val noDiscoveries = MutableStateFlow<List<BluetoothDevice>>(emptyList())
 
     private var bonded: List<HostOption> by mutableStateOf(emptyList())
 
@@ -136,11 +129,6 @@ class MainActivity : ComponentActivity() {
             BlugaemandTheme {
                 var openPanel by remember { mutableStateOf<TopPanel?>(null) }
                 val status by (service?.status ?: fallbackStatus).collectAsStateWithLifecycle()
-
-                // Stage 0 scratch, see TODO.md.
-                val found by (service?.discovered ?: noDiscoveries).collectAsStateWithLifecycle()
-                var impersonating by remember { mutableStateOf(false) }
-                var scanning by remember { mutableStateOf(false) }
 
                 val scope = rememberCoroutineScope()
                 val library by layoutStore.library
@@ -373,25 +361,6 @@ class MainActivity : ComponentActivity() {
                         onFixBlocker = { fixBlocker(status) },
                         onMakeDiscoverable = ::launchDiscoverable,
                         onConnect = ::connectTo,
-                        probe = SwitchProbe(
-                            impersonating = impersonating,
-                            scanning = scanning,
-                            found = hostOptions(found),
-                            onImpersonateChange = { on ->
-                                impersonating = on
-                                service?.useProfile(
-                                    if (on) SwitchProbeProfile else GenericHidProfile,
-                                )
-                            },
-                            onScan = {
-                                scanning = true
-                                service?.startScan()
-                            },
-                            onConnect = { host ->
-                                scanning = false
-                                connectToDiscovered(host)
-                            },
-                        ),
                         onRetry = {
                             if (hasBluetoothPermission()) {
                                 startForegroundSession()
@@ -518,31 +487,16 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission") // The service re-checks before touching the adapter.
     private fun refreshBondedDevices() {
-        bonded = hostOptions(service?.bondedDevices().orEmpty())
-    }
-
-    /** Names devices for the panel, falling back to the address when the name is unreadable. */
-    @SuppressLint("MissingPermission") // The service re-checks before touching the adapter.
-    private fun hostOptions(devices: List<BluetoothDevice>): List<HostOption> = devices.map {
-        HostOption(
-            name = runCatching { it.name }.getOrNull() ?: it.address,
-            address = it.address,
-        )
+        bonded = service?.bondedDevices().orEmpty().map { device ->
+            HostOption(
+                name = runCatching { device.name }.getOrNull() ?: device.address,
+                address = device.address,
+            )
+        }
     }
 
     private fun connectTo(host: HostOption) {
         val device = service?.bondedDevices()?.firstOrNull { it.address == host.address } ?: return
-        service?.connectTo(device)
-    }
-
-    /**
-     * Stage 0 scratch, see TODO.md. Unlike [connectTo] this reaches a device that was never
-     * bonded, which is the whole point — a console in its pairing screen never has been.
-     */
-    @SuppressLint("MissingPermission") // The service re-checks before touching the adapter.
-    private fun connectToDiscovered(host: HostOption) {
-        val device = service?.discovered?.value?.firstOrNull { it.address == host.address } ?: return
-        service?.stopScan()
         service?.connectTo(device)
     }
 

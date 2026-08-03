@@ -246,9 +246,16 @@ Throwaway work. Every later stage is gated on it.
         untested way around a class-of-device filter: if the console accepts an inbound connection
         instead of only offering what its own inquiry returned, the filter never runs
       - Remember to *Make discoverable to pair* as well, since the passive direction needs it
-- [ ] Delete `SwitchProbeProfile`, the panel's probe section and `SwitchProbe` once the above is
-      recorded, whichever way it goes. `startScan`/`stopScan`/`discovered` and `useProfile` on the
-      service go with them unless Iteration 3's profile picker wants the latter
+- [x] **Probe deleted.** `SwitchProbeProfile`, the panel's probe section, `SwitchProbe`,
+      `useProfile`, `startScan`/`stopScan`/`discovered` and the inquiry receiver are all gone —
+      336 lines, and the findings above are the only thing that needed to survive. The
+      `onInterruptData` override went with them: it proved the callback fires, which is recorded,
+      and with the iteration closed nothing would have consumed it.
+
+      **One thing was kept deliberately:** `BLUETOOTH_SCAN` still asserts
+      `android:usesPermissionFlags="neverForLocation"`. It is true of this app, and it keeps it out
+      of the location-permission association entirely — worth having on its own merits, quite apart
+      from the inquiry that first needed it
 - [x] **`onInterruptData` fires.** The one Stage 0 answer that came back *for* the iteration. The
       override is in `hidCallback` and logs only. Both probes landed:
 

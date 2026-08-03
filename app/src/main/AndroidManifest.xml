@@ -5,10 +5,9 @@
     <!-- Runtime permission on API 31+; this is what gates registering as an HID peripheral,
          talking to the adapter, and reading bonded device names. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <!-- Needed so the "make discoverable" flow works on API 31+, and so the Stage 0 scratch probe
-         can run an inquiry. Flagged neverForLocation because it is true — nothing here derives
-         physical location — and because without it the platform also wants ACCESS_FINE_LOCATION
-         and startDiscovery simply returns false. -->
+    <!-- Needed so the "make discoverable" flow works on API 31+. Flagged neverForLocation because
+         it is true: nothing here derives physical location, and saying so keeps the app out of the
+         location-permission association entirely. -->
     <uses-permission
         android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" />
