@@ -244,9 +244,11 @@ Throwaway work. Every later stage is gated on it.
 
 - [x] **`subclass` was wrong, and is now `0x08`.** Verified on the wire: attribute `0x0202` reads
       `UINT8 0x08`, and the phone still accepts both HID channels and answers with its usual
-      `a1 01 80 80 80 80 00 00 08 00 00`. As expected it changed nothing else — the phone still
-      inquires as `0x5A420C`, major Phone, so this only stops us contradicting ourselves in the one
-      field we control. Whether the console cares is still open. The reasoning, for the record:
+      `a1 01 80 80 80 80 00 00 08 00 00`. A Linux host still enumerates it unchanged — `js0`, all
+      eight axes with the triggers on `ABS_BRAKE`/`ABS_GAS`, all sixteen buttons — so nothing
+      regressed. As expected it changed nothing else either: the phone still inquires as
+      `0x5A420C`, major Phone, so this only stops us contradicting ourselves in the one field we
+      control. Whether the console cares is still open. The reasoning, for the record:
       the HID profile defines attribute `0x0202` as *the low byte of the Class of Device*, where
       the device type sits at bits 5-2, so the Pro Controller's `0x08` is `0b000010 << 2`, gamepad.
       `BluetoothHidDevice.SUBCLASS2_GAMEPAD` is `0x02` — the same nibble **unshifted** — and the
