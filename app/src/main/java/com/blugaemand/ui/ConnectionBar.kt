@@ -25,6 +25,19 @@ import com.blugaemand.ui.theme.OverlayColors
 data class HostOption(val name: String, val address: String)
 
 /**
+ * Stage 0 scratch controls, see TODO.md. Bundled into one object so measuring this costs the
+ * component signatures one parameter rather than five, and so deleting it is one line each.
+ */
+data class SwitchProbe(
+    val impersonating: Boolean,
+    val scanning: Boolean,
+    val found: List<HostOption>,
+    val onImpersonateChange: (Boolean) -> Unit,
+    val onScan: () -> Unit,
+    val onConnect: (HostOption) -> Unit,
+)
+
+/**
  * Compact status pill pinned to the top of the pad. It stays small so it does not eat into the
  * play area, and opens on a deliberate hold to reveal the pairing actions — which are only needed
  * occasionally. See [HoldPill] for why opening is a hold and closing a tap.
@@ -59,6 +72,7 @@ fun ConnectionPanel(
     onRetry: () -> Unit,
     onQuit: () -> Unit,
     modifier: Modifier = Modifier,
+    probe: SwitchProbe? = null,
 ) {
     PanelCard(modifier = modifier) {
         status.detail()?.let {
@@ -104,9 +118,67 @@ fun ConnectionPanel(
             }
         }
 
+        probe?.let { ProbeSection(it) }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onRetry) { Text("Retry", fontSize = 12.sp) }
             TextButton(onClick = onQuit) { Text("Stop gamepad", fontSize = 12.sp) }
+        }
+    }
+}
+
+/**
+ * Stage 0 scratch, see TODO.md. Two things the shipping app has no business offering: wearing a
+ * Pro Controller's SDP identity, and connecting *out* to a host that has never been paired.
+ */
+@Composable
+private fun ProbeSection(probe: SwitchProbe) {
+    Text(
+        text = "Switch probe — scratch",
+        color = OverlayColors.Caption,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+
+    OutlinedButton(
+        onClick = { probe.onImpersonateChange(!probe.impersonating) },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = if (probe.impersonating) {
+                "Impersonating Pro Controller — tap to stop"
+            } else {
+                "Impersonate Pro Controller"
+            },
+            fontSize = 12.sp,
+        )
+    }
+
+    if (probe.impersonating) {
+        Text(
+            text = "The phone's Bluetooth name is now Pro Controller. It goes back when the " +
+                "gamepad stops.",
+            color = OverlayColors.Caption,
+            fontSize = 11.sp,
+        )
+    }
+
+    OutlinedButton(onClick = probe.onScan, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = if (probe.scanning) "Scanning…" else "Scan for a host to connect to",
+            fontSize = 12.sp,
+        )
+    }
+
+    probe.found.forEach { host ->
+        TextButton(onClick = { probe.onConnect(host) }, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = host.name,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

@@ -54,7 +54,19 @@ class HidGamepadService : Service() {
     private val _status = MutableStateFlow<HidStatus>(HidStatus.Initializing)
     val status: StateFlow<HidStatus> = _status.asStateFlow()
 
-    private val profile: GamepadProfile = GenericHidProfile
+    /**
+     * Swappable only because Stage 0 needs to measure [SwitchProbeProfile] against a console. The
+     * real profile picker is an Iteration 3 item; this is not it.
+     */
+    var profile: GamepadProfile = GenericHidProfile
+        private set
+
+    /** Devices seen by an inquiry, for hosts that will never appear in [bondedDevices]. */
+    private val _discovered = MutableStateFlow<List<BluetoothDevice>>(emptyList())
+    val discovered: StateFlow<List<BluetoothDevice>> = _discovered.asStateFlow()
+
+    /** Adapter name from before [GamepadProfile.requiredAdapterName] overwrote it. */
+    private var previousAdapterName: String? = null
 
     /**
      * Reports go out on a dedicated thread. The Bluetooth stack call is blocking, and sharing a
@@ -103,6 +115,23 @@ class HidGamepadService : Service() {
         }
     }
 
+    /** Collects inquiry results for [startScan]. */
+    private val discoveryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != BluetoothDevice.ACTION_FOUND) return
+            val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+            } ?: return
+            Log.i(TAG, "Inquiry found ${device.address}")
+            if (_discovered.value.none { it.address == device.address }) {
+                _discovered.value = _discovered.value + device
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -111,6 +140,15 @@ class HidGamepadService : Service() {
             adapterStateReceiver,
             IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
             ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        ContextCompat.registerReceiver(
+            this,
+            discoveryReceiver,
+            IntentFilter(BluetoothDevice.ACTION_FOUND),
+            // Exported, unlike the adapter-state receiver: ACTION_FOUND is a protected broadcast,
+            // so only the system can send it, and NOT_EXPORTED is one of the things that can
+            // silently stop it arriving.
+            ContextCompat.RECEIVER_EXPORTED,
         )
         initialise()
     }
@@ -131,6 +169,7 @@ class HidGamepadService : Service() {
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(adapterStateReceiver) }
+        runCatching { unregisterReceiver(discoveryReceiver) }
         sendJob?.cancel()
         scope.cancel()
         releaseProfile()
@@ -174,6 +213,42 @@ class HidGamepadService : Service() {
     fun retry() {
         releaseProfile()
         initialise()
+    }
+
+    // -- Stage 0 scratch surface, see TODO.md ------------------------------------------------
+
+    /** Swaps the registered profile, re-registering under the new SDP identity. */
+    fun useProfile(next: GamepadProfile) {
+        if (next.id == profile.id) return
+        releaseProfile()
+        profile = next
+        initialise()
+    }
+
+    /**
+     * Starts an inquiry. A console in its pairing screen has never been bonded, so it cannot be
+     * reached through [bondedDevices] — and whether we can reach it at all by *initiating* rather
+     * than waiting to be discovered is the one untested way around a class-of-device filter.
+     */
+    @SuppressLint("MissingPermission") // Guarded by withBluetoothPermission.
+    fun startScan() = withBluetoothPermission(Unit) {
+        _discovered.value = emptyList()
+        val adapter = bluetoothAdapter ?: return@withBluetoothPermission Unit
+        scope.launch {
+            // Cancelling is asynchronous, so starting in the same breath fails.
+            if (adapter.isDiscovering) {
+                adapter.cancelDiscovery()
+                delay(CANCEL_DISCOVERY_SETTLE_MS)
+            }
+            Log.i(TAG, "startDiscovery -> ${adapter.startDiscovery()}")
+        }
+        Unit
+    }
+
+    @SuppressLint("MissingPermission") // Guarded by withBluetoothPermission.
+    fun stopScan() = withBluetoothPermission(Unit) {
+        bluetoothAdapter?.cancelDiscovery()
+        Unit
     }
 
     // -- Profile lifecycle ------------------------------------------------------------------
@@ -227,7 +302,12 @@ class HidGamepadService : Service() {
         val device = hidDevice ?: return@withBluetoothPermission
 
         profile.requiredAdapterName?.let { name ->
-            if (bluetoothAdapter?.name != name) bluetoothAdapter?.name = name
+            if (bluetoothAdapter?.name != name) {
+                // Remember the real name once, so repeated registrations do not record the
+                // impersonated one as the thing to restore.
+                if (previousAdapterName == null) previousAdapterName = bluetoothAdapter?.name
+                bluetoothAdapter?.name = name
+            }
         }
 
         val sdp = BluetoothHidDeviceAppSdpSettings(
@@ -254,6 +334,12 @@ class HidGamepadService : Service() {
         }
         hidDevice = null
         connectedHost = null
+        // The adapter name is the phone's, not ours, so hand it back rather than leaving the
+        // user's device called whatever a profile wanted it called.
+        previousAdapterName?.let { name ->
+            bluetoothAdapter?.name = name
+            previousAdapterName = null
+        }
     }
 
     private val hidCallback = object : BluetoothHidDevice.Callback() {
@@ -466,6 +552,9 @@ class HidGamepadService : Service() {
 
     companion object {
         private const val TAG = "Blugaemand"
+
+        /** How long to let a cancelled inquiry settle before starting another. */
+        private const val CANCEL_DISCOVERY_SETTLE_MS = 400L
         private const val CHANNEL_ID = "hid_gamepad"
         private const val NOTIFICATION_ID = 1
 

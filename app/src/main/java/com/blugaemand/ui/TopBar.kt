@@ -51,6 +51,7 @@ fun TopBar(
     onEditLayout: () -> Unit,
     onQuit: () -> Unit,
     modifier: Modifier = Modifier,
+    probe: SwitchProbe? = null,
 ) {
     Column(
         modifier = modifier.widthIn(max = 420.dp),
@@ -84,6 +85,7 @@ fun TopBar(
                 onConnect = onConnect,
                 onRetry = onRetry,
                 onQuit = onQuit,
+                probe = probe,
             )
         }
 

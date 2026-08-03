@@ -192,9 +192,22 @@ Throwaway work. Every later stage is gated on it.
       `GenericHidProfile` does; there are **no trigger axes at all**, confirming the ZL/ZR-go-digital
       item below; and the descriptor **ends `c0 00`**, a trailing zero after End Collection, the same
       artefact *Known constraints* records for ours
-- [ ] Point a scratch profile's `requiredAdapterName` at `Pro Controller`, register the existing
-      `GenericHidProfile` unchanged, and try to pair from *Change Grip/Order*. Record which of three:
-      never pairs / pairs then drops / holds the connection and waits for a handshake
+- [ ] Try to pair from *Change Grip/Order*. Record which of three: never pairs / pairs then drops /
+      holds the connection and waits for a handshake. **The build is ready** — `SwitchProbeProfile`
+      and a *Switch probe — scratch* section at the bottom of the connection panel, verified
+      end to end against a BlueZ host:
+      - *Impersonate Pro Controller* swaps to `SwitchProbeProfile`, which is `GenericHidProfile`'s
+        descriptor unchanged under a real pad's SDP identity — `Wireless Gamepad` / `Gamepad` /
+        `Nintendo`, all three confirmed on the wire — and renames the adapter to `Pro Controller`.
+        The previous name is restored when the profile is released
+      - *Scan for a host to connect to* runs an inquiry and lists what it finds, so a console that
+        has never been bonded can be **connected to rather than waited for**. This is the one
+        untested way around a class-of-device filter: if the console accepts an inbound connection
+        instead of only offering what its own inquiry returned, the filter never runs
+      - Remember to *Make discoverable to pair* as well, since the passive direction needs it
+- [ ] Delete `SwitchProbeProfile`, the panel's probe section and `SwitchProbe` once the above is
+      recorded, whichever way it goes. `startScan`/`stopScan`/`discovered` and `useProfile` on the
+      service go with them unless Iteration 3's profile picker wants the latter
 - [x] **`onInterruptData` fires.** The one Stage 0 answer that came back *for* the iteration. The
       override is in `hidCallback` and logs only. Both probes landed:
 
@@ -319,6 +332,18 @@ Throwaway work. Every later stage is gated on it.
 Worth attempting despite the risk, because the same impersonation is known to work from BlueZ hosts
 that can publish a DeviceID record. The question is squarely whether Android's five SDP fields leave
 enough surface — and Stage 0 is a day's work that starts by reading a controller which already works.
+
+### Traps found while building the Stage 0 probe
+
+- **`startDiscovery()` returns `false`, silently**, if `BLUETOOTH_SCAN` is declared without
+  `android:usesPermissionFlags="neverForLocation"` and the app has no `ACCESS_FINE_LOCATION`.
+  Nothing throws and no permission prompt appears — the call just says no. The manifest now
+  asserts the flag, which is honest: nothing here derives location
+- **Cancelling an inquiry is asynchronous.** `cancelDiscovery()` immediately followed by
+  `startDiscovery()` fails; the second call needs a moment, hence `CANCEL_DISCOVERY_SETTLE_MS`
+- **`ACTION_FOUND` is registered `RECEIVER_EXPORTED`**, unlike the adapter-state receiver. It is a
+  protected broadcast, so only the system can send it, and `NOT_EXPORTED` is a candidate for
+  silently dropping it
 
 ## Polish backlog
 
