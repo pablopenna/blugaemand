@@ -192,8 +192,36 @@ Throwaway work. Every later stage is gated on it.
       `GenericHidProfile` does; there are **no trigger axes at all**, confirming the ZL/ZR-go-digital
       item below; and the descriptor **ends `c0 00`**, a trailing zero after End Collection, the same
       artefact *Known constraints* records for ours
-- [ ] Try to pair from *Change Grip/Order*. Record which of three: never pairs / pairs then drops /
-      holds the connection and waits for a handshake. **The build is ready** — `SwitchProbeProfile`
+- [x] **Tried it from *Change Grip/Order*. It is the middle outcome: pairs, then drops** — and the
+      shape of the failure is more informative than the outcome. Measured with the probe on, the
+      adapter named `Pro Controller` and the SDP strings reading `Wireless Gamepad` / `Gamepad` /
+      `Nintendo`:
+
+      - **The console finds the phone and initiates by itself.** No *Make discoverable* needed; the
+        pairing dialog appeared unprompted, naming `Nintendo Switch` (`DC:68:EB:1A:2B:76`).
+        **So the class-of-device theory was wrong** — major class *Phone* does not keep the phone
+        out of the candidate list
+      - **The bond completes.** Across thirteen attempts the state machine went `11` (bonding) →
+        `12` (**bonded**, seven times) → `10` (none). It is torn down every time, and the console
+        immediately retries, which is the loop the user sees
+      - **The HID channel is never opened.** `HidGamepadService` logged no connection-state change
+        at all through the whole run — the console bonds, decides against the device, and unpairs
+        without ever reaching PSM 17. So `onInterruptData` firing is real but out of reach: the
+        handshake never gets a chance to start
+
+      **The rejection therefore happens after bonding and before HID, which means it is read out of
+      SDP.** Two candidates, and only one of them is ours to change: the DeviceID record, which
+      still says Xiaomi `038F:0000` because no API reaches it, or the HID report descriptor, which
+      is `GenericHidProfile`'s Xbox-style one rather than a Pro Controller's
+
+- [ ] **Before closing the iteration, put the reference descriptor in.** The probe is still
+      publishing our own descriptor; the reference controller's 171 bytes are recorded above and
+      have never been tried. If the console reads the descriptor, this is the last variable we
+      control, and it is a copy-paste. If it still drops the bond, the rejection is on the
+      DeviceID record, nothing in `BluetoothHidDeviceAppSdpSettings` can reach it, and **that is
+      the gate — stop and move the finding into *Known constraints***
+
+      The build was ready as — `SwitchProbeProfile`
       and a *Switch probe — scratch* section at the bottom of the connection panel, verified
       end to end against a BlueZ host:
       - *Impersonate Pro Controller* swaps to `SwitchProbeProfile`, which is `GenericHidProfile`'s
