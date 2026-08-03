@@ -140,7 +140,16 @@ turns up along the way.
 - [ ] Profile picker in the UI once there is more than one `GamepadProfile`
 - [ ] Per-host default layout, remembered per bonded device
 
-## Iteration 4 — Nintendo Switch
+## Iteration 4 — Nintendo Switch — **CLOSED, not possible**
+
+**Stage 0 answered it: the console rejects the phone on its vendor and product IDs, which no
+Android API can set.** It bonds and then unpairs without ever opening the HID channel, with every
+other field in the SDP record matching a real Pro Controller byte for byte. The conclusion is in
+*Known constraints*; Stages 1–3 below were never started and are kept only for the reasoning.
+
+Everything under Stage 0 is a measurement against a real console and a real third-party pad, so it
+is worth reading before anyone reopens this. Two of its findings contradict the obvious guesses —
+class of device is not the gate, and the subcommand callback does fire.
 
 **The Switch does not accept HID gamepads. It accepts controllers it recognises.** Every other host
 on the roadmap reads the descriptor and believes it; this one wants a Pro Controller, which means a
@@ -214,12 +223,16 @@ Throwaway work. Every later stage is gated on it.
       still says Xiaomi `038F:0000` because no API reaches it, or the HID report descriptor, which
       is `GenericHidProfile`'s Xbox-style one rather than a Pro Controller's
 
-- [ ] **Before closing the iteration, put the reference descriptor in.** The probe is still
-      publishing our own descriptor; the reference controller's 171 bytes are recorded above and
-      have never been tried. If the console reads the descriptor, this is the last variable we
-      control, and it is a copy-paste. If it still drops the bond, the rejection is on the
-      DeviceID record, nothing in `BluetoothHidDeviceAppSdpSettings` can reach it, and **that is
-      the gate — stop and move the finding into *Known constraints***
+- [x] **Put the reference descriptor in. It changed nothing.** Attribute `0x0206` verified on the
+      wire as 171 bytes identical to the reference pad's, trailing zero included — and the console
+      behaved exactly as before: bonded twice, tore it down five times, never opened the HID
+      channel. So the descriptor was not what it was reading
+
+- [x] **Gate tripped. Iteration 4 is closed.** Every field we can set now matches a real
+      Pro Controller and the console still rejects the phone before HID, which leaves the DeviceID
+      record — and no API reaches it. The finding is in *Known constraints*; the rest of this
+      section is kept as the record of how it was established, because it is a measurement rather
+      than a guess and re-running it costs a console and an evening
 
       The build was ready as — `SwitchProbeProfile`
       and a *Switch probe — scratch* section at the bottom of the connection panel, verified
@@ -406,7 +419,30 @@ Not bugs, and not fixable — recorded so they do not get rediscovered.
   decisions in the README.
 - **No BLE.** Android blocks apps from registering the HID service UUID on its GATT server, so
   HID-over-GATT is unavailable.
-- **No VID/PID control.** See Iteration 4.
+- **No VID/PID control, and it is what makes the Switch impossible.**
+  `BluetoothHidDeviceAppSdpSettings` exposes name, description, provider, subclass and descriptor,
+  and nothing that carries a vendor or product ID. The DeviceID record is the stack's: this phone
+  publishes Bluetooth-sourced Xiaomi `038F:0000`, where a Pro Controller publishes USB-sourced
+  `057E:2009`. There is no API, hidden or otherwise — the record and the class of device both
+  belong to the adapter, not the app.
+
+  **Measured against a real console, not inferred.** With the adapter renamed `Pro Controller`,
+  the SDP strings reading `Wireless Gamepad` / `Gamepad` / `Nintendo`, subclass `0x08`, and a
+  report descriptor byte-identical to a real pad's, a Switch in *Change Grip/Order*:
+  finds the phone unprompted, **bonds successfully**, then tears the bond down and retries,
+  **without ever opening the HID channel**. Bond states cycled `11 → 12 → 10` across two separate
+  runs. Since the rejection lands after bonding and before HID, it is read from SDP; since every
+  other field in that record now matches a real pad exactly, what is left is the DeviceID record.
+
+  Two useful corrections to earlier guesses, both worth keeping: **class of device is not the
+  gate** — the console offers the phone as a candidate despite major class *Phone* — and
+  **`onInterruptData` does fire**, so the subcommand handshake is mechanically reachable. Neither
+  helps, because the console never opens the channel they would run on.
+
+  Only three things would change this, all outside the project's premise: root, to set the
+  `bluetooth.device_id.*` and `class_of_device` system properties; a Bluetooth shim such as a Pi or
+  ESP32 doing the radio, which is how every working Pro Controller emulator does it; or USB gadget
+  mode, which also needs root. See the *Nintendo Switch* section for the full Stage 0 record.
 - **Some OEM builds omit the HID Device profile** entirely. The app detects and reports this.
 - **Hosts cache the report descriptor at pair time.** Reconnecting does not pick up a changed
   descriptor — the pairing has to be removed and redone on both ends. Worth remembering for every

@@ -554,8 +554,11 @@ and sharing a single layout are the same shape and there is one version number t
 
 Everything on the roadmap goes through one of these:
 
-- **`GamepadProfile`** — supporting a fussier host (the Switch) means adding an implementation, not
-  threading special cases through the service.
+- **`GamepadProfile`** — supporting a fussier host means adding an implementation, not threading
+  special cases through the service. The Switch was the intended proof of that and turned out to be
+  impossible for an unrelated reason: it identifies controllers by USB vendor and product ID, and
+  Android gives an app no way to publish one. Measured against a real console — see *Known
+  constraints* in [TODO.md](TODO.md). The seam is unaffected; the host is simply unreachable.
 - **`GamepadLayout`** — it needed no changes to become the saved format, because a user layout is a
   variable-length list of controls under a name and that is what it always was. The one change still
   queued is user-supplied art, which turns `ControlIcon` into a sealed `Builtin | File`; the version
@@ -691,9 +694,13 @@ edit the layout editor makes — all on the JVM:
 
 Two gotchas that account for most first-time failures:
 
-- **Register before pairing.** The class-of-device recorded at pair time is what tells the host this
-  is a gamepad. If the app was not registered, the host files the phone as a phone and never opens
-  the HID connection.
+- **Register before pairing.** What tells the host this is a gamepad is the **HID service record**,
+  and the host caches the service list at pair time. If the app was not registered there was no
+  such record to find, and the host never opens the HID connection.
+
+  Not the class of device, despite the obvious guess: that belongs to the adapter and stays
+  *Phone* whatever the app does — `subclass` only reaches SDP attribute `0x0202`. Measured, while
+  registered and advertising, in the Iteration 4 work.
 - **A phone previously paired as a phone must be removed first**, because the host caches the old
   service list.
 
