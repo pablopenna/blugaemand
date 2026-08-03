@@ -199,9 +199,37 @@ Throwaway work. Every later stage is gated on it.
       handshake runs through it, and nothing in the app has ever overridden it — `hidCallback` in
       `HidGamepadService` covers the other five. Add it, log it, poke the interrupt channel from a
       Linux host. If it never fires, nothing after this is possible
-- [ ] Read back what Android actually published in SDP, from a Linux host — `sdptool records` and
-      BlueZ's cache under `/var/lib/bluetooth/<adapter>/cache/`, since the Switch will not tell us.
-      Is there a DeviceID/PnP record at all, and what class of device does `subclass` produce?
+- [x] Read back what Android actually published in SDP, from a Linux host. Done with
+      `sdptool browse --raw <phone>` while the app was registered — BlueZ's cache under
+      `/var/lib/bluetooth/` needs root and is stale anyway, and the live browse is the same data.
+      Note the phone answers SDP only over a **BR/EDR** link: `bluetoothctl connect` picks LE and
+      `sdptool` then fails with *No route to host*, so force the classic link first with
+      `dbus-send --system --dest=org.bluez /org/bluez/hci0/dev_<addr> org.bluez.Device1.ConnectProfile string:00001124-0000-1000-8000-00805f9b34fb`.
+      **Both answers are bad, and neither is fixable from the app:**
+
+      - **There is a DeviceID record, and it is the phone's.** Record handle `0x10002`, not in the
+        public browse group, so `sdptool browse` misses it and `sdptool search 0x1200` is needed:
+        VendorIDSource `0x0001` (Bluetooth SIG), VendorID `0x038F` (Xiaomi), ProductID `0x0000`,
+        Version `0x0000`. One system-wide record, published by the stack, with nothing in
+        `BluetoothHidDeviceAppSdpSettings` reaching it. Even the **namespace** is wrong: the
+        Pro Controller's is USB-sourced (`usb:v057Ep2009`), so a console matching on
+        `usb:057E:2009` sees `bluetooth:038F:0000`
+      - **`subclass` does not touch the Class of Device.** With the app registered and advertising
+        the phone still inquires as `0x5A420C` — major **Phone**, minor Smartphone, BlueZ icon
+        `phone`. The Pro Controller is `0x002508`, major **Peripheral**, minor **Gamepad**. The
+        `subclass` byte lands only in SDP attribute `0x0202`, and CoD is the adapter's, set by the
+        stack. If the console filters its inquiry results by CoD — which is how every *Change
+        Grip/Order* screen appears to work — the phone is never a candidate, and no SDP field can
+        change that
+
+- [ ] **Cheap thing to try before writing anything off: `subclass` is arguably wrong.** The HID spec
+      defines attribute `0x0202` as *the low byte of the Class of Device*, where the device type
+      sits at bits 5-2 — the Pro Controller's `0x08` is `0b000010 << 2`, gamepad. Android's
+      `SUBCLASS2_GAMEPAD` is `0x02`, the nibble **unshifted**, and the stack passes it through
+      verbatim: our record reads `0x02`, which decodes as device type `0b0000`, *unspecified*. So
+      `GenericHidProfile.subclass` is publishing "uncategorised peripheral" where the reference pad
+      publishes "gamepad". Windows and Linux never noticed because they read the descriptor. Try
+      `0x08` and see whether anything downstream cares — one byte, and it costs nothing to measure
 - [ ] **Gate.** If the Switch will not open a connection to a device with no Nintendo VID/PID, stop
       here: move the finding into *Known constraints*, replacing the "No VID/PID control. See
       Iteration 4." forward-reference with the answer, and close the iteration. The reference
