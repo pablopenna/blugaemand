@@ -461,6 +461,53 @@ Unordered; pull from here whenever.
       control and not per layout: a progressive accelerator and a digital handbrake is one pad.
       Defaulted rather than required, so no format version bump — an older file reads as
       progressive, and an older build reads a newer file as progressive too
+- [ ] **Dynamic sticks** — an option on a stick, the way binary/progressive is an option on a
+      trigger: a `StickMode` on `ControlSpec` defaulting to the fixed stick we have now, one row on
+      the editor's root page while a stick is selected, a defaulted field so no format version bump.
+      A **dynamic** stick is **a rectangular area with no stick drawn in it**. A touch anywhere
+      inside makes one appear at that point reading `0,0`; the finger drags it off centre from
+      there; lifting makes it disappear again. It is the answer to the thing a fixed stick is bad
+      at — a thumb that has to find the stick before it can push it, in the dark, mid-game.
+      - **The anchor is already there.** `Binding` keeps `startX`/`startY` for a trigger's pull, and
+        a dynamic stick is the same idea on both axes: `normalisedOffset` measured about the
+        touch-down point instead of about the control's centre. That is the whole of the routing
+        change.
+      - **It breaks "what is drawn is exactly what is touchable"**, which is the invariant
+        `ResolvedLayout` exists to hold. A dynamic stick is touchable across a rectangle and drawn
+        as a circle somewhere inside it, so `contains` and the renderer stop agreeing by
+        construction. Decide deliberately how: the honest option is that the *area* is the control's
+        shape and the drawn stick is a transient the renderer places from the router, the way the
+        trigger read-out already is.
+      - **The renderer needs the anchor, not just the offset.** `stickOffset(index)` answers where
+        the knob is relative to the base; a dynamic one also has to say where the base *is*. Same
+        rule as `triggerValue`: one answer, from the binding, so the picture cannot disagree with
+        what the host is being sent.
+      - **The editor has to show something.** An empty rectangle is still a control to select, move
+        and resize, and unlike every other control it has nothing of its own to draw. It needs an
+        outline at least while editing, and probably a faint one on the pad too — an invisible
+        control is indistinguishable from a layout that lost one.
+      - **Settled: the base follows the finger, and off the area if it goes there.** Once a finger
+        passes the radius the base is dragged along behind it rather than pinning where it appeared,
+        so the stick stays at full deflection in that direction and the thumb can keep going as far
+        as it likes. **The area is for spawning only** — it decides where a stick may be *started*,
+        and has no say over anything after that. The binding already outlives leaving a control, so
+        this is the base's position to work out and nothing else.
+      - **The area loses to anything drawn on top of it.** A Start button inside the rectangle is a
+        Start button: a touch on it presses it and spawns no stick. So `hitTest` needs a rule beyond
+        nearest-centre — a dynamic area is a background, and any other control containing the point
+        beats it however far its centre happens to be. Note this makes the area the first control
+        that is *meant* to overlap others, which the *no built-in layout has overlapping controls*
+        test and the assumption behind it will both need to admit.
+      - **One stick per area: first finger wins, the second is ignored.** Ignored and not queued or
+        stacked — if it lands on a control drawn over the area it drives that, by the rule above,
+        and otherwise it binds to nothing at all, exactly as a touch on bare glass does. So `down`
+        has to refuse an area that already has a pointer on it, which is a new thing for it to
+        refuse: every other control takes as many fingers as land on it.
+      - **A small dead zone at the anchor**, as a fraction of the radius, the way
+        `Shape.Dpad.deadZone` already is. The anchor is wherever the thumb happened to touch down
+        rather than a place anyone aimed at, so a thumb that has not moved must read exactly centre;
+        without one, every spawn starts with a few pixels of drift on both axes. This does not give
+        the fixed stick one — it has none today, and its centre is a place you can feel.
 - [ ] Haptic feedback on button press, with a sensitivity setting
 - [ ] Turbo / autofire and macro buttons
 - [ ] Motion controls from the device IMU
