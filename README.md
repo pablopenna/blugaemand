@@ -397,6 +397,7 @@ shows a line with an empty half under it.
 **Editing is four operations** — move, resize, add, remove — plus the two colours and a rename. A
 nudge is a move by an exact amount rather than a fifth operation: the arrows call `movedControl` with
 `nudgeStep` for a delta, so everything a drag is clamped and snapped by applies to them unchanged.
+A handle drag is a resize by an exact amount, and stands in the same relation to a pinch.
 All
 of the arithmetic is in `LayoutEdits` and `Placement`, which are plain Kotlin, so the editor is
 tested on the JVM and `EditorScreen` is nothing but gestures.
@@ -503,6 +504,16 @@ Decisions in there that are easy to undo by accident:
 - **A group centres on its bounding box, not on the average of its positions.** With an odd member
   out — the centre three, where two are small and one is not — an average drifts towards the
   crowded side and the group lands beside the thumb rather than under it.
+- **The corner handles keep the aspect ratio and the edge handles do not.** That is the whole
+  reason for having eight rather than four: a pinch can only scale uniformly, so a shoulder button
+  could not be made longer without also being made taller. Only a `Rect` and a dynamic stick's area
+  have a size per axis to stretch — everything else is one radius — and `scalesPerAxis` is the one
+  place that is decided; an edge handle on a round control scales it whole rather than doing nothing.
+- **A handle anchors the opposite edge.** Dragging the right edge right widens the control
+  rightwards instead of growing it about its centre, which is what makes a handle feel like it is
+  holding the edge it is drawn on. The new centre is worked out from the size the control *ended up*
+  as, measured after the limits and the grid have had their say, rather than from the size the finger
+  asked for — otherwise a control at its size limit would keep sliding while the finger kept moving.
 - **A plate scales by one factor, clamped by its smallest and largest member.** The size limits
   exist so nothing becomes too small to grab hold of, and what a thumb aims at is a button, not the
   plate. Snapping applies to the plate's own extent once, not to each member — rounding them
@@ -710,7 +721,8 @@ whole of the routing change.
 **The throw and the area are sized separately**, and both live on `ControlSpec.Shape.Stick`: the
 `radius` is how far the stick travels, `areaWidth` and `areaHeight` are the rectangle it may be
 spawned in — measured like a `Rect`'s, against the screen and against the layout unit respectively.
-A pinch on a dynamic stick resizes **the area**, since that is what is drawn and what is touched;
+A pinch — or a handle drag — on a dynamic stick resizes **the area**, since that is what is drawn
+and what is touched;
 growing the region a stick can be started in should not cost a longer sweep to push it. Which leaves
 the throw tuned by pinching the stick as a fixed one and switching back — nothing is lost across the
 switch, in either direction. An area may be made far larger than any control: `MAX_AREA_EXTENT` is
@@ -875,7 +887,7 @@ edit the layout editor makes — all on the JVM:
   hue/saturation/value unchanged, alpha is carried rather than picked, hue wraps at both ends while
   saturation and value clamp, and — stated as a test rather than found as a bug — *hue is lost on
   the way to a grey*, which is why the picker holds one of its own.
-- `LayoutEditsTest` — everything a drag, a pinch, a nudge, an add and a remove do, on a 1000×500
+- `LayoutEditsTest` — everything a drag, a pinch, a handle, a nudge, an add and a remove do, on a 1000×500
   surface that makes the layout unit exactly 500 and the grid step exactly 25. The round-trip tests
   (move by `(dx, dy)`, then by `(-dx, -dy)`) catch an axis divided by the wrong dimension,
   and several exist only to hold the line that controls are addressed by index — *moving one copy
@@ -955,7 +967,11 @@ The three built-ins cannot be changed — make your own instead:
 2. The **☰ Layout** pill opens the menu and closes again, so the pad underneath stays reachable.
    It holds what applies to the layout as a whole; what applies to the control you selected sits as
    pills beside it, in the head bar, where they stay reachable with the menu shut.
-3. **Drag** a control to move it, **pinch** it to resize. **Grid** toggles snapping, which applies to
+3. **Drag** a control to move it, **pinch** it to resize, or drag one of the **eight arrows** that
+   appear around whatever is selected. The four on the corners keep the control's proportions; the
+   four on the edges stretch that side alone, so a shoulder button can be made longer without being
+   made taller. Anything drawn as a circle — a button, a D-pad, a stick — has one size and no second
+   axis, so its side arrows grow it whole. **Grid** toggles snapping, which applies to
    sizes as well as positions, so two buttons meant to match can be made to match. The **◀▲▼▶
    arrows** beside the pill move whatever is selected one step at a time — a whole grid cell with
    snapping on, a fifth of one with it off, which is finer than a thumb can place anything.
@@ -975,10 +991,11 @@ The three built-ins cannot be changed — make your own instead:
    (rests halfway, slide to pull it). Binary is what every trigger starts as, including on the
    built-in pads. Each trigger is set on its own, so one pad can have both.
 8. **Stick**, likewise, appears only while a thumbstick is selected, and switches it between
-   **fixed** — where it is drawn, pinch to resize its throw — and **dynamic**, an area where the stick appears under
-   your thumb wherever it lands inside it and vanishes when you lift. Pinching a dynamic stick
-   resizes the *area*, which can be made much bigger than any button; its throw is whatever size it
-   had as a fixed stick, so switch back, pinch, and switch again to change that. Anything you place
+   **fixed** — where it is drawn, resize it to change its throw — and **dynamic**, an area where the stick appears under
+   your thumb wherever it lands inside it and vanishes when you lift. Resizing a dynamic stick
+   changes the *area*, which can be made much bigger than any button and is one of the two things
+   that stretches per axis; its throw is whatever size it had as a fixed stick, so switch back,
+   resize, and switch again to change that. Anything you place
    inside the area still works normally — a touch on it presses it and spawns no stick.
 9. **Appearance** picks how the pad is drawn: *Shapes and colours*, or one of the seven art packs.
    In colours mode a picker sits below the rule — tap *At rest* or *Held* to say which fill it is

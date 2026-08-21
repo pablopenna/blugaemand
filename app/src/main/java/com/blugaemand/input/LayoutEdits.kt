@@ -3,6 +3,7 @@ package com.blugaemand.input
 import com.blugaemand.hid.GamepadButton
 import com.blugaemand.input.layouts.DEFAULT_LAYOUT
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 /**
@@ -100,7 +101,7 @@ fun ResolvedLayout.movedControl(
  */
 fun ResolvedLayout.resizedControl(index: Int, factor: Float, snap: Boolean): GamepadLayout {
     if (controls.getOrNull(index) == null) return layout
-    val scale = Scale(factor, if (snap) gridStep else 0f, unit, width)
+    val scale = Scale(factor, factor, if (snap) gridStep else 0f, unit, width)
     // Pulled back on screen afterwards because a plate grows about its centre and its whole
     // bounding box grows with it, so one near an edge would otherwise scale straight off the side.
     // A single control can do that too, but by half a radius rather than half a plate.
@@ -111,6 +112,132 @@ fun ResolvedLayout.resizedControl(index: Int, factor: Float, snap: Boolean): Gam
     }
     return ResolvedLayout(resized, width, height)
         .let { grown -> grown.movedControl(index, 0f, 0f, snap = false) }
+}
+
+/**
+ * One of the eight indicators drawn around the selection, and the direction dragging it pulls in:
+ * `-1`, `0` or `1` per axis, so `dx` and `dy` are the edge each one sits on.
+ *
+ * The four corners scale both axes together and the four edges scale their own axis alone — the
+ * behaviour every editor has, and the reason the aspect ratio is no longer forced on every resize.
+ * Which of those a shape can actually honour is [ControlSpec.scalesPerAxis].
+ */
+enum class ResizeHandle(val dx: Int, val dy: Int) {
+    TOP_LEFT(-1, -1),
+    TOP(0, -1),
+    TOP_RIGHT(1, -1),
+    RIGHT(1, 0),
+    BOTTOM_RIGHT(1, 1),
+    BOTTOM(0, 1),
+    BOTTOM_LEFT(-1, 1),
+    LEFT(-1, 0);
+
+    val isCorner: Boolean get() = dx != 0 && dy != 0
+}
+
+/**
+ * Whether this control has a width and a height that can move independently.
+ *
+ * A rectangle does, and so does a dynamic stick's spawning area — both are boxes with a size per
+ * axis. Everything else is measured by a single radius, so an edge handle on one can only scale it
+ * whole; dragging the side of a button squarely stretches nothing, it just makes a bigger button.
+ */
+fun ControlSpec.scalesPerAxis(): Boolean = shape is ControlSpec.Shape.Rect || isDynamicStick()
+
+/** Half the gap between a control and the ring drawn around it, which is where the handles sit. */
+val ResolvedControl.selectionInset: Float get() = minOf(extentX, extentY) * SELECTION_INSET_RATIO
+
+/** Centre of one handle, in pixels — where it is drawn, and what a touch is measured against. */
+fun ResolvedControl.handleCenterX(handle: ResizeHandle): Float =
+    centerX + handle.dx * (extentX + selectionInset)
+
+fun ResolvedControl.handleCenterY(handle: ResizeHandle): Float =
+    centerY + handle.dy * (extentY + selectionInset)
+
+/**
+ * How big a handle is drawn, and — at [HANDLE_TOUCH_RATIO] times that — how close a finger has to
+ * land to grab one.
+ *
+ * Off the layout unit rather than the control, so the indicators around a shoulder button and the
+ * ones around the D-pad are the same size and both are worth aiming at. A control small enough for
+ * its own handles to overlap it is a control you can still resize, which is the point of them.
+ */
+val ResolvedLayout.handleRadius: Float get() = unit * HANDLE_RADIUS_RATIO
+
+/**
+ * The handle a touch means, or null if it missed all eight.
+ *
+ * Nearest centre wins, so the corner and the edge handle beside it — which can overlap on a small
+ * control — split the gap between them rather than one silently swallowing the other.
+ */
+fun ResolvedControl.handleAt(x: Float, y: Float, radius: Float): ResizeHandle? =
+    ResizeHandle.entries
+        .filter { hypot(x - handleCenterX(it), y - handleCenterY(it)) <= radius }
+        .minByOrNull { hypot(x - handleCenterX(it), y - handleCenterY(it)) }
+
+/**
+ * [layout] with one control resized by dragging [handle] a pixel delta.
+ *
+ * **The opposite edge stays put.** Dragging the right edge to the right widens the control
+ * rightwards rather than growing it about its centre, which is what makes a handle feel like it is
+ * holding the edge it is drawn on. The centre moves to follow, and is clamped back on screen the
+ * way a drag is.
+ *
+ * A corner scales both axes by one factor and keeps the shape; an edge scales its own axis, for a
+ * control whose axes are independent ([ControlSpec.scalesPerAxis]) and both for one whose are not.
+ */
+fun ResolvedLayout.resizedControl(
+    index: Int,
+    handle: ResizeHandle,
+    dxPixels: Float,
+    dyPixels: Float,
+    snap: Boolean,
+): GamepadLayout {
+    val control = controls.getOrNull(index) ?: return layout
+    val halfWidth = control.extentX
+    val halfHeight = control.extentY
+    if (halfWidth <= 0f || halfHeight <= 0f) return layout
+
+    // The edge follows the finger, so half the control's size changes by the whole delta -- the
+    // opposite half is anchored and does not.
+    var factorX = if (handle.dx != 0) 1f + handle.dx * dxPixels / halfWidth else 1f
+    var factorY = if (handle.dy != 0) 1f + handle.dy * dyPixels / halfHeight else 1f
+    if (handle.isCorner || !control.spec.scalesPerAxis()) {
+        // A corner averages its two axes rather than picking one, so a diagonal drag answers to
+        // both halves of itself; an edge takes the axis it drove and ignores the one it did not.
+        val together = when {
+            handle.isCorner -> (factorX + factorY) / 2f
+            handle.dx != 0 -> factorX
+            else -> factorY
+        }
+        factorX = together
+        factorY = together
+    }
+
+    val scale = Scale(
+        factorX.coerceAtLeast(0f),
+        factorY.coerceAtLeast(0f),
+        if (snap) gridStep else 0f,
+        unit,
+        width,
+    )
+    val resized = layout.replacingSpec(index) { spec ->
+        spec.copy(shape = spec.shape.scaledBy(scale, area = spec.isDynamicStick()))
+    }
+
+    // Measured after the fact rather than predicted, because the limits and the grid both move the
+    // size the finger asked for, and the anchored edge has to hold against what the control ended
+    // up as -- not against what was requested.
+    val grown = ResolvedLayout(resized, width, height)
+    val after = grown.controls.getOrNull(index) ?: return resized
+    val anchoredX = control.centerX - handle.dx * halfWidth + handle.dx * after.extentX
+    val anchoredY = control.centerY - handle.dy * halfHeight + handle.dy * after.extentY
+    return grown.movedControl(
+        index,
+        if (handle.dx != 0) anchoredX - after.centerX else 0f,
+        if (handle.dy != 0) anchoredY - after.centerY else 0f,
+        snap = false,
+    )
 }
 
 /**
@@ -423,12 +550,21 @@ private fun ControlSpec.Shape.withScreenWidths(ratio: Float): ControlSpec.Shape 
  * reference, worked on there, and converted back.
  */
 private class Scale(
-    private val factor: Float,
+    private val factorX: Float,
+    private val factorY: Float,
     private val stepPixels: Float,
     private val unitPixels: Float,
     val widthPixels: Float,
 ) {
     val unit: Float get() = unitPixels
+
+    /**
+     * The one factor a shape with a single size field scales by.
+     *
+     * The two axes agree wherever this is read: a pinch scales uniformly, and [resizedControl]
+     * only lets them differ for a shape that has a size per axis to put them on.
+     */
+    private val factor: Float get() = factorX
 
     /**
      * The one factor a whole cluster scales by, so its arrangement comes out the same shape.
@@ -465,6 +601,10 @@ private class Scale(
     /**
      * One size field scaled, in pixels against its own reference, held between the limits.
      *
+     * [factor] is a parameter because a rectangle's two extents may be scaled by different amounts
+     * — an edge handle drags one of them and leaves the other alone. It defaults to the uniform
+     * factor, which is what a pinch and every single-size shape use.
+     *
      * [ceiling] is a parameter for the one field that has a different one — a dynamic stick's
      * spawning area, which is meant to be large; see [MAX_AREA_EXTENT]. The floor is not, because
      * the reason for it is the same for every kind of control: below it a thumb misses.
@@ -472,6 +612,7 @@ private class Scale(
     fun of(
         value: Float,
         referencePixels: Float,
+        factor: Float = this.factor,
         ceiling: Float = MAX_CONTROL_EXTENT,
     ): Float {
         val min = MIN_CONTROL_EXTENT * unitPixels
@@ -483,6 +624,14 @@ private class Scale(
         if (stepPixels > 0f) pixels = snapToGrid(pixels, stepPixels).coerceIn(min, max)
         return pixels / referencePixels
     }
+
+    /** [of] against the horizontal factor — the width of the shapes that have one. */
+    fun ofX(value: Float, referencePixels: Float, ceiling: Float = MAX_CONTROL_EXTENT): Float =
+        of(value, referencePixels, factorX, ceiling)
+
+    /** [of] against the vertical factor. */
+    fun ofY(value: Float, referencePixels: Float, ceiling: Float = MAX_CONTROL_EXTENT): Float =
+        of(value, referencePixels, factorY, ceiling)
 }
 
 /**
@@ -504,14 +653,14 @@ private fun ControlSpec.Shape.scaledBy(scale: Scale, area: Boolean): ControlSpec
     is ControlSpec.Shape.Circle -> copy(radius = scale.of(radius, scale.unit))
 
     is ControlSpec.Shape.Rect -> copy(
-        width = scale.of(width, scale.widthPixels),
-        height = scale.of(height, scale.unit),
+        width = scale.ofX(width, scale.widthPixels),
+        height = scale.ofY(height, scale.unit),
     )
 
     is ControlSpec.Shape.Stick -> if (area) {
         copy(
-            areaWidth = scale.of(areaWidth, scale.widthPixels, MAX_AREA_EXTENT),
-            areaHeight = scale.of(areaHeight, scale.unit, MAX_AREA_EXTENT),
+            areaWidth = scale.ofX(areaWidth, scale.widthPixels, MAX_AREA_EXTENT),
+            areaHeight = scale.ofY(areaHeight, scale.unit, MAX_AREA_EXTENT),
         )
     } else {
         val scaled = scale.of(radius, scale.unit)
@@ -576,3 +725,12 @@ private fun ControlSpec.Shape.scaledUniformly(factor: Float): ControlSpec.Shape 
         )
     }
 }
+
+/** How far outside a control its ring — and so its handles — sit, as a fraction of its extent. */
+private const val SELECTION_INSET_RATIO = 0.25f
+
+/** How big a handle is drawn, as a fraction of the layout unit. */
+private const val HANDLE_RADIUS_RATIO = 0.028f
+
+/** How much wider than it looks a handle is to a finger. */
+const val HANDLE_TOUCH_RATIO: Float = 1.8f

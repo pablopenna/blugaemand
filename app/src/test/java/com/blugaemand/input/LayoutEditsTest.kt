@@ -248,6 +248,115 @@ class LayoutEditsTest {
         assertOnGrid(after.height * height)
     }
 
+    // -- Resizing by a handle -------------------------------------------------------------
+
+    @Test
+    fun `an edge handle stretches one axis and anchors the opposite edge`() {
+        // The trigger is 100 x 50 about (500, 50), so its left edge is at 450. Pulling the right
+        // edge 50 px right doubles the width and leaves that edge exactly where it was.
+        val after = resolve().resizedControl(trigger, ResizeHandle.RIGHT, 50f, 0f, snap = false)
+        assertEquals(0.2f, after.rect(trigger).width, TOLERANCE)
+        assertEquals(0.1f, after.rect(trigger).height, TOLERANCE)
+        assertEquals(550f, after.pixelCenterX(trigger), TOLERANCE)
+        assertEquals(50f, after.pixelCenterY(trigger), TOLERANCE)
+    }
+
+    @Test
+    fun `a corner handle keeps the aspect ratio`() {
+        // The point of having both: an edge is free to stretch, a corner is not.
+        val before = layout.rect(trigger)
+        val after = resolve()
+            .resizedControl(trigger, ResizeHandle.BOTTOM_RIGHT, 25f, 12.5f, snap = false)
+            .rect(trigger)
+        assertEquals(before.width * 1.5f, after.width, TOLERANCE)
+        assertEquals(before.height * 1.5f, after.height, TOLERANCE)
+    }
+
+    @Test
+    fun `an edge handle on a round control scales it whole`() {
+        // A circle has one radius and no second axis to stretch, so the side handles grow it the
+        // way the corners do -- and the anchored edge still holds: 800 - 50 stays at 750.
+        val after = resolve().resizedControl(south, ResizeHandle.RIGHT, 25f, 0f, snap = false)
+        assertEquals(0.15f, after.circle(south).radius, TOLERANCE)
+        assertEquals(825f, after.pixelCenterX(south), TOLERANCE)
+        assertEquals(250f, after.pixelCenterY(south), TOLERANCE)
+    }
+
+    @Test
+    fun `dragging a handle inwards shrinks, and stops at the limit`() {
+        val shrunk = resolve().resizedControl(south, ResizeHandle.RIGHT, -25f, 0f, snap = false)
+        assertEquals(0.05f, shrunk.circle(south).radius, TOLERANCE)
+
+        val past = resolve().resizedControl(south, ResizeHandle.RIGHT, -1000f, 0f, snap = false)
+        assertEquals(MIN_CONTROL_EXTENT, past.circle(south).radius, TOLERANCE)
+    }
+
+    @Test
+    fun `a dynamic stick's area stretches per axis too`() {
+        // The other shape with a size per axis. Its area is 0.18 x 0.30, so 180 x 150 px.
+        val dynamic = layout.withStickMode(stick, StickMode.DYNAMIC)
+        val after = resolve(dynamic)
+            .resizedControl(stick, ResizeHandle.BOTTOM, 0f, 37.5f, snap = false)
+            .stick(stick)
+        assertEquals(ControlSpec.Shape.Stick.DEFAULT_AREA_WIDTH, after.areaWidth, TOLERANCE)
+        assertEquals(ControlSpec.Shape.Stick.DEFAULT_AREA_HEIGHT * 1.5f, after.areaHeight, TOLERANCE)
+    }
+
+    @Test
+    fun `a snapped handle drag lands the size on the grid`() {
+        val after = resolve().resizedControl(trigger, ResizeHandle.RIGHT, 33f, 0f, snap = true)
+        assertOnGrid(after.rect(trigger).width * width)
+    }
+
+    @Test
+    fun `a handle never pushes a control off screen`() {
+        // The anchored edge would take the trigger past the right edge long before the size limit
+        // did, so the clamp a drag uses applies here as well.
+        val after = resolve().resizedControl(trigger, ResizeHandle.RIGHT, 10_000f, 0f, snap = false)
+        val half = after.rect(trigger).width * width / 2f
+        assertTrue(after.pixelCenterX(trigger) + half <= width + TOLERANCE)
+    }
+
+    @Test
+    fun `resizing by a handle an index the layout does not have changes nothing`() {
+        assertEquals(layout, resolve().resizedControl(99, ResizeHandle.TOP, 5f, 5f, snap = false))
+    }
+
+    // -- The handles themselves -----------------------------------------------------------
+
+    @Test
+    fun `the handles sit on the corners and the middle of each edge`() {
+        // Just outside the control, on the ring drawn around it: the A button is r=50 about
+        // (800, 250) and its inset is a quarter of that.
+        val a = resolve().controls[south]
+        assertEquals(862.5f, a.handleCenterX(ResizeHandle.RIGHT), TOLERANCE)
+        assertEquals(250f, a.handleCenterY(ResizeHandle.RIGHT), TOLERANCE)
+        assertEquals(800f, a.handleCenterX(ResizeHandle.TOP), TOLERANCE)
+        assertEquals(187.5f, a.handleCenterY(ResizeHandle.TOP), TOLERANCE)
+        assertEquals(737.5f, a.handleCenterX(ResizeHandle.BOTTOM_LEFT), TOLERANCE)
+        assertEquals(312.5f, a.handleCenterY(ResizeHandle.BOTTOM_LEFT), TOLERANCE)
+    }
+
+    @Test
+    fun `a touch on a handle finds it, and one between two finds the nearer`() {
+        val a = resolve().controls[south]
+        val radius = resolve().handleRadius * HANDLE_TOUCH_RATIO
+        assertEquals(ResizeHandle.RIGHT, a.handleAt(862.5f, 250f, radius))
+        assertEquals(ResizeHandle.TOP_RIGHT, a.handleAt(860f, 200f, radius))
+        assertNull(a.handleAt(800f, 250f, radius))
+    }
+
+    @Test
+    fun `only the two boxes stretch per axis`() {
+        assertTrue(layout.controls[trigger].scalesPerAxis())
+        assertTrue(
+            layout.withStickMode(stick, StickMode.DYNAMIC).controls[stick].scalesPerAxis(),
+        )
+        assertTrue(!layout.controls[south].scalesPerAxis())
+        assertTrue(!layout.controls[stick].scalesPerAxis())
+        assertTrue(!layout.controls[dpad].scalesPerAxis())
+    }
+
     @Test
     fun `resizing an index the layout does not have changes nothing`() {
         assertEquals(layout, resolve().resizedControl(99, 2f, snap = false))

@@ -105,6 +105,14 @@ turns up along the way.
       for actions that are all one tap to reverse by hand. *Moving a group as a unit after it has
       been placed* was already off this list — a cluster is that, and more directly than a second
       selection model over loose controls would have been
+- [x] **Resize handles** — eight arrowed indicators on the selection, on the four corners and the
+      middle of each edge, dragged to scale. **The corners keep the aspect ratio and the edges do
+      not**, which is the behaviour every editor has and the thing a pinch could not offer: a
+      shoulder button can now be made longer without also being made taller. The opposite edge stays
+      anchored, so a handle holds the edge it is drawn on rather than growing the control about its
+      centre. Only two shapes have a size per axis to stretch — a `Rect` and a dynamic stick's
+      area — so an edge handle on anything measured by a radius scales it whole; `scalesPerAxis`
+      is the one place that line is drawn. The pinch still works and is unchanged
 - [x] **More built-in layouts** — **Switch** and **Steam Deck** both ship. As predicted, the
       plumbing was the easy part and Nintendo's A/B/X/Y crossing was the part to think about: it
       swaps *both* pairs, so the key drawn A sends what an Xbox pad's B sends. Unlike Xbox and PS5

@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -25,16 +26,24 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
 import com.blugaemand.input.GamepadLayout
+import com.blugaemand.input.HANDLE_TOUCH_RATIO
 import com.blugaemand.input.Placement
+import com.blugaemand.input.ResizeHandle
 import com.blugaemand.input.ResolvedControl
 import com.blugaemand.input.ResolvedLayout
 import com.blugaemand.input.gridStep
+import com.blugaemand.input.handleAt
+import com.blugaemand.input.handleCenterX
+import com.blugaemand.input.handleCenterY
+import com.blugaemand.input.handleRadius
 import com.blugaemand.input.movedControl
 import com.blugaemand.input.previewOf
 import com.blugaemand.input.resizedControl
+import com.blugaemand.input.selectionInset
 import com.blugaemand.input.withPlacement
 import com.blugaemand.ui.theme.OverlayColors
 import com.blugaemand.ui.theme.PadColors
+import kotlin.math.hypot
 
 /**
  * The pad with its wiring pulled out: the same controls in the same places, but a finger moves one
@@ -79,6 +88,7 @@ fun EditorScreen(
     // hold-to-open pill. The gesture is keyed on the surface size instead, which does not change
     // while a finger is down, and reads the current geometry through these.
     val currentResolved by rememberUpdatedState(resolved)
+    val currentSelected by rememberUpdatedState(selected)
     val currentSnap by rememberUpdatedState(snapToGrid)
     val currentOnSelect by rememberUpdatedState(onSelect)
     val currentOnLayoutChange by rememberUpdatedState(onLayoutChange)
@@ -128,6 +138,35 @@ fun EditorScreen(
                                 )
                             }
                             previewAt = null
+                            return@awaitEachGesture
+                        }
+
+                        // A handle belongs to the selection and is drawn outside the control, so
+                        // it is asked about before the pad is hit-tested: a corner indicator on a
+                        // button sitting over another control has to resize the one it belongs to,
+                        // not select the one underneath it.
+                        val grabbed = currentSelected
+                            ?.let { base.controls.getOrNull(it) }
+                            ?.handleAt(
+                                down.position.x,
+                                down.position.y,
+                                base.handleRadius * HANDLE_TOUCH_RATIO,
+                            )
+                        if (grabbed != null) {
+                            val index = currentSelected ?: return@awaitEachGesture
+                            var drag = Offset.Zero
+                            do {
+                                val event = awaitPointerEvent()
+                                drag += event.calculatePan()
+                                if (drag != Offset.Zero) {
+                                    currentOnLayoutChange(
+                                        base.resizedControl(
+                                            index, grabbed, drag.x, drag.y, currentSnap,
+                                        ),
+                                    )
+                                }
+                                event.changes.forEach { it.consume() }
+                            } while (event.changes.any { it.pressed })
                             return@awaitEachGesture
                         }
 
@@ -187,7 +226,10 @@ fun EditorScreen(
                 )
             }
 
-            selected?.let { resolved.controls.getOrNull(it) }?.let { drawSelection(it) }
+            selected?.let { resolved.controls.getOrNull(it) }?.let {
+                drawSelection(it)
+                drawHandles(it, resolved.handleRadius)
+            }
 
             // Drawn last so it reads as sitting above the pad rather than as part of it. Each
             // member is drawn as it will look, ringed in the accent -- the ring is what says "not
@@ -228,7 +270,7 @@ private fun DrawScope.drawSelection(control: ResolvedControl) {
     // round the throw of the stick it spawns.
     val halfWidth = control.extentX
     val halfHeight = control.extentY
-    val inset = halfWidth.coerceAtMost(halfHeight) * 0.25f
+    val inset = control.selectionInset
 
     drawRoundRect(
         color = OverlayColors.Accent,
@@ -247,4 +289,54 @@ private fun DrawScope.drawSelection(control: ResolvedControl) {
     )
 }
 
+/**
+ * The eight resize indicators, on the corners and the middle of each edge of the selection.
+ *
+ * Each wears the arrow it pulls along, which is what says a handle is for dragging and which way:
+ * the corners scale the whole control and the edges stretch their own axis. They are drawn on the
+ * ring rather than inside it so they read as belonging to the selection and not to the pad, and so
+ * a small control is not buried under its own handles.
+ */
+private fun DrawScope.drawHandles(control: ResolvedControl, radius: Float) {
+    for (handle in ResizeHandle.entries) {
+        val center = Offset(control.handleCenterX(handle), control.handleCenterY(handle))
+        drawCircle(OverlayColors.Accent, radius, center)
+        drawArrows(center, radius, handle.dx.toFloat(), handle.dy.toFloat())
+    }
+}
+
+/**
+ * A double-headed arrow through [center], pointing along ([dirX], [dirY]) and back.
+ *
+ * Drawn in the background colour, so it is a hole in the handle rather than another thing on top of
+ * it — at this size an outlined glyph would just read as noise.
+ */
+private fun DrawScope.drawArrows(center: Offset, radius: Float, dirX: Float, dirY: Float) {
+    val length = hypot(dirX, dirY)
+    val axis = Offset(dirX / length, dirY / length)
+    val tip = axis * (radius * ARROW_REACH)
+    val stroke = radius * ARROW_WIDTH
+    drawLine(PadColors.Background, center - tip, center + tip, stroke, StrokeCap.Round)
+
+    // The heads: two short lines off each tip, at 45 degrees either side of the shaft, which is
+    // the rotation of the axis by +/-135 degrees written out.
+    val head = radius * ARROW_HEAD
+    for (sign in listOf(1f, -1f)) {
+        val point = center + tip * sign
+        for (turn in listOf(1f, -1f)) {
+            val back = Offset(
+                -axis.x * HALF_ROOT_TWO - turn * axis.y * HALF_ROOT_TWO,
+                -axis.y * HALF_ROOT_TWO + turn * axis.x * HALF_ROOT_TWO,
+            )
+            drawLine(PadColors.Background, point, point + back * (head * sign), stroke, StrokeCap.Round)
+        }
+    }
+}
+
 private const val GRID_WIDTH = 1f
+
+/** How far along the handle's radius the arrow reaches, and how it is proportioned within that. */
+private const val ARROW_REACH = 0.55f
+private const val ARROW_HEAD = 0.5f
+private const val ARROW_WIDTH = 0.16f
+private const val HALF_ROOT_TWO = 0.7071068f
