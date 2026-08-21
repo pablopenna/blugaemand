@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import com.blugaemand.hid.HidStatus
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutLibrary
+import com.blugaemand.motion.MotionSettings
 
 /** The panels the top bar can have open. Exactly one at a time, or none. */
 enum class TopPanel { Connection, Menu }
@@ -49,6 +50,9 @@ fun TopBar(
     onNewEmptyLayout: () -> Unit,
     onCopyCurrentLayout: () -> Unit,
     onEditLayout: () -> Unit,
+    motion: MotionSettings,
+    motionAvailable: Boolean,
+    onMotionChange: (MotionSettings) -> Unit,
     onQuit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -123,6 +127,12 @@ fun TopBar(
                     onEditLayout()
                     onOpenPanelChange(null)
                 },
+                motion = motion,
+                motionAvailable = motionAvailable,
+                // Deliberately leaves the panel open: motion has four rows that are set against
+                // each other, and a menu that shut on every tap would have to be held open again
+                // for each one.
+                onMotionChange = onMotionChange,
                 onQuit = onQuit,
                 modifier = Modifier.width(180.dp),
             )

@@ -41,6 +41,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.blugaemand.data.LayoutStore
+import com.blugaemand.data.SettingsStore
 import com.blugaemand.hid.GamepadState
 import com.blugaemand.hid.HidGamepadService
 import com.blugaemand.hid.HidStatus
@@ -58,6 +59,10 @@ import com.blugaemand.input.nudgeStep
 import com.blugaemand.input.ungroupedControl
 import com.blugaemand.input.withControlAdded
 import com.blugaemand.input.withControlRemovedAt
+import com.blugaemand.motion.MotionAim
+import com.blugaemand.motion.MotionSensor
+import com.blugaemand.motion.MotionSettings
+import com.blugaemand.motion.withAim
 import com.blugaemand.ui.EditorBar
 import com.blugaemand.ui.EditorScreen
 import com.blugaemand.ui.GamepadScreen
@@ -86,6 +91,47 @@ class MainActivity : ComponentActivity() {
     private var bonded: List<HostOption> by mutableStateOf(emptyList())
 
     private val layoutStore by lazy { LayoutStore(this) }
+    private val settingsStore by lazy { SettingsStore(this) }
+
+    /**
+     * The pad's two sources of stick movement, kept apart because they arrive separately: fingers
+     * on a pointer event, the phone's own rotation on a sensor callback. What the host is told is
+     * always the two of them combined, so whichever arrives has to be able to send the pair.
+     *
+     * Volatile because the sensor writes [aim] from a sensor thread and the touch handler reads it
+     * from the main one.
+     */
+    @Volatile
+    private var touchState = GamepadState.NEUTRAL
+
+    @Volatile
+    private var aim = MotionAim.NONE
+
+    @Volatile
+    private var motionSettings = MotionSettings()
+
+    /**
+     * Whether the pad is the thing on screen, and whether this window is the one being touched.
+     *
+     * The gyroscope keeps reporting through both — an editor being used, a notification shade
+     * pulled down over the pad — and without these it would go on aiming: a stick moving on the
+     * host because the phone was tilted while someone was laying out buttons on it. A thumb cannot
+     * do that, which is why nothing needed this before motion.
+     */
+    @Volatile
+    private var padOnScreen = true
+
+    @Volatile
+    private var windowFocused = true
+
+    private val padActive: Boolean get() = padOnScreen && windowFocused
+
+    private val motionSensor by lazy {
+        MotionSensor(this) { latest ->
+            aim = latest
+            pushState()
+        }
+    }
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -137,6 +183,15 @@ class MainActivity : ComponentActivity() {
                     .collectAsStateWithLifecycle(initialValue = LayoutLibrary())
                 val selectedId by layoutStore.selectedId
                     .collectAsStateWithLifecycle(initialValue = DEFAULT_LAYOUT.id)
+                val motion by settingsStore.motion
+                    .collectAsStateWithLifecycle(initialValue = MotionSettings())
+                // Pushed out to the two things that read it off composition: the sensor, which
+                // starts and stops with it, and the field the report assembly reads from a sensor
+                // thread. Both are outside the composition, so neither can read the state directly.
+                LaunchedEffect(motion) {
+                    motionSettings = motion
+                    motionSensor.configure(motion)
+                }
                 // A selection can outlive the layout it names -- deleting the active layout is the
                 // obvious way, but so is a stored id whose layout failed to parse. Falling back
                 // rather than showing nothing keeps the pad usable either way.
@@ -202,9 +257,6 @@ class MainActivity : ComponentActivity() {
 
                 /** Creates [new], selects it, and opens the editor on it. */
                 fun startEditing(new: GamepadLayout) {
-                    // The pad is about to stop being a pad. Anything held is unreachable from here
-                    // on, so do not leave it asserted on the host.
-                    service?.updateState(GamepadState.NEUTRAL)
                     scope.launch {
                         // Stored before the editor opens, and in one transaction, so that the
                         // editor never opens on a layout the store has not caught up with -- and
@@ -233,6 +285,18 @@ class MainActivity : ComponentActivity() {
                 // that happens -- and staying in there would be editing something that is gone.
                 LaunchedEffect(selectedId, library) {
                     if (editing && !library.isEditable(selectedId)) editing = false
+                }
+
+                // Covering the pad or leaving it puts everything held out of reach, so nothing
+                // should stay asserted on the host — including whatever the phone's own movement
+                // was adding, which unlike a thumb goes on arriving the whole time the editor is
+                // up. Derived from what is on screen rather than released at each of the places
+                // that covers it, because there are five of those and the gyroscope only had to be
+                // forgotten at one of them.
+                val padLive = !editing && openPanel == null
+                LaunchedEffect(padLive) {
+                    padOnScreen = padLive
+                    if (!padLive) releaseControls()
                 }
 
                 // The connection panel only exists to get connected. Once that has happened it is
@@ -349,7 +413,10 @@ class MainActivity : ComponentActivity() {
 
                     GamepadScreen(
                         layout = layout,
-                        onStateChange = { service?.updateState(it) },
+                        onStateChange = {
+                            touchState = it
+                            pushState()
+                        },
                     )
 
                     // Sits between the pad and the bar while a panel is open: dismisses on a
@@ -379,11 +446,6 @@ class MainActivity : ComponentActivity() {
                         openPanel = openPanel,
                         onOpenPanelChange = { panel ->
                             openPanel = panel
-                            if (panel != null) {
-                                // Either panel covers the pad, so anything held is about to be
-                                // unreachable; do not leave it asserted on the host.
-                                service?.updateState(GamepadState.NEUTRAL)
-                            }
                             if (panel == TopPanel.Connection) refreshBondedDevices()
                         },
                         onFixBlocker = { fixBlocker(status) },
@@ -402,7 +464,7 @@ class MainActivity : ComponentActivity() {
                             // Switching rebuilds the router, which drops its pointer bindings
                             // without ever emitting a release — so whatever the last report
                             // asserted would stay asserted on the host.
-                            service?.updateState(GamepadState.NEUTRAL)
+                            releaseControls()
                         },
                         onNewEmptyLayout = {
                             // Not "New layout", which is what the row that creates it is called --
@@ -417,8 +479,10 @@ class MainActivity : ComponentActivity() {
                         onEditLayout = {
                             selectedControl = null
                             editing = true
-                            service?.updateState(GamepadState.NEUTRAL)
                         },
+                        motion = motion,
+                        motionAvailable = motionSensor.available,
+                        onMotionChange = { scope.launch { settingsStore.saveMotion(it) } },
                         onQuit = {
                             openPanel = null
                             stopGamepad()
@@ -434,6 +498,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        motionSensor.start()
         // Bind unconditionally so the UI can read the service's status even when permissions are
         // missing; only promote it to the foreground once we are allowed to.
         bindToService()
@@ -442,6 +507,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        motionSensor.stop()
+        aim = MotionAim.NONE
         // Only the binding goes away; the foreground service keeps the HID session alive.
         runCatching { unbindService(connection) }
         service = null
@@ -449,15 +516,35 @@ class MainActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        windowFocused = hasFocus
         if (hasFocus) {
             goImmersive()
         } else {
             // A shade pull or task switch must not leave buttons stuck down on the host.
-            service?.updateState(GamepadState.NEUTRAL)
+            releaseControls()
         }
     }
 
     // -- Service and permissions --------------------------------------------------------------
+
+    /** Hands the service the two sources combined. Safe to call from any thread. */
+    private fun pushState() {
+        if (!padActive) return
+        service?.updateState(touchState.withAim(motionSettings.target, aim))
+    }
+
+    /**
+     * Drops everything the pad is holding, including whatever the phone's movement was adding.
+     *
+     * Every place that covers the pad or takes it away calls this rather than pushing a neutral
+     * state directly: a bare push would be undone by the next gyroscope reading, which knows
+     * nothing about a panel having opened over the controls.
+     */
+    private fun releaseControls() {
+        touchState = GamepadState.NEUTRAL
+        aim = MotionAim.NONE
+        service?.updateState(GamepadState.NEUTRAL)
+    }
 
     private fun bindToService() {
         val intent = Intent(this, HidGamepadService::class.java)

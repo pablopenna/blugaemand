@@ -13,10 +13,11 @@ import androidx.compose.ui.unit.sp
 import com.blugaemand.R
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutLibrary
+import com.blugaemand.motion.MotionSettings
 import com.blugaemand.ui.theme.OverlayColors
 
 /** Which page of the menu is showing. */
-private enum class MenuPage { Root, Layouts, New }
+private enum class MenuPage { Root, Layouts, New, Motion }
 
 /**
  * The app menu's pill, sitting to the right of [ConnectionPill]. Same shape and same hold to open,
@@ -61,6 +62,10 @@ fun MenuPanel(
     onNewEmptyLayout: () -> Unit,
     onCopyCurrentLayout: () -> Unit,
     onEditLayout: () -> Unit,
+    motion: MotionSettings,
+    /** Whether this phone has a gyroscope to read at all. */
+    motionAvailable: Boolean,
+    onMotionChange: (MotionSettings) -> Unit,
     onQuit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -73,6 +78,13 @@ fun MenuPanel(
                 if (library.isEditable(selectedLayoutId)) {
                     PanelEntry(label = "Edit layout", onClick = onEditLayout)
                 }
+                // Here rather than in the editor, because it is a setting about the phone and the
+                // hands holding it -- it applies whichever layout is on, and a copy of it inside
+                // every layout would be one to set again for each.
+                PanelEntry(
+                    label = "Motion",
+                    trailing = if (motion.enabled) "on" else "off",
+                ) { page = MenuPage.Motion }
                 PanelEntry(label = "Quit", onClick = onQuit)
             }
 
@@ -107,6 +119,42 @@ fun MenuPanel(
                 // list above is how you choose which, and this page stays two rows however many
                 // layouts exist.
                 PanelEntry(label = "Copy of $currentLayoutName", onClick = onCopyCurrentLayout)
+            }
+
+            MenuPage.Motion -> {
+                PanelBack { page = MenuPage.Root }
+
+                if (!motionAvailable) {
+                    // Stated rather than hidden: a missing Motion row would read as a build without
+                    // the feature, and the reason it does nothing here is worth one line.
+                    PanelCaption("This phone has no gyroscope, so there is nothing to read.")
+                    return@PanelCard
+                }
+
+                PanelEntry(
+                    label = "Aim with the phone",
+                    trailing = if (motion.enabled) "on" else "off",
+                    onClick = { onMotionChange(motion.copy(enabled = !motion.enabled)) },
+                )
+                PanelEntry(
+                    label = "Stick",
+                    trailing = motion.target.describe(),
+                    onClick = { onMotionChange(motion.copy(target = motion.target.other())) },
+                )
+                PanelEntry(
+                    label = "Sensitivity",
+                    trailing = "×${motion.sensitivity}",
+                    onClick = { onMotionChange(motion.nextSensitivity()) },
+                )
+                PanelEntry(
+                    label = "Invert vertical",
+                    trailing = if (motion.invertY) "on" else "off",
+                    onClick = { onMotionChange(motion.copy(invertY = !motion.invertY)) },
+                )
+                PanelCaption(
+                    "Turning the phone pushes the ${motion.target.describe()} stick, on top of " +
+                        "whatever a thumb on it is already sending.",
+                )
             }
         }
     }
