@@ -403,20 +403,8 @@ fun ControlId.describe(): String = when (this) {
     ControlId.Dpad -> "D-pad (one cross)"
     is ControlId.DpadButton -> "D-pad ${direction.name.lowercase()}"
     // A plate has no name of its own -- what it is, is what is on it, which only the shape knows.
-    // See ControlSpec.describe, which is what the editor actually calls.
+    // Nothing asks for one: the id names a control being *added*, and a plate is added as a group.
     ControlId.Cluster -> "Control group"
-}
-
-/**
- * How a control is named in the editor, given the whole spec.
- *
- * A cluster needs this rather than [ControlId.describe]: its members live on its shape, so its id
- * alone cannot say what it is, and *"Control group"* is no use in a list where there may be three of
- * them. Naming the members instead — *"Y / X / B / A"* — says which plate is selected.
- */
-fun ControlSpec.describe(): String = when (val shape = shape) {
-    is ControlSpec.Shape.Cluster -> shape.members.joinToString(" / ") { it.describe() }
-    else -> id.describe()
 }
 
 /**

@@ -419,11 +419,13 @@ face diamond, a four-arm D-pad, the centre three, and each shoulder pair side by
 most derived from `DEFAULT_LAYOUT` so tuning it moves them. The editor's *Add control group* page
 has an **As one control** switch that picks which way the chosen one lands:
 
+- **Clustered**, through `ControlGroups.clustered`, and **the default**. One control that has
+  several buttons on it. What you want when the arrangement is the point — see below — which is
+  almost always why a group is being placed rather than four controls one at a time. *Ungroup* is
+  one tap away for when it is not.
 - **Loose**, the original. The members are ordinary controls the moment they are dropped: nothing
   records that they arrived together and nothing in the saved layout says so. What you want when the
   arrangement is a starting point to be tuned.
-- **Clustered**, through `ControlGroups.clustered`. One control that has several buttons on it. What
-  you want when the arrangement is the point — see below.
 
 The switch is held by `MainActivity` alongside **Grid**, not by the panel that shows it. The panel is
 destroyed every time it closes — which placing something does — so state living there would reset
@@ -995,13 +997,14 @@ The three built-ins cannot be changed — make your own instead:
 4. **Add control** then **tap the pad where it should go** — a preview follows your finger until you
    lift. Any control can be added more than once. **Add control group** does the same for several at
    a time: the face diamond, a four-button D-pad, the centre three, or a shoulder pair side by side
-   or stacked. Once dropped they are ordinary controls and move separately.
-5. **As one control**, on the group page, drops that arrangement as a *single* control instead — the
-   face diamond as one plate that sends A, B, X or Y depending on where you touch it. It moves,
+   or stacked.
+5. **As one control**, on the group page, is **on**: the arrangement lands as a *single* control —
+   the face diamond as one plate that sends A, B, X or Y depending on where you touch it. It moves,
    resizes and deletes as one, keeps its shape on any screen, and rolling a thumb across it changes
    button without lifting. **Ungroup**, beside the arrows while a plate is selected, breaks it back
-   into separate controls, each where the plate was drawing it.
-6. **✕** in the head bar takes out whatever is selected. A caption on the menu names any button left
+   into separate controls, each where the plate was drawing it; turning the switch **off** before
+   placing does the same thing up front, dropping ordinary controls that move separately.
+6. **✕ Remove** in the head bar takes out whatever is selected. A caption on the menu names any button left
    with no control — a warning, not an error.
 7. **Trigger**, a head-bar pill, appears only while a trigger is selected — or a plate with one on
    it — and switches that trigger between **binary** (fully pulled while touched, like a button) and **progressive**

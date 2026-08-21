@@ -704,12 +704,6 @@ class LayoutEditsTest {
         assertEquals(layout, resolve().ungroupedControl(99))
     }
 
-    @Test
-    fun `a plate is named by what is on it`() {
-        assertEquals("Y / X / B / A", plated.controls.single().describe())
-        assertEquals("A", layout.controls[south].describe())
-    }
-
     // -- Trigger mode ---------------------------------------------------------------------
 
     @Test

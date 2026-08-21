@@ -149,7 +149,10 @@ class MainActivity : ComponentActivity() {
                 // than in the panel that shows it, because that panel is destroyed every time it
                 // closes -- which placing something does -- and both of these are settings about
                 // how the editor works rather than about the group being placed.
-                var asOneControl by remember { mutableStateOf(false) }
+                // On by default: a plate is what a group of buttons is for -- one thing to place,
+                // move, resize and delete, and a thumb that can roll across it. Ungroup is one tap
+                // for the rarer case, and the switch is right there while you are choosing.
+                var asOneControl by remember { mutableStateOf(true) }
                 // The colours to restore when a layout comes back off an art pack. A layout in
                 // image mode has none saved -- the two styles are alternatives, not layers -- so
                 // without this, looking at a pack and changing your mind would hand back the

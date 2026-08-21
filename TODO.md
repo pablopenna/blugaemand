@@ -66,7 +66,8 @@ turns up along the way.
       placement shortcut only; once dropped the members are ordinary controls, so a layout stays a
       flat list and the editor keeps one selection model
 - [x] **A group can be one control** — `ControlSpec.Shape.Cluster`, offered as an *As one control*
-      switch on the group page. `ControlId.Dpad` was already a control resolving a touch to an
+      switch on the group page, **on by default**: a plate is what a group of buttons is usually
+      wanted for, and *Ungroup* is one tap for when it is not. `ControlId.Dpad` was already a control resolving a touch to an
       output from where inside itself it landed, so this generalises it rather than inventing
       anything, and every one of the seven arrangements clusters — the shoulder pairs were the ones
       that made a plate have to be more than a diamond of circles. The member a touch means is the

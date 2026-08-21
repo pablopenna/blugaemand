@@ -381,9 +381,13 @@ private fun SelectionPills(
     if (spec.shape is ControlSpec.Shape.Cluster) {
         SelectionPill("Ungroup", onClick = onUngroupSelected)
     }
+    // Named for what it does, not for what it would take out. The pill sat beside the selection
+    // ring showing the selection's own name, which said nothing the ring did not already say and
+    // grew the pill to the width of *"Y / X / B / A"* for a plate.
+    //
     // No confirmation, unlike *delete layout*: putting a control back is one tap and a place to
     // drop it.
-    SelectionPill("✕", spec.describe(), onClick = onRemoveSelected)
+    SelectionPill("✕", "Remove", onClick = onRemoveSelected)
 }
 
 /** One head-bar pill: what it is, and the value it is on if it has one. */
