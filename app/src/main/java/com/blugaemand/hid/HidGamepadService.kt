@@ -32,6 +32,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -73,6 +74,26 @@ class HidGamepadService : Service() {
     /** Latest state the UI has produced. Read by the send loop, written by the touch handler. */
     @Volatile
     private var desiredState: GamepadState = GamepadState.NEUTRAL
+
+    /**
+     * Wakes the send loop. Conflated, because what the loop needs to know is *that* something
+     * changed and not how many times — the state itself is read from [desiredState] when it gets
+     * there. A change arriving while the loop is inside a send, or inside its rate-limiting gap, is
+     * held here and taken the moment it comes back round.
+     */
+    private val changes = Channel<Unit>(Channel.CONFLATED)
+
+    /**
+     * When the oldest change not yet on the wire was recorded, or 0 for none pending.
+     *
+     * The *oldest*, not the newest: two changes landing between sends means the first one has been
+     * waiting the longer, and that is the wait a player feels.
+     */
+    @Volatile
+    private var pendingSinceNanos = 0L
+
+    private val latency = LatencyProbe()
+    private var lastLatencyLogNanos = 0L
 
     /** Last report actually put on the wire, used to suppress duplicates. */
     private var lastSentReport: ByteArray? = null
@@ -145,7 +166,10 @@ class HidGamepadService : Service() {
      * decides what actually reaches the host.
      */
     fun updateState(state: GamepadState) {
+        if (state == desiredState) return
         desiredState = state
+        if (pendingSinceNanos == 0L) pendingSinceNanos = System.nanoTime()
+        changes.trySend(Unit)
     }
 
     /** Bonded devices we could plausibly connect to as a gamepad. */
@@ -337,19 +361,48 @@ class HidGamepadService : Service() {
     // -- Report pump ------------------------------------------------------------------------
 
     /**
-     * Sends at most one report per tick, and only when something changed.
+     * Puts a report on the wire when something changes, and never more often than [MIN_SEND_GAP_MS]
+     * apart.
      *
      * Sending straight from the touch handler would put a report on the wire for every pointer
      * move — hundreds per second across several fingers — which saturates the L2CAP interrupt
-     * channel and shows up as lag rather than responsiveness. Coalescing to a fixed rate keeps
-     * latency bounded and predictable.
+     * channel and shows up as lag rather than responsiveness. So the rate is capped. But the cap is
+     * applied *after* a send rather than by polling on a timer: a poll makes every change wait for
+     * the next tick, which costs an isolated button press half the interval on average and the
+     * whole of it at worst, for nothing — there was no traffic to coalesce it with. Waiting on a
+     * change and then holding the line for the gap gives the same ceiling on the wire, and gives a
+     * press that arrives into a quiet channel no wait at all.
+     *
+     * It also means an idle pad wakes nothing up, where the poll ran a hundred times a second
+     * through a pause in play.
+     *
+     * How long a change really waits here is measured rather than reasoned about; see
+     * [LatencyProbe].
      */
     private fun startSendLoop() {
         if (sendJob?.isActive == true) return
         sendJob = scope.launch(reportExecutor.asCoroutineDispatcher()) {
-            while (isActive) {
-                sendIfChanged()
-                delay(SEND_INTERVAL_MS)
+            // Every touch of the probe happens in here, on the one thread this dispatcher has.
+            // Starting and stopping the loop is done from wherever a connection changed, which is
+            // not necessarily that thread, so the tidy-up belongs to the coroutine and not to the
+            // call that cancels it.
+            latency.reset()
+            lastLatencyLogNanos = System.nanoTime()
+            try {
+                // The host has just connected and knows nothing about the pad's state, so the
+                // first pass through is unconditional rather than waiting for a finger to arrive.
+                changes.trySend(Unit)
+                while (isActive) {
+                    changes.receive()
+                    val sent = sendIfChanged()
+                    logLatencyPeriodically()
+                    if (sent) delay(MIN_SEND_GAP_MS)
+                }
+            } finally {
+                // The tail of the session, which is otherwise the window most likely to be thrown
+                // away unlogged -- a host dropping out is exactly when the numbers are interesting.
+                latency.summary()?.let { Log.i(TAG, "latency: $it") }
+                latency.reset()
             }
         }
     }
@@ -358,18 +411,51 @@ class HidGamepadService : Service() {
         sendJob?.cancel()
         sendJob = null
         lastSentReport = null
+        pendingSinceNanos = 0L
     }
 
+    /** Sends the current state if it differs from the last one on the wire; says whether it did. */
     @SuppressLint("MissingPermission")
-    private fun sendIfChanged() {
-        val host = connectedHost ?: return
-        val hid = hidDevice ?: return
-        val report = profile.encode(desiredState)
-        if (report.contentEquals(lastSentReport)) return
+    private fun sendIfChanged(): Boolean {
+        val host = connectedHost ?: return false
+        val hid = hidDevice ?: return false
 
-        runCatching { hid.sendReport(host, profile.reportId, report) }
+        // Claimed before the encode, so a change landing during the send is timed from its own
+        // arrival and not from this one's. The one it cannot separate is a change that lands
+        // between these two lines, which is then measured as part of the report already going out
+        // -- a sample too fast by a fraction of a millisecond, in a number whose point is the
+        // slow tail.
+        val queuedAt = pendingSinceNanos
+        pendingSinceNanos = 0L
+
+        val report = profile.encode(desiredState)
+        if (report.contentEquals(lastSentReport)) return false
+
+        val startedAt = System.nanoTime()
+        val ok = runCatching { hid.sendReport(host, profile.reportId, report) }
             .onSuccess { lastSentReport = report }
             .onFailure { Log.w(TAG, "sendReport failed", it) }
+            .isSuccess
+        val finishedAt = System.nanoTime()
+
+        if (queuedAt != 0L) latency.record(startedAt - queuedAt, finishedAt - startedAt)
+        return ok
+    }
+
+    /**
+     * Writes a window of measurements to the log, at most one line every
+     * [LATENCY_LOG_INTERVAL_MS].
+     *
+     * Logged rather than shown: this is for tuning the pump against a host, which is done with
+     * `logcat` beside a connected phone, and a read-out on the pad would be one more thing drawn
+     * over the controls during play.
+     */
+    private fun logLatencyPeriodically() {
+        val now = System.nanoTime()
+        if (now - lastLatencyLogNanos < LATENCY_LOG_INTERVAL_MS * 1_000_000L) return
+        lastLatencyLogNanos = now
+        latency.summary()?.let { Log.i(TAG, "latency: $it") }
+        latency.reset()
     }
 
     // -- Plumbing ---------------------------------------------------------------------------
@@ -458,7 +544,18 @@ class HidGamepadService : Service() {
         private const val CHANNEL_ID = "hid_gamepad"
         private const val NOTIFICATION_ID = 1
 
-        /** 100 Hz. Faster gains nothing perceptible; slower starts to feel sluggish. */
-        private const val SEND_INTERVAL_MS = 10L
+        /**
+         * The shortest gap between two reports: 100 Hz, the ceiling the wire is held to.
+         *
+         * Unchanged from the interval the polling pump ran at, and deliberately so — it is a cap on
+         * a channel now rather than a delay every input pays, so the case for lowering it is much
+         * weaker than it was. Whether 100 Hz is the right ceiling at all is a question for measured
+         * numbers from a real host; [LatencyProbe] is what produces them and TODO.md records what
+         * is still to be measured.
+         */
+        private const val MIN_SEND_GAP_MS = 10L
+
+        /** How often the pad writes what it has measured to the log while connected. */
+        private const val LATENCY_LOG_INTERVAL_MS = 10_000L
     }
 }
