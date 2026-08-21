@@ -202,6 +202,11 @@ host. Only the service and the Compose layer touch the framework.
 - `PadStyle` — a `LayoutStyle` resolved for drawing: ARGB `Int`s become Compose `Color`s, and glyph
   names become `Painter`s. It exists because `painterResource` is a composable while the pad draws
   inside a `Canvas` lambda, which is not composition — painters have to be resolved up front.
+  One `Painter` per icon, shared by every control drawing it, which is why `drawGlyph` rasterises
+  every picture at one fixed square and lets the canvas scale it: a vector painter re-renders when
+  the size it is asked for changes, and applies that a frame late, so two controls with the same
+  icon at different sizes each drew the other's picture. Two A buttons and a pinch on one is how
+  that surfaced — in image mode only, since shapes are drawn from numbers every frame.
 - `ControlIcons` — `ControlIcon → R.drawable`, the only file in the app that mentions `R.drawable`.
 - `TopBar` — the two pills pinned to the top edge and whichever panel is open below them. Panel
   state is one nullable `TopPanel`, not a boolean each, so "only one open at a time" is structural.

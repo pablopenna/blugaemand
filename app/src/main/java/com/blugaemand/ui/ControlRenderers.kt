@@ -6,6 +6,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.Painter
@@ -146,6 +147,14 @@ private fun DrawScope.drawTriggerValue(
  *
  * The touch area is deliberately left as the resolved shape, which for those wide controls is
  * larger than the picture — a trigger that is easier to hit than it looks is the right way round.
+ *
+ * **The picture is always rasterised at [GLYPH_RASTER] and scaled into place**, rather than drawn
+ * at the size it ends up. A `Painter` is resolved once per icon and shared by every control using
+ * it, and a vector one re-renders itself when the size it is asked for changes — a change it
+ * applies on the *next* frame. Two controls with the same icon at different sizes therefore each
+ * left the other holding a picture rendered for its neighbour, which showed up as a duplicated
+ * button flickering at the size of the one being resized. One size for every draw means the cache
+ * is never asked to be two things at once, and the canvas does the resizing instead.
  */
 private fun DrawScope.drawGlyph(control: ResolvedControl, glyph: Painter) {
     val extent = if (control.radius > 0f) {
@@ -155,9 +164,18 @@ private fun DrawScope.drawGlyph(control: ResolvedControl, glyph: Painter) {
     }
 
     translate(left = control.centerX - extent / 2f, top = control.centerY - extent / 2f) {
-        with(glyph) { draw(Size(extent, extent)) }
+        scale(extent / GLYPH_RASTER, pivot = Offset.Zero) {
+            with(glyph) { draw(Size(GLYPH_RASTER, GLYPH_RASTER)) }
+        }
     }
 }
+
+/**
+ * The pixel square every glyph is rendered into. Comfortably above the size a control is drawn at
+ * on a phone, so scaling is almost always down, and small enough that a plate's worth of cached
+ * bitmaps stays in the hundreds of kilobytes each.
+ */
+private const val GLYPH_RASTER = 256f
 
 private fun DrawScope.drawCircleControl(
     control: ResolvedControl,
