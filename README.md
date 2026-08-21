@@ -687,8 +687,9 @@ unless the pill would fall off the bottom of the glass, in which case above. `To
 is what the renderer asks, and it is the same number the host is being sent, computed the same way:
 a read-out disagreeing with the report would be worse than no read-out. It answers for a trigger
 reached as a plate member too, positioned against the plate, since the plate is what the binding is
-on. A binary trigger gets one as well, pinned at `255` — the read-out says what is going to the
-host, which is as true of a switch as of a pull, and it is how the mode shows on the pad at all.
+on. **A binary trigger has none**: `triggerValue` answers null for one however hard it is held. It
+sends one number and only that number, so a pill pinned at `255` adds nothing to a control that has
+already lit up, and a number that never moves reads as a broken analog trigger rather than a switch.
 
 **A saved layout carries `"triggerMode"` on every control**, like `"label"`, and it is defaulted
 rather than required. That is deliberately *not* a format version bump: a layout that does not name

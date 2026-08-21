@@ -201,15 +201,17 @@ class TouchRouter(private val layout: ResolvedLayout) {
      * the finger is over. What it cannot do is answer for two triggers on one plate at once, which
      * is the same first-pointer-wins simplification those two already make.
      *
-     * A [TriggerMode.BINARY] trigger answers here as well, with the 255 it is sending. The read-out
-     * says what is going to the host, and "the host is being told 255" is as true of a switch as of
-     * a pull — and seeing it pinned there is how the mode shows on the pad at all.
+     * A [TriggerMode.BINARY] trigger answers null even while held. It sends one number and only
+     * that number, so a read-out pinned at 255 says nothing a lit-up control does not already —
+     * and a number that never moves reads as a broken analog one rather than as a switch.
      */
     fun triggerValue(controlIndex: Int): Int? {
         val binding = bindings.values.firstOrNull {
             it.control.index == controlIndex && it.target().id is ControlId.Trigger
         } ?: return null
-        return binding.valueOf(binding.target())
+        val trigger = binding.target()
+        if (trigger.spec.triggerMode == TriggerMode.BINARY) return null
+        return binding.valueOf(trigger)
     }
 
     /** Builds the state to send to the host from every currently held control. */

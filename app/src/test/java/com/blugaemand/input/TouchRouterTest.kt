@@ -866,11 +866,13 @@ class TouchRouterTest {
     }
 
     @Test
-    fun `the read-out shows what a binary trigger is sending too`() {
+    fun `a binary trigger has no read-out, held or not`() {
+        // It sends one number, so the number is not what there is to see -- the control lighting
+        // up says everything a pinned 255 would.
         val router = binaryRouter()
         assertNull(router.triggerValue(TRIGGER))
         router.down(1, 500f, 50f)
-        assertEquals(GamepadState.AXIS_MAX, router.triggerValue(TRIGGER))
+        assertNull("held, but still a switch", router.triggerValue(TRIGGER))
     }
 
     @Test
@@ -930,7 +932,7 @@ class TouchRouterTest {
         router.down(1, 500f, 175f)
         router.move(1, 500f, 225f) // a slide that would read 96 on a progressive one
         assertEquals(GamepadState.AXIS_MAX, router.state().rightTrigger)
-        assertEquals(GamepadState.AXIS_MAX, router.triggerValue(0))
+        assertNull("binary, so no read-out", router.triggerValue(0))
     }
 
     @Test
