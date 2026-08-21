@@ -482,7 +482,10 @@ Unordered; pull from here whenever.
         stick resizes the area, capped by `MAX_AREA_EXTENT` (`1.0`, against a control's `0.40`);
         the throw is the radius, tuned by pinching as a fixed stick, and nothing is lost across the
         switch either way. Worth revisiting if it turns out nobody finds that.
-      - **The base follows the finger** past full deflection, and the area governs spawning only.
+      - **The anchor does not move.** A spawned stick is centred on the touch-down point until the
+        finger lifts; past the radius the value clamps. The area governs spawning only, so the
+        finger may leave it. (Tried it the other way first, with the base towed along behind a
+        finger past full deflection — a stick you can drag around the screen is not a stick.)
       - **The area loses to anything drawn on it**, and takes **one finger at a time** — the first
         refusal `down` has ever made. The *no built-in layout has overlapping controls* test skips
         pairs involving an area; no built-in ships one yet.

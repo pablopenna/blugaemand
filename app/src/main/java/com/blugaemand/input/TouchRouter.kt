@@ -14,8 +14,8 @@ import kotlin.math.roundToInt
  * -1..1 pair on each axis.
  *
  * The base is part of the answer because a [StickMode.DYNAMIC] stick's centre is wherever the thumb
- * landed rather than where the control is drawn. A fixed stick's base is simply its own centre, so
- * one type says both and the renderer needs no branch.
+ * landed rather than where the control is drawn. A fixed stick's base is its own centre, so one
+ * type says both and the renderer needs no branch.
  */
 data class StickTouch(
     val baseX: Float,
@@ -38,65 +38,32 @@ class TouchRouter(private val layout: ResolvedLayout) {
 
     private class Binding(
         val control: ResolvedControl,
-        /** Where the finger went down, which is what a trigger's pull is measured against. */
+        /**
+         * Where the finger went down: what a trigger's pull is measured against, and where a
+         * dynamic stick is centred for as long as the finger is down.
+         */
         val startX: Float,
         val startY: Float,
         var x: Float,
         var y: Float,
     ) {
         /**
-         * Where the stick this pointer spawned is centred, for a dynamic one — the point the
-         * offset is measured about, and where the renderer draws the base.
-         *
-         * Starts at the touch-down point, which is the whole of what makes a stick dynamic, and
-         * then **follows the finger** once it is a full deflection away; see [follow]. Meaningless
-         * for anything else, and the only thing that reads it checks the control first.
-         */
-        var baseX: Float = startX
-        var baseY: Float = startY
-
-        /**
-         * Moves this pointer, dragging a dynamic stick's base along behind it.
-         *
-         * Past the radius the base is pulled up to sit exactly one radius back along the line to
-         * the finger, rather than pinning where the stick appeared. So the stick stays at full
-         * deflection in the direction it is being pushed and the thumb can keep going as far as it
-         * likes — off the area it spawned in, off the far side of the screen — and turning the
-         * finger around turns the stick with it instead of swinging it through a centre that is
-         * now somewhere behind the hand.
-         *
-         * The area has no say in any of this: it decides where a stick may be *started* and
-         * nothing after that, which is the same rule that already lets a thumb roll off a button
-         * without releasing it.
-         */
-        fun follow(toX: Float, toY: Float) {
-            x = toX
-            y = toY
-            if (!control.isDynamicStick) return
-            val dx = x - baseX
-            val dy = y - baseY
-            val distance = hypot(dx, dy)
-            if (distance <= control.radius || distance <= 0f) return
-            val overshoot = (distance - control.radius) / distance
-            baseX += dx * overshoot
-            baseY += dy * overshoot
-        }
-
-        /**
          * Where this pointer's stick is centred and how far it is pushed, or null if it is not on
          * a stick at all.
          *
-         * The one answer to both halves of the question, for the same reason `triggerValue` is the
-         * one answer to what a trigger is sending: the renderer places the base and the cap from
-         * exactly the numbers the host is being sent, so the picture cannot disagree with the
-         * report. A fixed stick answers here too, about its own centre — which is what makes the
-         * renderer's two cases one.
+         * One answer to both halves, for the reason `triggerValue` is one answer to what a trigger
+         * is sending: the renderer places the base and the cap from the numbers the host is being
+         * sent, so the picture cannot disagree with the report.
+         *
+         * A dynamic stick is centred on the touch-down point and **stays there** until the finger
+         * lifts — the same anchor a trigger's pull is measured from, read on both axes. A fixed
+         * stick is centred on the control, which is what leaves the renderer one case.
          */
         fun stickTouch(): StickTouch? {
             if (control.spec.shape !is ControlSpec.Shape.Stick) return null
             val dynamic = control.isDynamicStick
-            val baseX = if (dynamic) baseX else control.centerX
-            val baseY = if (dynamic) baseY else control.centerY
+            val baseX = if (dynamic) startX else control.centerX
+            val baseY = if (dynamic) startY else control.centerY
             val (dx, dy) = control.offsetAbout(
                 baseX, baseY, x, y,
                 deadZone = if (dynamic) DYNAMIC_DEAD_ZONE else 0f,
@@ -160,7 +127,10 @@ class TouchRouter(private val layout: ResolvedLayout) {
 
     /** Updates a pointer already bound to a control. Unbound pointers are ignored. */
     fun move(pointerId: Long, x: Float, y: Float) {
-        bindings[pointerId]?.follow(x, y)
+        bindings[pointerId]?.let {
+            it.x = x
+            it.y = y
+        }
     }
 
     fun up(pointerId: Long) {
@@ -322,9 +292,10 @@ class TouchRouter(private val layout: ResolvedLayout) {
         /**
          * Displacement from a point, clamped to the control's radius and scaled to -1..1.
          *
-         * The point is the control's own centre for a fixed stick and the moving base for a
+         * The point is the control's own centre for a fixed stick and the touch-down point for a
          * dynamic one, which is the whole of the difference between them: the same arithmetic
-         * about a different origin.
+         * about a different origin. Past the radius the value clamps, so a finger that keeps going
+         * holds full deflection.
          *
          * [deadZone] is a fraction of the radius that reads as dead centre, with the rest of the
          * throw stretched over what is left so the value climbs from zero at its edge rather than

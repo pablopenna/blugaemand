@@ -676,13 +676,13 @@ whole of the routing change.
   where its centre *is*. Same rule as `triggerValue`: one answer, from the binding, so the picture
   cannot disagree with what the host is being sent. A fixed stick answers there too, about its own
   centre, which is what leaves the renderer with one case instead of two.
-- **The base follows the finger, and off the area if it goes there.** Once the finger is a full
-  deflection out, the base is dragged up behind it to sit exactly one radius back, rather than
-  pinning where the stick appeared. So the stick stays at full throw in the direction it is being
-  pushed, the thumb can keep going as far as it likes, and turning around turns the stick with it
-  instead of swinging it through a centre now somewhere behind the hand. **The area is for spawning
-  only** — it decides where a stick may be *started* and has no say over anything after that, which
-  is the rule that already lets a thumb roll off a button without releasing it.
+- **The anchor does not move.** Once a stick has spawned it is centred on that point until the
+  finger lifts. Past the radius the value simply clamps, so a finger that keeps going holds full
+  deflection and comes back to a centre that is exactly where it left it — which is what a stick
+  under a thumb is: something you push against, not something you tow. **The area is for spawning
+  only** — it decides where a stick may be *started* and has no say over anything after that, so
+  the finger is free to leave it, which is the rule that already lets a thumb roll off a button
+  without releasing it.
 - **The area loses to anything drawn on top of it.** A Start button inside the rectangle is a Start
   button: `hitTest` gives the touch to any non-area control containing the point, however far its
   centre is, and only falls back to the areas when nothing else was touched. This makes the area the

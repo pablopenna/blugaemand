@@ -352,25 +352,27 @@ class TouchRouterTest {
     }
 
     @Test
-    fun `the base follows the finger past full deflection`() {
+    fun `the anchor stays where the stick spawned`() {
         val router = dynamicRouter()
         router.down(1, 200f, 250f)
         router.move(1, 500f, 250f) // 300 pixels out, three times the throw
 
-        // Dragged along behind the finger, one radius back, so the stick is still at full throw
-        // and the thumb can keep going as far as it likes.
+        // Past the radius the value clamps and the stick stays put, so the finger holds full
+        // deflection wherever it goes and comes back to a centre that has not moved.
         val touch = router.stickTouch(STICK)!!
-        assertEquals(400f, touch.baseX, 0.001f)
+        assertEquals(200f, touch.baseX, 0.001f)
         assertEquals(250f, touch.baseY, 0.001f)
         assertEquals(1f, touch.offsetX, 0.001f)
         assertEquals(GamepadState.AXIS_MAX, router.state().leftStickX)
 
-        // And turning around turns the stick with it, rather than swinging it through a centre
-        // left somewhere behind the hand: coming back 50 pixels from a base now at 400 pushes the
-        // stick the other way, by the 50 travelled less the 12-pixel dead zone over the 88 of
-        // throw that is left beyond it.
-        router.move(1, 350f, 250f)
-        assertEquals(-38f / 88f, unitOf(router.state().leftStickX), 0.01f)
+        router.move(1, 350f, 250f) // still beyond the radius, so still full throw
+        assertEquals(200f, router.stickTouch(STICK)!!.baseX, 0.001f)
+        assertEquals(GamepadState.AXIS_MAX, router.state().leftStickX)
+
+        // Back inside it, measured from the same anchor: 50 travelled, less the 12-pixel dead
+        // zone, over the 88 of throw beyond it.
+        router.move(1, 250f, 250f)
+        assertEquals(38f / 88f, unitOf(router.state().leftStickX), 0.01f)
     }
 
     @Test

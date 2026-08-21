@@ -145,8 +145,8 @@ enum class StickMode {
      *
      * The answer to the thing a fixed stick is bad at — a thumb that has to find the stick before
      * it can push it, in the dark, mid-game. See `TouchRouter` for how one behaves once it exists:
-     * the base follows the finger past full deflection, the area governs spawning and nothing
-     * else, and one area carries one stick at a time.
+     * it stays where it spawned, the area governs spawning and nothing else, and one area carries
+     * one stick at a time.
      */
     DYNAMIC,
 }
