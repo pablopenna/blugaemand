@@ -182,6 +182,10 @@ turns up along the way.
       pins that no pack answers for a `DpadButton` so this cannot drift back. What is actually
       needed is art of an *arm*, which means drawing it rather than converting it — a much bigger
       job than a conversion run, and worth deciding on rather than assuming
+- [x] **Overlapping controls all press together.** `hitTestAll` binds a finger to every control
+      under it, so two buttons stacked on one spot send both. Stacking was always representable and
+      used to make the control underneath unreachable. The editor still selects one — `hitTest` is
+      that question, and takes the nearest
 - [ ] Import / export layouts as JSON so they can be shared. The format exists and is versioned;
       what is left is the file picker and the share sheet. Two things to decide there: what to do
       with an incoming id that collides with a local layout (copies already take a fresh UUID, so

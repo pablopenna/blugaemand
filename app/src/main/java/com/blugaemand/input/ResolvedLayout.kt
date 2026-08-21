@@ -190,20 +190,36 @@ class ResolvedLayout(
     }
 
     /**
-     * The control under a touch point, or null. When controls overlap the nearest centre wins,
-     * which keeps behaviour predictable in tight clusters like the face buttons.
+     * The *one* control under a touch point, or null: the nearest centre of everything
+     * [hitTestAll] found. What the editor selects and drags, where a single answer is the whole
+     * point — the pad binds to all of them instead.
      *
-     * **Except that a dynamic stick's area always loses.** A Start button sitting inside one is a
+     * **A dynamic stick's area always loses.** A Start button sitting inside one is a
      * Start button, and nearest-centre alone would hand a touch on its edge to an area whose centre
      * happens to be closer. So an area is a background: anything else containing the point beats
      * it, however far away its centre is, and the areas are only considered when nothing else was
      * touched. Between two areas — a layout nobody sensible will make, but a representable one —
      * nearest centre decides as usual.
      */
-    fun hitTest(x: Float, y: Float): ResolvedControl? {
+    fun hitTest(x: Float, y: Float): ResolvedControl? = hitTestAll(x, y).firstOrNull()
+
+    /**
+     * Every control under a touch point, nearest centre first — what the pad binds a finger to.
+     *
+     * **Overlapping controls are all pressed at once.** Two buttons stacked on the same spot are a
+     * layout asking for one thumb to send both, which is the only thing that arrangement can
+     * reasonably mean; picking one of them and ignoring the rest would make the second control
+     * unreachable and silently pointless. The editor still selects one — [hitTest] is that
+     * question, and it takes the nearest.
+     *
+     * A dynamic stick's area is still a background, exactly as [hitTest] describes: anything drawn
+     * over one takes the touch instead, so a Start button inside a stick area is a Start button and
+     * does not also spawn a stick. Only when nothing else was touched do the areas answer.
+     */
+    fun hitTestAll(x: Float, y: Float): List<ResolvedControl> {
         val touched = controls.filter { it.contains(x, y) }
         val drawnOnTop = touched.filterNot { it.isDynamicStick }
-        return drawnOnTop.ifEmpty { touched }.minByOrNull { hypot(x - it.centerX, y - it.centerY) }
+        return drawnOnTop.ifEmpty { touched }.sortedBy { hypot(x - it.centerX, y - it.centerY) }
     }
 
     private companion object {

@@ -37,6 +37,7 @@ data class StickTouch(
 class TouchRouter(private val layout: ResolvedLayout) {
 
     private class Binding(
+        val pointerId: Long,
         val control: ResolvedControl,
         /**
          * Where the finger went down: what a trigger's pull is measured against, and where a
@@ -103,38 +104,48 @@ class TouchRouter(private val layout: ResolvedLayout) {
         )
     }
 
-    private val bindings = LinkedHashMap<Long, Binding>()
+    // A list rather than a map from pointer to control, because one finger may hold several: a
+    // layout is free to stack controls on the same spot, and a thumb there is on all of them.
+    // Insertion order stands in for the map's, so the questions answered by the first binding found
+    // still mean the finger that got there first.
+    private val bindings = mutableListOf<Binding>()
 
     /**
-     * Registers a new pointer. Returns true if it landed on a control.
+     * Registers a new pointer against every control it landed on. Returns true if that was any.
      *
-     * **A dynamic stick's area takes one finger at a time**, which is a new thing for this to
-     * refuse: every other control takes as many as land on it, because two thumbs on one face
-     * plate are two buttons and two thumbs on one cross are one direction either way. An area with
-     * a stick already out of it has nothing to do with a second finger — a second stick from the
-     * same area would fight the first for the same axes — so that finger binds to nothing at all,
-     * exactly as a touch on bare glass does. If it landed on a control drawn over the area it
-     * never got here: [ResolvedLayout.hitTest] gave it that control instead.
+     * **Overlapping controls all bind**, so one thumb on two stacked buttons sends both — see
+     * [ResolvedLayout.hitTestAll], which also keeps a dynamic stick's area beneath anything drawn
+     * over it.
+     *
+     * **A dynamic stick's area takes one finger at a time**, which is the one thing this refuses:
+     * every other control takes as many as land on it, because two thumbs on one face plate are
+     * two buttons and two thumbs on one cross are one direction either way. An area with a stick
+     * already out of it has nothing to do with a second finger — a second stick from the same area
+     * would fight the first for the same axes — so that area is dropped from what the finger binds
+     * to, and a finger left with nothing binds to nothing at all, exactly as a touch on bare glass
+     * does.
      */
     fun down(pointerId: Long, x: Float, y: Float): Boolean {
-        val control = layout.hitTest(x, y) ?: return false
-        if (control.isDynamicStick && bindings.values.any { it.control.index == control.index }) {
-            return false
-        }
-        bindings[pointerId] = Binding(control, startX = x, startY = y, x = x, y = y)
+        val occupied = bindings.mapTo(mutableSetOf()) { it.control.index }
+        val targets = layout.hitTestAll(x, y)
+            .filterNot { it.isDynamicStick && it.index in occupied }
+        if (targets.isEmpty()) return false
+        targets.mapTo(bindings) { Binding(pointerId, it, startX = x, startY = y, x = x, y = y) }
         return true
     }
 
     /** Updates a pointer already bound to a control. Unbound pointers are ignored. */
     fun move(pointerId: Long, x: Float, y: Float) {
-        bindings[pointerId]?.let {
-            it.x = x
-            it.y = y
+        for (binding in bindings) {
+            if (binding.pointerId == pointerId) {
+                binding.x = x
+                binding.y = y
+            }
         }
     }
 
     fun up(pointerId: Long) {
-        bindings.remove(pointerId)
+        bindings.removeAll { it.pointerId == pointerId }
     }
 
     /** Releases everything, e.g. when the window loses focus mid-press. */
@@ -148,7 +159,7 @@ class TouchRouter(private val layout: ResolvedLayout) {
      * By index and not by [ControlId], because a layout may hold the same id twice: keyed by id,
      * pressing one of two A buttons would light both.
      */
-    fun activeControls(): Set<Int> = bindings.values.mapTo(mutableSetOf()) { it.control.index }
+    fun activeControls(): Set<Int> = bindings.mapTo(mutableSetOf()) { it.control.index }
 
     /**
      * Which members of the cluster at [controlIndex] are held, by their ordinal within it.
@@ -156,7 +167,7 @@ class TouchRouter(private val layout: ResolvedLayout) {
      * The union across every pointer, not the first one found: two thumbs on one face plate are two
      * bindings onto the same control, and they are meant to light — and send — two buttons.
      */
-    fun activeMembers(controlIndex: Int): Set<Int> = bindings.values
+    fun activeMembers(controlIndex: Int): Set<Int> = bindings
         .filter { it.control.index == controlIndex && it.control.members.isNotEmpty() }
         .mapTo(mutableSetOf()) { it.target().index }
 
@@ -172,7 +183,7 @@ class TouchRouter(private val layout: ResolvedLayout) {
      * exactly that.
      */
     fun dpadPush(controlIndex: Int): Hat? {
-        val binding = bindings.values.firstOrNull { it.control.index == controlIndex } ?: return null
+        val binding = bindings.firstOrNull { it.control.index == controlIndex } ?: return null
         return binding.control.hatFor(binding.x, binding.y)
     }
 
@@ -189,7 +200,7 @@ class TouchRouter(private val layout: ResolvedLayout) {
      * layout, but they are a representable one, and they should not move in lockstep.
      */
     fun stickTouch(controlIndex: Int): StickTouch? =
-        bindings.values.firstOrNull { it.control.index == controlIndex }?.stickTouch()
+        bindings.firstOrNull { it.control.index == controlIndex }?.stickTouch()
 
     /**
      * What the trigger at [controlIndex] is sending right now, in the 1..255 range a touched
@@ -206,7 +217,7 @@ class TouchRouter(private val layout: ResolvedLayout) {
      * and a number that never moves reads as a broken analog one rather than as a switch.
      */
     fun triggerValue(controlIndex: Int): Int? {
-        val binding = bindings.values.firstOrNull {
+        val binding = bindings.firstOrNull {
             it.control.index == controlIndex && it.target().id is ControlId.Trigger
         } ?: return null
         val trigger = binding.target()
@@ -274,7 +285,7 @@ class TouchRouter(private val layout: ResolvedLayout) {
             }
         }
 
-        for (binding in bindings.values) apply(binding)
+        for (binding in bindings) apply(binding)
 
         // A held cross wins. A layout carrying both is a layout where the cross is the deliberate
         // one, and letting a stray arm override a thumb already on the cross would be worse than

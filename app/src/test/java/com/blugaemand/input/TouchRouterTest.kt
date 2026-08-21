@@ -935,6 +935,95 @@ class TouchRouterTest {
         assertNull("binary, so no read-out", router.triggerValue(0))
     }
 
+    /** Two buttons on exactly the same spot, which is the arrangement stacking is for. */
+    private fun stackedRouter(): TouchRouter {
+        val stacked = GamepadLayout(
+            id = "stacked",
+            name = "Stacked",
+            controls = listOf(
+                ControlSpec(
+                    ControlId.Button(GamepadButton.SOUTH),
+                    ControlSpec.Shape.Circle(0.5f, 0.5f, radius = 0.1f),
+                ),
+                ControlSpec(
+                    ControlId.Button(GamepadButton.EAST),
+                    ControlSpec.Shape.Circle(0.5f, 0.5f, radius = 0.1f),
+                ),
+            ),
+        )
+        return TouchRouter(ResolvedLayout(stacked, 1000f, 500f))
+    }
+
+    @Test
+    fun `one finger on two stacked buttons sends both`() {
+        val router = stackedRouter()
+        assertTrue(router.down(1, 500f, 250f))
+
+        val state = router.state()
+        assertTrue("A", state.isPressed(GamepadButton.SOUTH))
+        assertTrue("B", state.isPressed(GamepadButton.EAST))
+        assertEquals("both light", setOf(0, 1), router.activeControls())
+
+        router.up(1)
+        assertEquals(GamepadState.NEUTRAL, router.state())
+        assertTrue(router.activeControls().isEmpty())
+    }
+
+    @Test
+    fun `a finger only on one of the two sends only that one`() {
+        // Controls need not be stacked exactly. Half a radius off centre is inside one and outside
+        // the other, and only the one it is in answers.
+        val offset = GamepadLayout(
+            id = "offset",
+            name = "Offset",
+            controls = listOf(
+                ControlSpec(
+                    ControlId.Button(GamepadButton.SOUTH),
+                    ControlSpec.Shape.Circle(0.5f, 0.5f, radius = 0.1f),
+                ),
+                ControlSpec(
+                    ControlId.Button(GamepadButton.EAST),
+                    ControlSpec.Shape.Circle(0.56f, 0.5f, radius = 0.1f),
+                ),
+            ),
+        )
+        val router = TouchRouter(ResolvedLayout(offset, 1000f, 500f))
+
+        router.down(1, 520f, 250f) // inside both
+        assertEquals(setOf(0, 1), router.activeControls())
+        router.up(1)
+
+        router.down(2, 465f, 250f) // inside the first alone
+        assertEquals(setOf(0), router.activeControls())
+        assertFalse(router.state().isPressed(GamepadButton.EAST))
+    }
+
+    @Test
+    fun `a stacked binding holds until the finger lifts, wherever it strays`() {
+        // The same rule one binding has always had, applied to all of them: a thumb rolling off
+        // the buttons does not release them.
+        val router = stackedRouter()
+        router.down(1, 500f, 250f)
+        router.move(1, 900f, 450f)
+
+        assertEquals(setOf(0, 1), router.activeControls())
+        assertTrue(router.state().isPressed(GamepadButton.SOUTH))
+        assertTrue(router.state().isPressed(GamepadButton.EAST))
+    }
+
+    @Test
+    fun `a second finger on the stack changes nothing, and lifting one leaves the other`() {
+        val router = stackedRouter()
+        router.down(1, 500f, 250f)
+        router.down(2, 505f, 255f)
+        assertEquals(setOf(0, 1), router.activeControls())
+
+        router.up(1)
+        assertEquals("the second finger is still on both", setOf(0, 1), router.activeControls())
+        router.up(2)
+        assertTrue(router.activeControls().isEmpty())
+    }
+
     @Test
     fun `only triggers have a read-out`() {
         val router = router()

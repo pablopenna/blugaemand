@@ -461,6 +461,25 @@ destroyed every time it closes — which placing something does — so state liv
 after every drop, and laying out a pad of plates would mean setting it again for each one. Both are
 settings about how the editor works rather than about the thing being placed.
 
+### Overlapping controls all press together
+
+`hitTestAll` answers with **every** control under a touch point, nearest centre first, and `down`
+binds the finger to all of them. One thumb on two stacked buttons sends both.
+
+Stacking one control on another is the only way to ask for that, and the layout format has always
+allowed it — a position is a position, and nothing stops two controls sharing one. What used to
+happen is that the nearest centre took the touch and the other control was unreachable: on the pad
+it looked like a button that did nothing, with nothing to say why. Sending both is the only reading
+of a deliberate stack that is not silently broken.
+
+Everything else about a binding is unchanged, and now simply happens more than once: each holds
+until the finger lifts, wherever it strays, and a second finger on the same stack binds again rather
+than stealing anything. A dynamic stick's area stays underneath — see below — so a button dropped
+inside one does not also spawn a stick. **The editor still selects one control**, which is what
+`hitTest` is for: it is `hitTestAll` taking the nearest, and dragging two controls with one finger
+is not an edit anyone means to make. The way to reach the one underneath is to move the top one off
+it.
+
 ### A cluster: one control with several buttons on it
 
 `ControlId.Dpad` was already a control that resolves a touch to an output from *where inside itself*
@@ -748,8 +767,10 @@ whole of the routing change.
   the finger is free to leave it, which is the rule that already lets a thumb roll off a button
   without releasing it.
 - **The area loses to anything drawn on top of it.** A Start button inside the rectangle is a Start
-  button: `hitTest` gives the touch to any non-area control containing the point, however far its
-  centre is, and only falls back to the areas when nothing else was touched. This makes the area the
+  button: `hitTestAll` gives the touch to the non-area controls containing the point, however far
+  their centres are, and only falls back to the areas when nothing else was touched. That is what
+  keeps an area out of the stacking above — a control drawn over one takes the touch instead of
+  sharing it. This makes the area the
   first control *meant* to overlap others, so the *no built-in layout has overlapping controls* test
   skips pairs involving one.
 - **One stick per area: first finger wins, the second is ignored.** Not queued, not stacked — a
