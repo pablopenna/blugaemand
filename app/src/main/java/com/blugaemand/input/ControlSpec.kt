@@ -115,8 +115,8 @@ enum class TriggerMode {
      * Full pull the moment it is touched: [com.blugaemand.hid.GamepadState.AXIS_MAX] while a finger
      * is on it, released when it lifts.
      *
-     * What a trigger did before it was analog at all, kept because plenty of games only ask whether
-     * the trigger is down and a slide that has to be aimed is worse than a tap for those.
+     * **The default**: most games only ask whether the trigger is down, and for those a value that
+     * has to be aimed is worse than a tap. The slide is opted into per trigger.
      */
     BINARY,
 
@@ -174,10 +174,11 @@ data class ControlSpec(
      * Only meaningful for a [ControlId.Trigger], and ignored by every other control — like [label],
      * which is likewise carried by everything and shown only by some.
      *
-     * Defaulted rather than required so that every layout saved before the setting existed reads
-     * back as the behaviour it was saved with, and so a hand-written layout can leave it out.
+     * Defaulted rather than required so a hand-written layout can leave it out and no file needs
+     * migrating to gain it. Every built-in takes the default, so it is set here and not restated
+     * eight times.
      */
-    val triggerMode: TriggerMode = TriggerMode.PROGRESSIVE,
+    val triggerMode: TriggerMode = TriggerMode.BINARY,
     /**
      * Only meaningful for a [ControlId.Stick] drawn as a [Shape.Stick], and ignored by everything
      * else — carried by every control the way [label] and [triggerMode] are, and shown by some.

@@ -10,9 +10,9 @@ labels, and **Xbox**, **PS5**, **Switch**, **Switch 2**, **Steam Deck**, **Wii U
 buttons out. **You can also make your own**,
 from empty or as a copy of one of those, and move, resize, add and remove controls on it — including
 whole arrangements dropped as **one control**, so a face diamond is a single plate that sends A, B,
-X or Y depending on where you touch it. Triggers are analog or binary per control, and a stick is
-either fixed where it is drawn or **dynamic** — an area where the stick appears under your thumb
-wherever it lands. Layouts and the choice of one are saved between launches. 
+X or Y depending on where you touch it. Triggers are binary by default and analog per control if
+you want the slide, and a stick is either fixed where it is drawn or **dynamic** — an area where
+the stick appears under your thumb wherever it lands. Layouts and the choice of one are saved between launches. 
 Verified end-to-end against **Linux** and **Windows**.
 Two pills sit at the top edge, each opening
 its panel on a 600 ms hold: the left one is connection status and pairing, the right one
@@ -559,12 +559,15 @@ one.
 ### Analog triggers
 
 A trigger sends a value, not a press, and **each one is set to one of two `TriggerMode`s** —
-progressive or binary — by the row the editor shows when it is selected.
+binary or progressive — by the row the editor shows when it is selected.
 
-**Binary is the simple one: `255` while a finger is on it, `0` when there is not.** What a trigger
-did before it was analog at all, and kept because plenty of games only ask whether the trigger is
-down; for those, a value that has to be aimed is worse than a tap. Nothing about where the finger
-goes matters, so a binary trigger can be tucked anywhere a button can.
+**Binary is the default, and the simple one: `255` while a finger is on it, `0` when there is
+not.** What a trigger did before it was analog at all, and the default because most games only ask
+whether the trigger is down; for those, a value that has to be aimed is worse than a tap. A pad
+should behave like a pad before it behaves like a pedal, so the slide is the thing you opt into on
+the triggers that want it. Nothing about where the finger goes matters, so a binary trigger can be
+tucked anywhere a button can. **Every built-in layout is binary**, none of them naming a mode at
+all — they take the default, so this is one constant rather than a line repeated eight times.
 
 The mode lives on `ControlSpec`, not on `ControlId.Trigger`. An id is what a control *is*, and it is
 compared as one all over the app — `withControlAdded` counts copies by it, `missingButtons`
@@ -630,11 +633,15 @@ on. A binary trigger gets one as well, pinned at `255` — the read-out says wha
 host, which is as true of a switch as of a pull, and it is how the mode shows on the pad at all.
 
 **A saved layout carries `"triggerMode"` on every control**, like `"label"`, and it is defaulted
-rather than required. That is deliberately *not* a format version bump: a layout saved before the
-setting existed comes back progressive, which is the behaviour it was saved with, and a layout
-saved with it loads on an older build as progressive too — `ignoreUnknownKeys` skips the field.
-Bumping the version would instead have made old files unreadable until a migration was written, to
-buy nothing.
+rather than required. That is deliberately *not* a format version bump: a layout that does not name
+a mode comes back binary, and a layout that does loads on a build that predates the setting as the
+progressive trigger that build only knew how to be — `ignoreUnknownKeys` skips the field. Bumping
+the version would instead have made old files unreadable until a migration was written, to buy
+nothing. The default is a behaviour, not a compatibility promise: it moved from progressive to
+binary once there were two modes to choose between, and moving it again would re-answer for every
+file that stays quiet about it. Files written by this build are not quiet — `encodeDefaults` puts
+the key on every control — so what a change to the default reaches is hand-written layouts and
+anything saved before the setting existed.
 
 All of this is `TouchRouter`, `LayoutEdits` and the renderer. The descriptor already declared the
 full range and the encoder already forwarded it, so neither changed.
@@ -956,8 +963,9 @@ The three built-ins cannot be changed — make your own instead:
 6. **Remove** takes out whatever is selected. A caption names any button left with no control — a
    warning, not an error.
 7. **Trigger** appears only while a trigger is selected — or a plate with one on it — and switches
-   that trigger between **progressive** (rests halfway, slide to pull it) and **binary** (fully
-   pulled while touched, like a button). Each trigger is set on its own, so one pad can have both.
+   that trigger between **binary** (fully pulled while touched, like a button) and **progressive**
+   (rests halfway, slide to pull it). Binary is what every trigger starts as, including on the
+   built-in pads. Each trigger is set on its own, so one pad can have both.
 8. **Stick** appears only while a thumbstick is selected, and switches it between **fixed** — where
    it is drawn, pinch to resize its throw — and **dynamic**, an area where the stick appears under
    your thumb wherever it lands inside it and vanishes when you lift. Pinching a dynamic stick

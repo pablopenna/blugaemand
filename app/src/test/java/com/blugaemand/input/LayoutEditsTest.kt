@@ -593,17 +593,17 @@ class LayoutEditsTest {
     // -- Trigger mode ---------------------------------------------------------------------
 
     @Test
-    fun `a trigger starts progressive and switches to binary`() {
-        assertEquals(TriggerMode.PROGRESSIVE, layout.controls[trigger].triggerModeOrNull())
+    fun `a trigger starts binary and switches to progressive`() {
+        assertEquals(TriggerMode.BINARY, layout.controls[trigger].triggerModeOrNull())
 
-        val binary = layout.withTriggerMode(trigger, TriggerMode.BINARY)
-        assertEquals(TriggerMode.BINARY, binary.controls[trigger].triggerModeOrNull())
+        val progressive = layout.withTriggerMode(trigger, TriggerMode.PROGRESSIVE)
+        assertEquals(TriggerMode.PROGRESSIVE, progressive.controls[trigger].triggerModeOrNull())
         // The setting and nothing else: a mode is not a move, and the control it is set on has to
         // come back the same size in the same place.
-        assertEquals(layout.controls[trigger].shape, binary.controls[trigger].shape)
+        assertEquals(layout.controls[trigger].shape, progressive.controls[trigger].shape)
         assertEquals(
             layout.controls.filterIndexed { i, _ -> i != trigger },
-            binary.controls.filterIndexed { i, _ -> i != trigger },
+            progressive.controls.filterIndexed { i, _ -> i != trigger },
         )
     }
 
@@ -634,13 +634,13 @@ class LayoutEditsTest {
                 ),
             ),
         )
-        assertEquals(TriggerMode.PROGRESSIVE, shoulders.controls[0].triggerModeOrNull())
+        assertEquals(TriggerMode.BINARY, shoulders.controls[0].triggerModeOrNull())
 
-        val binary = shoulders.withTriggerMode(0, TriggerMode.BINARY)
-        val members = binary.cluster(0).members
-        assertEquals(TriggerMode.BINARY, members[0].triggerMode)
+        val progressive = shoulders.withTriggerMode(0, TriggerMode.PROGRESSIVE)
+        val members = progressive.cluster(0).members
+        assertEquals(TriggerMode.PROGRESSIVE, members[0].triggerMode)
         assertEquals(shoulders.cluster(0).members[1], members[1])
-        assertEquals(TriggerMode.BINARY, binary.controls[0].triggerModeOrNull())
+        assertEquals(TriggerMode.PROGRESSIVE, progressive.controls[0].triggerModeOrNull())
     }
 
     @Test

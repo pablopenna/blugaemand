@@ -45,6 +45,8 @@ class TouchRouterTest {
             ControlSpec(
                 ControlId.Trigger(Side.LEFT),
                 ControlSpec.Shape.Rect(0.5f, 0.1f, width = 0.1f, height = 0.1f),
+                // Named, not defaulted: the slide is what most of the trigger tests are about.
+                triggerMode = TriggerMode.PROGRESSIVE,
             ),
         ),
     )
@@ -669,6 +671,7 @@ class TouchRouterTest {
                 ControlSpec(
                     ControlId.Trigger(Side.LEFT),
                     ControlSpec.Shape.Rect(0.5f, 0.4f, width = 0.1f, height = 0.1f),
+                    triggerMode = TriggerMode.PROGRESSIVE,
                 ),
             ),
         )
@@ -692,6 +695,7 @@ class TouchRouterTest {
                 ControlSpec(
                     ControlId.Trigger(Side.RIGHT),
                     ControlSpec.Shape.Rect(0.95f, 0.3f, width = 0.1f, height = 0.1f),
+                    triggerMode = TriggerMode.PROGRESSIVE,
                 ),
             ),
         )
@@ -713,6 +717,7 @@ class TouchRouterTest {
             ControlSpec(
                 ControlId.Trigger(Side.RIGHT),
                 ControlSpec.Shape.Rect(0.7f, 0.3f, width = 0.1f, height = 0.1f),
+                triggerMode = TriggerMode.PROGRESSIVE,
             ),
         ),
     )
@@ -755,6 +760,7 @@ class TouchRouterTest {
                 ControlSpec(
                     ControlId.Trigger(Side.LEFT),
                     ControlSpec.Shape.Rect(0.5f, 0.9f, width = 0.1f, height = 0.1f),
+                    triggerMode = TriggerMode.PROGRESSIVE,
                 ),
             ),
         )
@@ -871,14 +877,15 @@ class TouchRouterTest {
             id = "mixed",
             name = "Mixed",
             controls = listOf(
+                // The left one takes the default, the right one names the other mode.
                 ControlSpec(
                     ControlId.Trigger(Side.LEFT),
                     ControlSpec.Shape.Rect(0.2f, 0.1f, width = 0.1f, height = 0.1f),
-                    triggerMode = TriggerMode.BINARY,
                 ),
                 ControlSpec(
                     ControlId.Trigger(Side.RIGHT),
                     ControlSpec.Shape.Rect(0.8f, 0.1f, width = 0.1f, height = 0.1f),
+                    triggerMode = TriggerMode.PROGRESSIVE,
                 ),
             ),
         )
@@ -1073,6 +1080,7 @@ class TouchRouterTest {
                             ControlSpec(
                                 ControlId.Trigger(Side.RIGHT),
                                 ControlSpec.Shape.Rect(0f, -0.15f, width = 0.4f, height = 0.2f),
+                                triggerMode = TriggerMode.PROGRESSIVE,
                             ),
                             ControlSpec(
                                 ControlId.Button(GamepadButton.R1),

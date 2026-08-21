@@ -459,8 +459,12 @@ Unordered; pull from here whenever.
       and not on `ControlId.Trigger`, because an id is compared as identity all over the app and a
       mode carried there would make a binary ZR and a progressive ZR two different controls. Per
       control and not per layout: a progressive accelerator and a digital handbrake is one pad.
-      Defaulted rather than required, so no format version bump — an older file reads as
-      progressive, and an older build reads a newer file as progressive too
+      Defaulted rather than required, so no format version bump — a file that does not name a mode
+      reads as the default, and an older build reads a newer file as the progressive trigger it is
+      the only kind of. **The default is `BINARY`**, changed from `PROGRESSIVE` once there were two
+      modes to pick between: most games only ask whether the trigger is down, and a pad should
+      behave like a pad before it behaves like a pedal. It is also what every built-in gets, none
+      of them naming a mode
 - [x] **Dynamic sticks** — a `StickMode` on `ControlSpec` defaulting to the fixed stick, one row on
       the editor's root page while a stick is selected, a defaulted field so no format version bump.
       A **dynamic** stick is a rectangular area with no stick drawn in it: a touch inside makes one
