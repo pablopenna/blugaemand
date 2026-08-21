@@ -270,8 +270,8 @@ private fun DrawScope.drawStick(
     )
 }
 
-private const val SHAFT_RADIUS = 0.62f
-private const val SHAFT_TRAVEL = 0.5f
+private const val SHAFT_RADIUS = 0.72f
+private const val SHAFT_TRAVEL = 0.4f
 
 /**
  * The outline of the rectangle a dynamic stick may be spawned in.
