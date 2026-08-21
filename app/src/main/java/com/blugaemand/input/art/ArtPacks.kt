@@ -12,7 +12,15 @@ object ArtPacks {
      * This is what a saved layout's pack id resolves against, so a pack that is not in this list is
      * a pack no layout can be loaded with.
      */
-    val ALL: List<ArtPack> = listOf(XBOX_ART, PLAYSTATION_ART, SWITCH_ART, STEAM_DECK_ART)
+    val ALL: List<ArtPack> = listOf(
+        XBOX_ART,
+        PLAYSTATION_ART,
+        SWITCH_ART,
+        SWITCH2_ART,
+        STEAM_DECK_ART,
+        GAMECUBE_ART,
+        WII_U_ART,
+    )
 
     fun byId(id: String): ArtPack? = ALL.firstOrNull { it.id == id }
 }

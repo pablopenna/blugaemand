@@ -111,8 +111,27 @@ turns up along the way.
       these two are **authored in full rather than derived** — the Pro Controller leans both lower
       controls inboard, the Deck rides high because its trackpads own the lower third, and a derived
       geometry would have made them the default pad with different pictures on it
-- [ ] Further plates, now that the shape is a pack file and a layout file: GameCube, Wii U and the
-      Switch 2 are all in the same Kenney download
+- [x] **Further plates — GameCube, Wii U and Switch 2 all ship.** The prediction held: a plate is a
+      pack file and a layout file, and nothing outside those two and the icon enum had to change.
+      Three things worth keeping from doing it:
+
+      - **The Switch 2 is a pack stated as a difference.** Of the 112 pictures across Kenney's two
+        Switch folders, **105 are byte-identical files** — only ZL and ZR were redrawn, plus the new
+        C, GL and GR, which the profile has no slot for. So `SWITCH2_ART` is `SWITCH_ART.glyphs`
+        with two entries replaced and owns four `ControlIcon` names rather than thirty, and
+        `SWITCH2_LAYOUT` derives from `SWITCH_LAYOUT` outright. The `PS_`/`PS5_` split, pushed one
+        step further: there the two pads differed in more than a picture
+      - **`art/input/` is flat and Kenney's download is not.** Both Switch folders ship a
+        `switch_button_zl.svg`, and they are *different pictures*, so copying both in would have
+        left whichever landed second. The four redrawn triggers came in renamed `switch2_*` — the
+        one place a file here does not match its name upstream. Worth checking for whenever art
+        from a new console folder is added
+      - **`LayoutSerializationTest` used `gamecube` as its example of a pack that is not
+        installed**, which stopped being an example the moment the plate landed. It now says
+        `tomato`. Nothing named after a console was ever safe there
+- [ ] Further plates still in the same download, if they are ever wanted: Steam Controller, Steam
+      Frame, Nintendo Wii, Meta Quest, Valve Index and Playdate. None was skipped for a reason —
+      the three named above were simply the three the backlog asked for
 - [ ] D-pad glyph lighting the direction being pushed rather than the whole cross — the directional
       art exists, but `drawControl` is told only whether the control is held, not which way. The
       four-button D-pad needs the same art and does not have it either: each arm is one control, so

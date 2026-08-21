@@ -106,12 +106,17 @@ class LayoutSerializationTest {
 
     @Test
     fun `a layout naming a pack that is not installed is refused, and says which`() {
+        // The id is deliberately absurd. This test used to say `gamecube`, which was a fine
+        // stand-in for "a pad we do not ship" right up until the GameCube plate landed and turned
+        // an assertion about missing packs into an assertion that a real one is missing. Nothing
+        // named after a console is safe here; `tomato` is, and it is what the bad-button test above
+        // already uses.
         val text = layoutFileOf(
             """{"id":"x","name":"x","controls":[],""" +
-                """"style":{"type":"images","pack":"gamecube"}}""",
+                """"style":{"type":"images","pack":"tomato"}}""",
         )
         val error = assertThrowsSerialization { decodeLayouts(text) }
-        assertTrue(error, "gamecube" in error)
+        assertTrue(error, "tomato" in error)
     }
 
     // -- Versioning -----------------------------------------------------------------------

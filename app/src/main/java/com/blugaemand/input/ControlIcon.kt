@@ -24,6 +24,12 @@ package com.blugaemand.input
  * layout is free to want a specific one. `SWITCH_LS` and `DECK_LS` are the exception to the
  * outline-and-solid pairing — neither pack draws a stick-click button, so both pair a picture of
  * the stick with a picture of it being pressed, which says the same thing.
+ *
+ * `SWITCH2_` is the same split as `PS_`/`PS5_`, and a much sharper one: of the 112 pictures Kenney
+ * ships for the two Switch generations, 105 are byte-identical files. Only the triggers were
+ * redrawn, so the Switch 2 owns exactly four names and
+ * [com.blugaemand.input.art.SWITCH2_ART] reuses `SWITCH_` for everything else rather than
+ * duplicating a hundred drawables to say the same thing twice.
  */
 enum class ControlIcon {
     XBOX_A,
@@ -155,4 +161,59 @@ enum class ControlIcon {
 
     DECK_DPAD,
     DECK_DPAD_PRESSED,
+
+    SWITCH2_ZL,
+    SWITCH2_ZL_PRESSED,
+    SWITCH2_ZR,
+    SWITCH2_ZR_PRESSED,
+
+    GAMECUBE_A,
+    GAMECUBE_A_PRESSED,
+    GAMECUBE_B,
+    GAMECUBE_B_PRESSED,
+    GAMECUBE_X,
+    GAMECUBE_X_PRESSED,
+    GAMECUBE_Y,
+    GAMECUBE_Y_PRESSED,
+
+    GAMECUBE_L,
+    GAMECUBE_L_PRESSED,
+    GAMECUBE_R,
+    GAMECUBE_R_PRESSED,
+    GAMECUBE_Z,
+    GAMECUBE_Z_PRESSED,
+
+    GAMECUBE_START,
+    GAMECUBE_START_PRESSED,
+
+    GAMECUBE_DPAD,
+    GAMECUBE_DPAD_PRESSED,
+
+    WIIU_A,
+    WIIU_A_PRESSED,
+    WIIU_B,
+    WIIU_B_PRESSED,
+    WIIU_X,
+    WIIU_X_PRESSED,
+    WIIU_Y,
+    WIIU_Y_PRESSED,
+
+    WIIU_L,
+    WIIU_L_PRESSED,
+    WIIU_R,
+    WIIU_R_PRESSED,
+    WIIU_ZL,
+    WIIU_ZL_PRESSED,
+    WIIU_ZR,
+    WIIU_ZR_PRESSED,
+
+    WIIU_MINUS,
+    WIIU_MINUS_PRESSED,
+    WIIU_PLUS,
+    WIIU_PLUS_PRESSED,
+    WIIU_HOME,
+    WIIU_HOME_PRESSED,
+
+    WIIU_DPAD,
+    WIIU_DPAD_PRESSED,
 }

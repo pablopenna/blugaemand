@@ -4,9 +4,10 @@ Turns an Android phone into a real Bluetooth gamepad. The host sees a standard H
 driver, no companion app, no root.
 
 **Current state:** an Xbox-style pad (two sticks, D-pad, ABXY, four shoulder controls, the three
-centre buttons, two stick clicks), offered in five presentations — **Default**, drawn as shapes and
-labels, and **Xbox**, **PS5**, **Switch** and **Steam Deck**, drawn with each console's button art
-and laid out the way that console lays its buttons out. **You can also make your own**,
+centre buttons, two stick clicks), offered in eight presentations — **Default**, drawn as shapes and
+labels, and **Xbox**, **PS5**, **Switch**, **Switch 2**, **Steam Deck**, **Wii U** and
+**GameCube**, drawn with each console's button art and laid out the way that console lays its
+buttons out. **You can also make your own**,
 from empty or as a copy of one of those, and move, resize, add and remove controls on it — including
 whole arrangements dropped as **one control**, so a face diamond is a single plate that sends A, B,
 X or Y depending on where you touch it. Layouts and the choice of one are saved between launches. 
@@ -292,7 +293,7 @@ Only the two fills that change with press state belong to the layout. Strokes, l
 well and the canvas stay in `PadColors`: they are the pad's chrome rather than the layout's
 identity, and a layout free to recolour its strokes is a layout free to make itself invisible.
 
-### The five built-in plates
+### The eight built-in plates
 
 | | Geometry | Face plate |
 |---|---|---|
@@ -300,10 +301,17 @@ identity, and a layout free to recolour its strokes is a layout free to make its
 | **Xbox** | derived from Default, unchanged | Xbox prompts |
 | **PS5** | derived, with the left cluster restated | PlayStation prompts |
 | **Switch** | authored in full | Switch prompts |
+| **Switch 2** | derived from Switch, unchanged | Switch prompts, triggers redrawn |
 | **Steam Deck** | authored in full | Steam Deck prompts |
+| **Wii U** | authored in full | Wii U prompts |
+| **GameCube** | authored in full | GameCube prompts |
 
-Xbox is derived because a Series pad genuinely is the default arrangement. The other three are not,
-and a derived geometry would have made them the same pad with different pictures on it:
+Two are derived, and for the same reason: a Series pad genuinely *is* the default arrangement, and a
+Switch 2 Pro Controller genuinely is a Pro Controller — same sticks, same diamond, same D-pad, same
+shoulder row. What the newer Nintendo pad adds is a C button and two back paddles, and the profile
+has no slot for either, so restating fifteen controls would only give the two plates somewhere to
+drift apart. The rest are authored, because a derived geometry would have made them the same pad
+with different pictures on it:
 
 - **PS5** puts the D-pad opposite the diamond and drops the left stick level with the right, because
   PlayStation has never used the offset arrangement.
@@ -316,13 +324,26 @@ and a derived geometry would have made them the same pad with different pictures
   sticks, D-pad and diamond are all pushed up and outboard, the diamond is tighter than the shared
   one, and the centre is spread — View and Options high and wide apart, the Steam button alone and
   low.
+- **Wii U** puts *both sticks in a row along the top* and both clusters in a row underneath, level
+  rather than splayed. Every other plate here pairs a stick with a cluster on each side; this one
+  does not, which is why it looks wrong to anyone expecting a Switch pad and right to anyone who
+  owned one.
+- **GameCube** is the only plate whose face buttons are not a diamond at all: a large central A with
+  B, X and Y as smaller satellites around it, and the C-stick tucked underneath rather than sitting
+  as a peer of the left stick.
 
-Two things neither of the new plates can show: the Deck's trackpads and back paddles, and the Switch
-having no L3/R3 buttons at all (you press the sticks). The stick clicks are put along the bottom
-edge on both, out of the way, because there is no authentic place for them.
+Three things none of these plates can show: the Deck's trackpads and back paddles, the Switch 2's C
+button and paddles, and the fact that neither a Pro Controller nor a GameCube pad has L3/R3 buttons
+at all — on a Pro Controller you press the sticks, and a GameCube's do not click. The stick clicks go
+along the bottom edge on all of them, out of the way, because there is no authentic place for them.
 
-**The Switch plate is where the face-button crossing bites hardest.** Every pack keys its glyph to
-the position on the diamond, and Nintendo swaps *both* pairs relative to Xbox:
+**The GameCube plate is where a pack is most visibly incomplete**, and deliberately so: five of its
+controls draw as plain shapes because the 2001 pad has no such button. It has no Select, no Home and
+no stick clicks, and its shoulder row is three buttons — L, R and Z — for the four slots the profile
+declares. Each keeps a neutral label rather than borrowing another button's prompt.
+
+**The Nintendo plates are where the face-button crossing bites hardest.** Every pack keys its glyph
+to the position on the diamond, and Nintendo swaps *both* pairs relative to Xbox:
 
 | Position | Slot | Xbox | Nintendo |
 |---|---|---|---|
@@ -333,8 +354,13 @@ the position on the diamond, and Nintendo swaps *both* pairs relative to Xbox:
 
 So **the key drawn A sends the same button an Xbox pad's B sends**. That is not a bug — it is the
 swap every Switch owner already lives with, and matching the printed letter instead would move the
-button under the thumb rather than the picture on it. Valve kept Microsoft's arrangement, so the
-Steam Deck plate is the only one where the printed letter and the reported letter agree everywhere.
+button under the thumb rather than the picture on it. It applies to the Switch, Switch 2 and Wii U
+plates alike; the Wii U is where Nintendo started doing it.
+
+Two plates are exempt, for opposite reasons. Valve kept Microsoft's arrangement, so **Steam Deck**
+agrees everywhere. And the **GameCube** predates the swap — its printed letters land on the slots
+that report them, so the key drawn A really does send A. That makes it the one Nintendo plate where
+copying the Switch table would be wrong in all four positions.
 
 ### Layouts, built-in and user-made
 
@@ -750,7 +776,7 @@ The three built-ins cannot be changed — make your own instead:
    each where the plate was drawing it.
 6. **Remove** takes out whatever is selected. A caption names any button left with no control — a
    warning, not an error.
-7. **Appearance** picks how the pad is drawn: *Shapes and colours*, or one of the four art packs.
+7. **Appearance** picks how the pad is drawn: *Shapes and colours*, or one of the seven art packs.
    In colours mode a picker sits below the rule — tap *At rest* or *Held* to say which fill it is
    adjusting, then drag on the square and the hue bar; in image mode the art carries its own colours,
    so there is nothing there to pick. Going back to shapes returns the colours you had.
@@ -856,6 +882,13 @@ a clean checkout; run `python3 art/input/convert-input-art.py` after changing th
 also covers Switch, Steam Deck and others, which is what makes a new face plate a pack file and a
 three-line layout.
 
+**`art/input/` is flat, and Kenney's download is not.** Its art is keyed on the console folder, so
+`Nintendo Switch` and `Nintendo Switch 2` each ship a `switch_button_zl.svg` — different pictures
+under one name, and copying both in would silently leave whichever landed second. Only the four
+redrawn Switch 2 triggers are carried across, renamed `switch2_*` on the way in. That rename is the
+one place a file here does not match its name upstream, and it is worth checking for whenever art
+from a new folder is added.
+
 Two of those files are **chrome rather than control art**: `generic_joystick` and
 `generic_joystick_red` mark the two halves of the menu's layout list. They deliberately do **not**
 become `ControlIcon` entries — that enum is a saved-layout compatibility surface, and a menu icon has
@@ -868,11 +901,22 @@ guide button falls back to a drawn shape rather than borrowing another button's 
 and Steam Deck sets do have their guide buttons — Home and Steam — so on those two nothing falls
 back but the sticks. Expect the same kind of gap in any pack, and prefer the fallback to a near-miss.
 
-Four families ship: Xbox, PlayStation, Switch and Steam Deck. Neither Nintendo's nor Valve's set has
-coloured face buttons — both draw them in one colour, as the real pads are — so on those two plates
-the pressed picture is the solid fill rather than a second hue. Neither has a stick-click button
-either, so `SWITCH_LS` and `DECK_LS` pair a picture of the stick with a picture of it pressed, which
-says the same thing.
+Seven families ship: Xbox, PlayStation, Switch, Switch 2, Steam Deck, Wii U and GameCube. Most of
+the Nintendo and Valve sets have no coloured face buttons — they draw them in one colour, as the
+real pads are — so the pressed picture is the solid fill rather than a second hue. The GameCube is
+the exception among them, because its A and B really are green and red, and those two take a
+colour-fill pressed picture the way Xbox's do.
+
+Stick clicks are the other uneven part. Only the Switch and Steam Deck sets draw a pressed stick, so
+`SWITCH_LS` and `DECK_LS` pair a picture of the stick with a picture of it pressed, which says the
+same thing; the Wii U set has no pressed stick and the GameCube pad has no click at all, so on both
+of those plates L3 and R3 fall back to their labels.
+
+**Switch 2 is a pack stated as a difference, not a copy.** Of the 112 pictures across Kenney's two
+Switch folders, 105 are byte-identical files — only the triggers were redrawn, plus the new C, GL
+and GR buttons. So `SWITCH2_ART` is `SWITCH_ART`'s map with two entries replaced, and owns four
+`ControlIcon` names rather than thirty. The same split as `PS_`/`PS5_`, pushed one step further:
+there the two pads differed in more than a picture, and here they do not.
 
 The conversion is a text transform, not an SVG renderer, and it can be because these files are
 uniformly simple: a 64×64 canvas, one or two `<path>` elements, no strokes, a solid hex fill, and

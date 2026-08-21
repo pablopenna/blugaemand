@@ -55,6 +55,32 @@ class LayoutArtTest {
             "A" to Glyph(ControlIcon.SWITCH_B, ControlIcon.SWITCH_B_PRESSED),
             "B" to Glyph(ControlIcon.SWITCH_A, ControlIcon.SWITCH_A_PRESSED),
         ),
+        // The Switch 2 pack states itself as a difference from the Switch one and changes only the
+        // triggers, so the crossing has to come through it untouched. That is exactly what this
+        // row is for: written out in full rather than pointed at the row above, so the day someone
+        // edits SWITCH2_ART's face keys the two rows disagree and this fails.
+        "switch2" to mapOf(
+            "Y" to Glyph(ControlIcon.SWITCH_X, ControlIcon.SWITCH_X_PRESSED),
+            "X" to Glyph(ControlIcon.SWITCH_Y, ControlIcon.SWITCH_Y_PRESSED),
+            "A" to Glyph(ControlIcon.SWITCH_B, ControlIcon.SWITCH_B_PRESSED),
+            "B" to Glyph(ControlIcon.SWITCH_A, ControlIcon.SWITCH_A_PRESSED),
+        ),
+        // The Wii U is where Nintendo's crossing came from, so it reads exactly like the Switch.
+        "wiiu" to mapOf(
+            "Y" to Glyph(ControlIcon.WIIU_X, ControlIcon.WIIU_X_PRESSED),
+            "X" to Glyph(ControlIcon.WIIU_Y, ControlIcon.WIIU_Y_PRESSED),
+            "A" to Glyph(ControlIcon.WIIU_B, ControlIcon.WIIU_B_PRESSED),
+            "B" to Glyph(ControlIcon.WIIU_A, ControlIcon.WIIU_A_PRESSED),
+        ),
+        // And the GameCube is the Nintendo pad that does *not* cross, which is worth a test of its
+        // own rather than an absence: it is the one row here where a copy-paste from the Switch
+        // table would be wrong in all four positions.
+        "gamecube" to mapOf(
+            "Y" to Glyph(ControlIcon.GAMECUBE_Y, ControlIcon.GAMECUBE_Y_PRESSED),
+            "X" to Glyph(ControlIcon.GAMECUBE_X, ControlIcon.GAMECUBE_X_PRESSED),
+            "A" to Glyph(ControlIcon.GAMECUBE_A, ControlIcon.GAMECUBE_A_PRESSED),
+            "B" to Glyph(ControlIcon.GAMECUBE_B, ControlIcon.GAMECUBE_B_PRESSED),
+        ),
         // Valve kept Microsoft's arrangement, so this one is the only plate where the printed
         // letter and the reported letter agree everywhere.
         "steamdeck" to mapOf(
@@ -90,6 +116,34 @@ class LayoutArtTest {
         "steamdeck" to setOf(
             ControlId.Stick(ControlId.Side.LEFT),
             ControlId.Stick(ControlId.Side.RIGHT),
+        ),
+        // Kenney redrew only the triggers for the Switch 2, and SWITCH2_ART inherits the rest, so
+        // this plate has the same one gap the Switch plate does.
+        "switch2" to setOf(
+            ControlId.Stick(ControlId.Side.LEFT),
+            ControlId.Stick(ControlId.Side.RIGHT),
+        ),
+        // A Wii U Pro's sticks do click, but Kenney draws no pressed stick in this pack -- only the
+        // Switch and Steam Deck packs ship that pair -- so L3 and R3 fall back rather than wear a
+        // picture of an unpressed stick.
+        "wiiu" to setOf(
+            ControlId.Stick(ControlId.Side.LEFT),
+            ControlId.Stick(ControlId.Side.RIGHT),
+            ControlId.Button(GamepadButton.L3),
+            ControlId.Button(GamepadButton.R3),
+        ),
+        // The longest list in this table, and every entry is a button the 2001 pad does not have:
+        // no Select, no Home, no stick clicks, and three shoulder buttons for four slots. Held as
+        // a set rather than waved through, so a pack that quietly borrows a prompt for one of them
+        // fails here.
+        "gamecube" to setOf(
+            ControlId.Stick(ControlId.Side.LEFT),
+            ControlId.Stick(ControlId.Side.RIGHT),
+            ControlId.Button(GamepadButton.L1),
+            ControlId.Button(GamepadButton.BACK),
+            ControlId.Button(GamepadButton.GUIDE),
+            ControlId.Button(GamepadButton.L3),
+            ControlId.Button(GamepadButton.R3),
         ),
     )
 

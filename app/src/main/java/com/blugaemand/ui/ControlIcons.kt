@@ -13,8 +13,14 @@ import com.blugaemand.input.ControlIcon
  * returns a painter either way and the renderer draws both identically. Vectors are used for the
  * bundled art because they stay sharp at any size, not because anything requires them.
  *
- * The Xbox, PlayStation, Switch and Steam Deck glyphs are all Kenney's Input Prompts 1.5A (CC0),
- * converted by `art/input/convert-input-art.py`.
+ * Every glyph is from Kenney's Input Prompts 1.5A (CC0), converted by
+ * `art/input/convert-input-art.py`.
+ *
+ * The `switch2_` sources are the one place a file was renamed on the way in. Kenney keys its art on
+ * the console folder, so `Nintendo Switch 2` ships a `switch_button_zl.svg` of its own that is a
+ * *different picture* from the `Nintendo Switch` file of that name — and `art/input/` is flat, so
+ * one would have overwritten the other. Only the four redrawn triggers are carried across, under
+ * names that say which console they came from; see [ControlIcon].
  */
 @DrawableRes
 fun drawableFor(icon: ControlIcon): Int = when (icon) {
@@ -151,4 +157,64 @@ fun drawableFor(icon: ControlIcon): Int = when (icon) {
 
     ControlIcon.DECK_DPAD -> R.drawable.steamdeck_dpad
     ControlIcon.DECK_DPAD_PRESSED -> R.drawable.steamdeck_dpad_all
+
+    // Only the triggers were redrawn for the Switch 2 -- everything else SWITCH2_ART draws is the
+    // Switch 1 file, byte for byte. See the note above about the rename.
+    ControlIcon.SWITCH2_ZL -> R.drawable.switch2_button_zl_outline
+    ControlIcon.SWITCH2_ZL_PRESSED -> R.drawable.switch2_button_zl
+    ControlIcon.SWITCH2_ZR -> R.drawable.switch2_button_zr_outline
+    ControlIcon.SWITCH2_ZR_PRESSED -> R.drawable.switch2_button_zr
+
+    // A and B are the only coloured keys on a GameCube -- green and red -- so those two take the
+    // colour-fill pressed picture the Xbox face buttons do, and the grey X and Y take a solid white
+    // one like every Nintendo pack since.
+    ControlIcon.GAMECUBE_A -> R.drawable.gamecube_button_a_outline
+    ControlIcon.GAMECUBE_A_PRESSED -> R.drawable.gamecube_button_color_a
+    ControlIcon.GAMECUBE_B -> R.drawable.gamecube_button_b_outline
+    ControlIcon.GAMECUBE_B_PRESSED -> R.drawable.gamecube_button_color_b
+    ControlIcon.GAMECUBE_X -> R.drawable.gamecube_button_x_outline
+    ControlIcon.GAMECUBE_X_PRESSED -> R.drawable.gamecube_button_x
+    ControlIcon.GAMECUBE_Y -> R.drawable.gamecube_button_y_outline
+    ControlIcon.GAMECUBE_Y_PRESSED -> R.drawable.gamecube_button_y
+
+    ControlIcon.GAMECUBE_L -> R.drawable.gamecube_trigger_l_outline
+    ControlIcon.GAMECUBE_L_PRESSED -> R.drawable.gamecube_trigger_l
+    ControlIcon.GAMECUBE_R -> R.drawable.gamecube_trigger_r_outline
+    ControlIcon.GAMECUBE_R_PRESSED -> R.drawable.gamecube_trigger_r
+    ControlIcon.GAMECUBE_Z -> R.drawable.gamecube_button_z_outline
+    ControlIcon.GAMECUBE_Z_PRESSED -> R.drawable.gamecube_button_z
+
+    ControlIcon.GAMECUBE_START -> R.drawable.gamecube_button_start_outline
+    ControlIcon.GAMECUBE_START_PRESSED -> R.drawable.gamecube_button_start
+
+    ControlIcon.GAMECUBE_DPAD -> R.drawable.gamecube_dpad
+    ControlIcon.GAMECUBE_DPAD_PRESSED -> R.drawable.gamecube_dpad_all
+
+    ControlIcon.WIIU_A -> R.drawable.wiiu_button_a_outline
+    ControlIcon.WIIU_A_PRESSED -> R.drawable.wiiu_button_a
+    ControlIcon.WIIU_B -> R.drawable.wiiu_button_b_outline
+    ControlIcon.WIIU_B_PRESSED -> R.drawable.wiiu_button_b
+    ControlIcon.WIIU_X -> R.drawable.wiiu_button_x_outline
+    ControlIcon.WIIU_X_PRESSED -> R.drawable.wiiu_button_x
+    ControlIcon.WIIU_Y -> R.drawable.wiiu_button_y_outline
+    ControlIcon.WIIU_Y_PRESSED -> R.drawable.wiiu_button_y
+
+    ControlIcon.WIIU_L -> R.drawable.wiiu_button_l_outline
+    ControlIcon.WIIU_L_PRESSED -> R.drawable.wiiu_button_l
+    ControlIcon.WIIU_R -> R.drawable.wiiu_button_r_outline
+    ControlIcon.WIIU_R_PRESSED -> R.drawable.wiiu_button_r
+    ControlIcon.WIIU_ZL -> R.drawable.wiiu_button_zl_outline
+    ControlIcon.WIIU_ZL_PRESSED -> R.drawable.wiiu_button_zl
+    ControlIcon.WIIU_ZR -> R.drawable.wiiu_button_zr_outline
+    ControlIcon.WIIU_ZR_PRESSED -> R.drawable.wiiu_button_zr
+
+    ControlIcon.WIIU_MINUS -> R.drawable.wiiu_button_minus_outline
+    ControlIcon.WIIU_MINUS_PRESSED -> R.drawable.wiiu_button_minus
+    ControlIcon.WIIU_PLUS -> R.drawable.wiiu_button_plus_outline
+    ControlIcon.WIIU_PLUS_PRESSED -> R.drawable.wiiu_button_plus
+    ControlIcon.WIIU_HOME -> R.drawable.wiiu_button_home_outline
+    ControlIcon.WIIU_HOME_PRESSED -> R.drawable.wiiu_button_home
+
+    ControlIcon.WIIU_DPAD -> R.drawable.wiiu_dpad
+    ControlIcon.WIIU_DPAD_PRESSED -> R.drawable.wiiu_dpad_all
 }

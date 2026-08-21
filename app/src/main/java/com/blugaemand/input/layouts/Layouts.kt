@@ -16,6 +16,9 @@ object Layouts {
         XBOX_LAYOUT,
         PS5_LAYOUT,
         SWITCH_LAYOUT,
+        SWITCH2_LAYOUT,
         STEAM_DECK_LAYOUT,
+        WII_U_LAYOUT,
+        GAMECUBE_LAYOUT,
     )
 }
