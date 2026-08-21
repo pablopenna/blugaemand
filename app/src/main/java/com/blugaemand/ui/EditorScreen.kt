@@ -211,19 +211,24 @@ fun EditorScreen(
         ) {
             if (snapToGrid) drawGrid(resolved.gridStep)
 
-            for (control in resolved.controls) {
-                drawControl(
-                    control = control,
-                    style = padStyle,
-                    // Nothing is held in here, and a control drawn pressed would be a control
-                    // showing its pressed colour for no reason the user can act on.
-                    pressed = false,
-                    // Nothing is touching anything in here, which for a dynamic stick means its
-                    // area is drawn and the stick inside it is not -- exactly what the pad shows
-                    // before a thumb lands.
-                    stickTouch = null,
-                    textMeasurer = textMeasurer,
-                )
+            // The pad's own opacity, so the editor shows what the pad will show. The grid, the
+            // selection and the handles are outside it: they are the editor's furniture rather
+            // than part of the layout, and a faint pad is exactly when they are most needed.
+            withOpacity(padStyle.opacity) {
+                for (control in resolved.controls) {
+                    drawControl(
+                        control = control,
+                        style = padStyle,
+                        // Nothing is held in here, and a control drawn pressed would be a control
+                        // showing its pressed colour for no reason the user can act on.
+                        pressed = false,
+                        // Nothing is touching anything in here, which for a dynamic stick means
+                        // its area is drawn and the stick inside it is not -- exactly what the pad
+                        // shows before a thumb lands.
+                        stickTouch = null,
+                        textMeasurer = textMeasurer,
+                    )
+                }
             }
 
             selected?.let { resolved.controls.getOrNull(it) }?.let {
@@ -237,7 +242,9 @@ fun EditorScreen(
             if (pending != null) {
                 val at = previewAt ?: Offset(size.width / 2f, size.height / 2f)
                 for (control in resolved.previewOf(pending, at.x, at.y, snapToGrid)) {
-                    drawControl(control, padStyle, false, null, textMeasurer)
+                    withOpacity(padStyle.opacity) {
+                        drawControl(control, padStyle, false, null, textMeasurer)
+                    }
                     drawSelection(control)
                 }
             }

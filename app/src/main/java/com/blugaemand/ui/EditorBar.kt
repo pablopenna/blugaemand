@@ -26,6 +26,7 @@ import com.blugaemand.input.ControlId
 import com.blugaemand.input.ControlSpec
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutStyle
+import com.blugaemand.input.PadThemes
 import com.blugaemand.input.Placement
 import com.blugaemand.input.art.ArtPacks
 import com.blugaemand.input.describe
@@ -36,9 +37,10 @@ import com.blugaemand.input.triggerModeOrNull
 import com.blugaemand.input.withStickMode
 import com.blugaemand.input.withTriggerMode
 import com.blugaemand.ui.theme.OverlayColors
+import kotlin.math.roundToInt
 
 /** Which page of the editor is showing. */
-private enum class EditorPage { Root, Add, AddGroup, Appearance, Rename, ConfirmDelete }
+private enum class EditorPage { Root, Add, AddGroup, Appearance, Themes, Rename, ConfirmDelete }
 
 /** Which of a layout's two colours the picker on the *Appearance* page is aimed at. */
 private enum class ColorTarget { Resting, Pressed }
@@ -266,6 +268,16 @@ private fun EditorPanel(
             EditorPage.Appearance -> {
                 PanelBack { page = EditorPage.Root }
 
+                // Above the choice of shapes or art, and outside the `colors` guard below, because
+                // it is the one appearance setting that means the same thing in both: how much of
+                // the screen behind the pad shows through it.
+                PanelEntry(
+                    label = "Opacity",
+                    trailing = "${(layout.opacity * 100).roundToInt()}%",
+                    onClick = { onLayoutChange(layout.copy(opacity = nextOpacity(layout.opacity))) },
+                )
+                PanelDivider()
+
                 val colors = layout.style as? LayoutStyle.Colors
                 PanelEntry(
                     label = "Shapes and colours",
@@ -288,6 +300,11 @@ private fun EditorPanel(
                 // an image layout draws its art's own colours and has none to pick.
                 if (colors != null) {
                     PanelDivider()
+
+                    // A page of its own rather than six more rows here: the picker below is long
+                    // enough already, and a theme is a starting point to be taken and then tuned
+                    // with it rather than a second thing to scroll past on the way there.
+                    PanelEntry(label = "Themes", trailing = "›") { page = EditorPage.Themes }
 
                     var target by remember { mutableStateOf(ColorTarget.Resting) }
                     ColorTargetRow(
@@ -325,6 +342,25 @@ private fun EditorPanel(
                         )
                     }
                 }
+            }
+
+            EditorPage.Themes -> {
+                PanelBack { page = EditorPage.Appearance }
+                val colors = layout.style as? LayoutStyle.Colors
+                PadThemes.ALL.forEach { theme ->
+                    ColorTargetRow(
+                        label = theme.name,
+                        // Swatched in the colour a held button will be, which is the one that says
+                        // which theme this is -- the resting fills are all dark by design.
+                        color = theme.colors.pressed,
+                        selected = colors == theme.colors,
+                        // Straight onto the layout rather than back to the root page: trying them
+                        // one after another is how a theme gets picked, and each pick is visible on
+                        // the pad behind the panel.
+                        onClick = { onLayoutChange(layout.copy(style = theme.colors)) },
+                    )
+                }
+                PanelCaption("A starting point. The picker under Appearance tunes either colour.")
             }
 
             EditorPage.Rename -> {
@@ -401,6 +437,19 @@ private fun SelectionPills(
     // drop it.
     SelectionPill("✕", "Remove", onClick = onRemoveSelected)
 }
+
+/**
+ * The next opacity the *Appearance* row offers, wrapping back to solid at the bottom.
+ *
+ * Steps rather than a slider, for the same reason the rest of the panel is rows: a slider is a
+ * thing to aim a thumb at in a panel that is covering the pad it is adjusting. It stops at
+ * [GamepadLayout.MIN_OPACITY] rather than reaching zero — a pad faded to nothing still takes
+ * touches, and there would be no visible row to bring it back with.
+ */
+private fun nextOpacity(current: Float): Float =
+    OPACITY_STEPS.firstOrNull { it < current - 0.001f } ?: OPACITY_STEPS.first()
+
+private val OPACITY_STEPS = listOf(1f, 0.85f, 0.7f, 0.55f, 0.4f, GamepadLayout.MIN_OPACITY)
 
 /** One head-bar pill: what it is, and the value it is on if it has one. */
 @Composable

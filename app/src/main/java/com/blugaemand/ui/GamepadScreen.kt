@@ -95,27 +95,29 @@ fun GamepadScreen(
             tick // Read so the canvas repaints when a touch changes.
 
             val active = router.activeControls()
-            for (control in resolved.controls) {
-                // Keyed on the shape rather than the id, because the shape is what dispatches to
-                // the stick renderer -- a layout is free to give ControlId.Stick a plain circle.
-                val stickTouch = (control.spec.shape as? ControlSpec.Shape.Stick)
-                    ?.let { router.stickTouch(control.index) }
-                // Keyed on the shape for the same reason, since the sector arithmetic behind it is
-                // the D-pad shape's dead zone and half-width.
-                val pushed = (control.spec.shape as? ControlSpec.Shape.Dpad)
-                    ?.let { router.dpadPush(control.index) }
-                // Not keyed on the shape, unlike those two: a trigger's pull is measured from
-                // where the finger landed and how tall the control is, which every shape has.
-                drawControl(
-                    control = control,
-                    style = padStyle,
-                    pressed = control.index in active,
-                    stickTouch = stickTouch,
-                    textMeasurer = textMeasurer,
-                    heldMembers = router.activeMembers(control.index),
-                    pushed = pushed,
-                    triggerValue = router.triggerValue(control.index),
-                )
+            withOpacity(padStyle.opacity) {
+                for (control in resolved.controls) {
+                    // Keyed on the shape rather than the id, because the shape is what dispatches
+                    // to the stick renderer -- a layout may give ControlId.Stick a plain circle.
+                    val stickTouch = (control.spec.shape as? ControlSpec.Shape.Stick)
+                        ?.let { router.stickTouch(control.index) }
+                    // Keyed on the shape for the same reason, since the sector arithmetic behind
+                    // it is the D-pad shape's dead zone and half-width.
+                    val pushed = (control.spec.shape as? ControlSpec.Shape.Dpad)
+                        ?.let { router.dpadPush(control.index) }
+                    // Not keyed on the shape, unlike those two: a trigger's pull is measured from
+                    // where the finger landed and how tall the control is, which every shape has.
+                    drawControl(
+                        control = control,
+                        style = padStyle,
+                        pressed = control.index in active,
+                        stickTouch = stickTouch,
+                        textMeasurer = textMeasurer,
+                        heldMembers = router.activeMembers(control.index),
+                        pushed = pushed,
+                        triggerValue = router.triggerValue(control.index),
+                    )
+                }
             }
         }
     }

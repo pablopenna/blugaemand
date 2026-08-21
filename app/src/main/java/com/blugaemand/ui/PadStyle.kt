@@ -28,6 +28,12 @@ class PadStyle(
     val pressed: Color,
     private val pack: ArtPack?,
     private val painters: Map<ControlIcon, Painter>,
+    /**
+     * How solid the controls are drawn. Applied to the whole pad at once by [withOpacity] rather
+     * than to each colour, so overlapping controls stay one picture instead of showing through each
+     * other.
+     */
+    val opacity: Float = 1f,
 ) {
     /**
      * The picture [control] draws while [held], or null if it has none and falls back to its
@@ -65,10 +71,25 @@ fun rememberPadStyle(layout: GamepadLayout): PadStyle {
         }
     }
 
+    // Clamped here rather than trusted from the file, which may have been hand-edited: a pad at
+    // zero is a blank screen that still takes touches, with no way to find the control that would
+    // put it back.
+    val opacity = layout.opacity.coerceIn(GamepadLayout.MIN_OPACITY, 1f)
+
     return when (val style = layout.style) {
-        is LayoutStyle.Colors ->
-            PadStyle(Color(style.resting), Color(style.pressed), pack = null, painters = painters)
-        is LayoutStyle.Images ->
-            PadStyle(PadColors.ControlFill, PadColors.ControlFillPressed, style.pack, painters)
+        is LayoutStyle.Colors -> PadStyle(
+            resting = Color(style.resting),
+            pressed = Color(style.pressed),
+            pack = null,
+            painters = painters,
+            opacity = opacity,
+        )
+        is LayoutStyle.Images -> PadStyle(
+            resting = PadColors.ControlFill,
+            pressed = PadColors.ControlFillPressed,
+            pack = style.pack,
+            painters = painters,
+            opacity = opacity,
+        )
     }
 }

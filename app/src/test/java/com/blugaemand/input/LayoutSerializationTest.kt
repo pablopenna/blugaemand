@@ -102,6 +102,33 @@ class LayoutSerializationTest {
         assertTrue(error, "tomato" in error)
     }
 
+    // -- Opacity --------------------------------------------------------------------------
+
+    @Test
+    fun `a layout saved before opacity existed comes back solid`() {
+        // The bargain every defaulted field makes, and the reason adding this one moved no version
+        // number: every layout already on a phone was written without the key.
+        val text = layoutFileOf(
+            """{"id":"old","name":"Old","controls":[],""" +
+                """"style":{"type":"colors","resting":"#FF000000","pressed":"#FFFFFFFF"}}""",
+        )
+        assertEquals(1f, decodeLayouts(text).single().opacity)
+    }
+
+    @Test
+    fun `an opacity round trips`() {
+        val faint = DEFAULT_LAYOUT.copy(opacity = 0.4f)
+        assertEquals(faint, decodeLayouts(encodeLayouts(listOf(faint))).single())
+    }
+
+    @Test
+    fun `opacity survives a change of style, being on the layout rather than in it`() {
+        // Which is why it is where it is: on the style it would be written twice and silently lost
+        // every time someone tried an art pack and came back.
+        val faint = DEFAULT_LAYOUT.copy(opacity = 0.55f)
+        assertEquals(0.55f, faint.copy(style = LayoutStyle.Images(PLAYSTATION_ART)).opacity)
+    }
+
     // -- Art packs ------------------------------------------------------------------------
 
     @Test
@@ -138,8 +165,11 @@ class LayoutSerializationTest {
     fun `a field a newer build added does not stop this one reading the file`() {
         // The other half of forward compatibility: unknown keys are skipped, so a layout saved by a
         // build that learned a new property still loads on one that has not.
+        // Nothing this build knows -- and note it may not stay that way: this test used to name
+        // `opacity`, which was a fine stand-in for a property nobody had added right up until
+        // somebody added it.
         val text = layoutFileOf(
-            """{"id":"n","name":"n","controls":[],"opacity":0.5,""" +
+            """{"id":"n","name":"n","controls":[],"sparkle":0.5,""" +
                 """"style":{"type":"colors","resting":"#FF000000","pressed":"#FFFFFFFF"}}""",
         )
         assertEquals("n", decodeLayouts(text).single().id)
@@ -463,7 +493,8 @@ class LayoutSerializationTest {
                             "type": "colors",
                             "resting": "#FF262B36",
                             "pressed": "#FF4C82F7"
-                        }
+                        },
+                        "opacity": 1.0
                     }
                 ]
             }

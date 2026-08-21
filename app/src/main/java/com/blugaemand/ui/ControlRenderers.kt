@@ -2,9 +2,12 @@ package com.blugaemand.ui
 
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -21,6 +24,31 @@ import com.blugaemand.input.StickTouch
 import com.blugaemand.input.isDynamicStick
 import com.blugaemand.ui.theme.OverlayColors
 import com.blugaemand.ui.theme.PadColors
+
+/**
+ * Draws [block] — the pad's controls — at [PadStyle.opacity].
+ *
+ * One layer for the whole pad rather than an alpha on each colour, which are not the same picture:
+ * per-colour alpha lets a face plate show through the stick drawn over it, and a stick's own cap
+ * show through its base. Compositing the lot once and fading that keeps a translucent pad looking
+ * like the pad, only fainter.
+ *
+ * The layer is skipped when there is nothing to fade, since it is an offscreen buffer per frame.
+ * The caller decides what goes inside it: the editor keeps its grid, selection ring and handles
+ * out, because those are the editor's own furniture and fading them would hide the thing being
+ * dragged along with the thing it is dragging.
+ */
+inline fun DrawScope.withOpacity(opacity: Float, block: DrawScope.() -> Unit) {
+    if (opacity >= 1f) {
+        block()
+        return
+    }
+    drawIntoCanvas { canvas ->
+        canvas.saveLayer(Rect(Offset.Zero, size), Paint().apply { alpha = opacity })
+        block()
+        canvas.restore()
+    }
+}
 
 /**
  * Draws one resolved control. [pressed] drives the highlight, and [stickTouch] says where a
