@@ -226,6 +226,12 @@ host. Only the service and the Compose layer touch the framework.
   panel covers the top centre and makes the controls under it unselectable. Built on `TapPill`
   rather than `HoldPill`: the hold exists so a stray tap cannot throw a panel up mid-game, and
   nothing being edited is connected to anything, so it would be a tax with nothing bought by it.
+  **Split by what an option acts on**: the ☰ Layout panel is the layout — what is on it, how it
+  looks, what it is called — while everything scoped to the selected control is a pill in the head
+  bar beside it. `SelectionPills` holds those: the trigger and stick modes, *Ungroup* for a plate,
+  and ✕ to remove, each shown only when it applies, alongside `NudgePad`. Mixing the two scopes in
+  one list asked the reader to check what each row applied to before tapping it, and the head bar is
+  where the selection was already worked on — and stays reachable with the panel shut.
 
 ### Two presentations
 
@@ -946,7 +952,9 @@ The three built-ins cannot be changed — make your own instead:
 
 1. **Hold** the ☰ Menu pill, then **Layouts → New layout**, and pick either **Empty** or **Copy of**
    whichever layout is showing. Either one is selected and opens the editor straight away.
-2. The **☰ Edit** pill opens the menu and closes again, so the pad underneath stays reachable.
+2. The **☰ Layout** pill opens the menu and closes again, so the pad underneath stays reachable.
+   It holds what applies to the layout as a whole; what applies to the control you selected sits as
+   pills beside it, in the head bar, where they stay reachable with the menu shut.
 3. **Drag** a control to move it, **pinch** it to resize. **Grid** toggles snapping, which applies to
    sizes as well as positions, so two buttons meant to match can be made to match. The **◀▲▼▶
    arrows** beside the pill move whatever is selected one step at a time — a whole grid cell with
@@ -958,16 +966,16 @@ The three built-ins cannot be changed — make your own instead:
 5. **As one control**, on the group page, drops that arrangement as a *single* control instead — the
    face diamond as one plate that sends A, B, X or Y depending on where you touch it. It moves,
    resizes and deletes as one, keeps its shape on any screen, and rolling a thumb across it changes
-   button without lifting. **Ungroup** on a selected plate breaks it back into separate controls,
-   each where the plate was drawing it.
-6. **Remove** takes out whatever is selected. A caption names any button left with no control — a
-   warning, not an error.
-7. **Trigger** appears only while a trigger is selected — or a plate with one on it — and switches
-   that trigger between **binary** (fully pulled while touched, like a button) and **progressive**
+   button without lifting. **Ungroup**, beside the arrows while a plate is selected, breaks it back
+   into separate controls, each where the plate was drawing it.
+6. **✕** in the head bar takes out whatever is selected. A caption on the menu names any button left
+   with no control — a warning, not an error.
+7. **Trigger**, a head-bar pill, appears only while a trigger is selected — or a plate with one on
+   it — and switches that trigger between **binary** (fully pulled while touched, like a button) and **progressive**
    (rests halfway, slide to pull it). Binary is what every trigger starts as, including on the
    built-in pads. Each trigger is set on its own, so one pad can have both.
-8. **Stick** appears only while a thumbstick is selected, and switches it between **fixed** — where
-   it is drawn, pinch to resize its throw — and **dynamic**, an area where the stick appears under
+8. **Stick**, likewise, appears only while a thumbstick is selected, and switches it between
+   **fixed** — where it is drawn, pinch to resize its throw — and **dynamic**, an area where the stick appears under
    your thumb wherever it lands inside it and vanishes when you lift. Pinching a dynamic stick
    resizes the *area*, which can be made much bigger than any button; its throw is whatever size it
    had as a fixed stick, so switch back, pinch, and switch again to change that. Anything you place

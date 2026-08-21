@@ -18,7 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,8 +27,6 @@ import com.blugaemand.input.ControlSpec
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutStyle
 import com.blugaemand.input.Placement
-import com.blugaemand.input.StickMode
-import com.blugaemand.input.TriggerMode
 import com.blugaemand.input.art.ArtPacks
 import com.blugaemand.input.describe
 import com.blugaemand.input.missingButtons
@@ -55,6 +52,10 @@ private enum class ColorTarget { Resting, Pressed }
  *
  * The pill opens on a plain tap rather than [HoldPill]'s 600 ms hold; see [TapPill] for why the
  * hold has nothing to buy in here.
+ *
+ * Options split by what they act on: the pill's panel is the layout — what is on it, how it looks,
+ * what it is called — and the head bar beside the pill is the control that is selected. See
+ * [SelectionPills].
  *
  * Everything destructive is one step away from where a thumb rests. *Delete layout* asks first,
  * because a layout is the only copy of work someone did and there is no undo for it; removing a
@@ -113,7 +114,7 @@ fun EditorBar(
             TapPill(onClick = { onExpandedChange(!expanded) }) {
                 Text("☰", color = OverlayColors.Label, fontSize = 12.sp)
                 Text(
-                    text = if (expanded) "Close" else "Edit",
+                    text = if (expanded) "Close" else "Layout",
                     color = OverlayColors.Label,
                     fontSize = 12.sp,
                     maxLines = 1,
@@ -124,7 +125,16 @@ fun EditorBar(
             // the panel covers the top middle of the pad, and arrows on it would be moving a control
             // that may well be underneath it. Here they work with the panel shut, which is how the
             // editor sits most of the time. Shown only when there is something to move.
-            if (selected != null) NudgePad(onNudge)
+            if (selected != null) {
+                NudgePad(onNudge)
+                SelectionPills(
+                    layout = layout,
+                    selected = selected,
+                    onLayoutChange = onLayoutChange,
+                    onRemoveSelected = onRemoveSelected,
+                    onUngroupSelected = onUngroupSelected,
+                )
+            }
         }
 
         AnimatedVisibility(
@@ -136,7 +146,6 @@ fun EditorBar(
         ) {
             EditorPanel(
                 layout = layout,
-                selected = selected,
                 snapToGrid = snapToGrid,
                 onSnapToGridChange = onSnapToGridChange,
                 asOneControl = asOneControl,
@@ -144,8 +153,6 @@ fun EditorBar(
                 lastColors = lastColors,
                 onLayoutChange = onLayoutChange,
                 onStartPlacing = onStartPlacing,
-                onRemoveSelected = onRemoveSelected,
-                onUngroupSelected = onUngroupSelected,
                 onDeleteLayout = onDeleteLayout,
                 onDone = onDone,
                 modifier = Modifier.width(240.dp),
@@ -162,7 +169,6 @@ fun EditorBar(
 @Composable
 private fun EditorPanel(
     layout: GamepadLayout,
-    selected: Int?,
     snapToGrid: Boolean,
     onSnapToGridChange: (Boolean) -> Unit,
     asOneControl: Boolean,
@@ -171,8 +177,6 @@ private fun EditorPanel(
     lastColors: LayoutStyle.Colors,
     onLayoutChange: (GamepadLayout) -> Unit,
     onStartPlacing: (Placement) -> Unit,
-    onRemoveSelected: () -> Unit,
-    onUngroupSelected: () -> Unit,
     onDeleteLayout: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
@@ -186,66 +190,6 @@ private fun EditorPanel(
                 PanelEntry(label = "Add control", trailing = "›") { page = EditorPage.Add }
                 PanelEntry(label = "Add control group", trailing = "›") {
                     page = EditorPage.AddGroup
-                }
-                val selectedSpec = selected?.let { layout.controls.getOrNull(it) }
-                PanelEntry(
-                    label = selectedSpec?.let { "Remove ${it.describe()}" } ?: "Remove control",
-                    // Nothing selected means nothing to remove, and a row that acted on whichever
-                    // control happened to be last would be worse than one that waits.
-                    enabled = selectedSpec != null,
-                    color = if (selectedSpec != null) Color.Unspecified else OverlayColors.Caption,
-                    onClick = onRemoveSelected,
-                )
-                // Only shown for a plate, because for anything else there is nothing to break up.
-                // This is the way back out of one: a member is not separately selectable, by
-                // design, so ungrouping is how a single button in a group gets tuned.
-                if (selectedSpec?.shape is ControlSpec.Shape.Cluster) {
-                    PanelEntry(label = "Ungroup", onClick = onUngroupSelected)
-                }
-                // The one setting a control carries that is neither its position nor its size, so
-                // it lives with the selection rather than on a page of its own -- and it is absent
-                // for everything that is not a trigger, which is nearly everything. A row that
-                // showed greyed out on every button would be a permanent reminder of a setting
-                // that has nothing to do with them.
-                val triggerMode = selectedSpec?.triggerModeOrNull()
-                if (selected != null && triggerMode != null) {
-                    PanelEntry(
-                        label = "Trigger",
-                        trailing = triggerMode.describe(),
-                        onClick = {
-                            onLayoutChange(layout.withTriggerMode(selected, triggerMode.other()))
-                        },
-                    )
-                    PanelCaption(
-                        when (triggerMode) {
-                            TriggerMode.PROGRESSIVE ->
-                                "Rests halfway. Slide in or out to change how far it is pulled."
-                            TriggerMode.BINARY -> "Fully pulled while touched, like a button."
-                        },
-                    )
-                }
-                // The stick's counterpart, and absent for everything that is not one, for the
-                // reason the trigger's row is: a setting that has nothing to do with a button
-                // should not be a greyed-out row on every button.
-                val stickMode = selectedSpec?.stickModeOrNull()
-                if (selected != null && stickMode != null) {
-                    PanelEntry(
-                        label = "Stick",
-                        trailing = stickMode.describe(),
-                        onClick = {
-                            onLayoutChange(layout.withStickMode(selected, stickMode.other()))
-                        },
-                    )
-                    PanelCaption(
-                        when (stickMode) {
-                            StickMode.FIXED ->
-                                "Sits where it is drawn. Pinch to resize its throw."
-                            StickMode.DYNAMIC ->
-                                "An area to touch, not a stick to find: it appears where your " +
-                                    "thumb lands. Pinch to resize the area; its throw is the " +
-                                    "size it had as a fixed stick."
-                        },
-                    )
                 }
                 PanelEntry(
                     label = "Grid",
@@ -392,6 +336,63 @@ private fun EditorPanel(
                 PanelEntry(label = "Delete", onClick = onDeleteLayout)
                 PanelEntry(label = "Keep it") { page = EditorPage.Root }
             }
+        }
+    }
+}
+
+/**
+ * What can be done to the control that is selected, beside the arrows that move it.
+ *
+ * Up here rather than on the panel because these act on the selection and the panel does not: a
+ * menu that mixed *remove this trigger* with *delete this layout* asked the reader to check the
+ * scope of every row before tapping it. The head bar is already where the selection is worked on —
+ * it holds [NudgePad] — and it is visible with the panel shut, which is how the editor sits while
+ * a control is being placed by eye.
+ *
+ * Each pill is absent unless it applies. A trigger's mode has nothing to say about a button, and a
+ * row of greyed-out pills over the pad would be permanent furniture for settings that are almost
+ * never reachable.
+ */
+@Composable
+private fun SelectionPills(
+    layout: GamepadLayout,
+    selected: Int,
+    onLayoutChange: (GamepadLayout) -> Unit,
+    onRemoveSelected: () -> Unit,
+    onUngroupSelected: () -> Unit,
+) {
+    val spec = layout.controls.getOrNull(selected) ?: return
+
+    // The value is the label: with no room for the panel's line of explanation, the pill has to say
+    // what the setting is on rather than only what it is called.
+    spec.triggerModeOrNull()?.let { mode ->
+        SelectionPill("Trigger", mode.describe()) {
+            onLayoutChange(layout.withTriggerMode(selected, mode.other()))
+        }
+    }
+    spec.stickModeOrNull()?.let { mode ->
+        SelectionPill("Stick", mode.describe()) {
+            onLayoutChange(layout.withStickMode(selected, mode.other()))
+        }
+    }
+    // Only for a plate, because for anything else there is nothing to break up. This is the way
+    // back out of one: a member is not separately selectable, by design, so ungrouping is how a
+    // single button in a group gets tuned.
+    if (spec.shape is ControlSpec.Shape.Cluster) {
+        SelectionPill("Ungroup", onClick = onUngroupSelected)
+    }
+    // No confirmation, unlike *delete layout*: putting a control back is one tap and a place to
+    // drop it.
+    SelectionPill("✕", spec.describe(), onClick = onRemoveSelected)
+}
+
+/** One head-bar pill: what it is, and the value it is on if it has one. */
+@Composable
+private fun SelectionPill(label: String, value: String? = null, onClick: () -> Unit) {
+    TapPill(onClick = onClick) {
+        Text(label, color = OverlayColors.Label, fontSize = 12.sp, maxLines = 1)
+        if (value != null) {
+            Text(value, color = OverlayColors.Caption, fontSize = 12.sp, maxLines = 1)
         }
     }
 }

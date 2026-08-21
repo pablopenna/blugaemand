@@ -90,7 +90,7 @@ turns up along the way.
       for yours. `MenuPanel` takes the whole library rather than a list, which is also what let
       `canEdit` stop being threaded down from `MainActivity`. The shared `PanelDivider` is used
       again under the group page's *As one control* switch
-- [x] **Editor extras** — the two that were worth having. **Nudge arrows** sit beside the ☰ Edit
+- [x] **Editor extras** — the two that were worth having. **Nudge arrows** sit beside the ☰ Layout
       pill whenever something is selected, and move it by a whole grid cell with snapping on or a
       fifth of one with it off; `ResolvedLayout.nudgeStep` is the one new piece of arithmetic and it
       is derived from `gridStep` rather than stated. They are *beside* the pill and not on a panel
