@@ -112,6 +112,16 @@ fun EditorBar(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Leaving the editor is not a menu row: it is the thing done most often and the one
+            // thing that is not an edit, and it sat on a page that has to be opened to reach it.
+            // First on the bar, because it is where you finish. Green because it is the only way
+            // out that keeps what you made -- the other one is red, on the panel below, and the
+            // pair is the whole of the colour the chrome carries.
+            TapPill(onClick = onDone) {
+                Text("✓", color = OverlayColors.Confirm, fontSize = 12.sp)
+                Text("Done", color = OverlayColors.Confirm, fontSize = 12.sp, maxLines = 1)
+            }
+
             TapPill(onClick = { onExpandedChange(!expanded) }) {
                 Text("☰", color = OverlayColors.Label, fontSize = 12.sp)
                 Text(
@@ -120,15 +130,6 @@ fun EditorBar(
                     fontSize = 12.sp,
                     maxLines = 1,
                 )
-            }
-
-            // Leaving the editor is not a menu row: it is the thing done most often and the one
-            // thing that is not an edit, and it sat on a page that has to be opened to reach it.
-            // Green because it is the only way out that keeps what you made -- the other one is
-            // red, two rows down, and the pair is the whole of the colour the chrome carries.
-            TapPill(onClick = onDone) {
-                Text("✓", color = OverlayColors.Confirm, fontSize = 12.sp)
-                Text("Done", color = OverlayColors.Confirm, fontSize = 12.sp, maxLines = 1)
             }
 
             // Beside the pill rather than on a panel page, because nudging is something you watch:

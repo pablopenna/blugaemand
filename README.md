@@ -1032,7 +1032,7 @@ The three built-ins cannot be changed — make your own instead:
    In colours mode a picker sits below the rule — tap *At rest* or *Held* to say which fill it is
    adjusting, then drag on the square and the hue bar; in image mode the art carries its own colours,
    so there is nothing there to pick. Going back to shapes returns the colours you had.
-10. **✓ Done**, the green pill beside ☰, goes back to the pad. Everything is saved as you go;
+10. **✓ Done**, the green pill at the head of the bar, goes back to the pad. Everything is saved as you go;
    **Delete layout**, the one row in red, asks first, because there is no undo. Every sub-page
    opens with **‹ Back**.
 
