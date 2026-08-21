@@ -791,6 +791,15 @@ too, and no format version bump is needed either way.
 and sharing a single layout are the same shape and there is one version number to reason about.
 `data/LayoutStore` keeps that string in a Preferences DataStore.
 
+**An edit is drawn from the draft it produced, not from the store reading it back.** A drag makes a
+write per frame, and a write is a round trip: `MainActivity` holds the newest edit in a `draft`
+state that the screens render, and drops it the moment the store comes back agreeing. The writes
+themselves go through one `MutableStateFlow` with a single collector, rather than a coroutine each —
+separate coroutines reach DataStore in whatever order they are scheduled in, so an older frame could
+land last and the control would snap back to a size it had already left. One collector is ordered by
+construction, and a `StateFlow` conflates the frames that pile up during a save instead of writing
+every one of them.
+
 ```json
 {
   "version": 1,

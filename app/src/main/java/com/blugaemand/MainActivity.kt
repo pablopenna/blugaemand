@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +67,7 @@ import com.blugaemand.ui.TopPanel
 import com.blugaemand.ui.theme.BlugaemandTheme
 import com.blugaemand.ui.theme.OverlayColors
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 /**
@@ -138,7 +140,17 @@ class MainActivity : ComponentActivity() {
                 // A selection can outlive the layout it names -- deleting the active layout is the
                 // obvious way, but so is a stored id whose layout failed to parse. Falling back
                 // rather than showing nothing keeps the pad usable either way.
-                val layout = library.byId(selectedId) ?: DEFAULT_LAYOUT
+                val stored = library.byId(selectedId) ?: DEFAULT_LAYOUT
+
+                // The edit in hand, drawn in place of what the store has read back so far. Saving
+                // is a round trip through DataStore and a drag makes one write per frame, so
+                // without this the screen shows whichever write came back last rather than the
+                // last edit made -- a control snapping between sizes as it is dragged.
+                var draft by remember { mutableStateOf<GamepadLayout?>(null) }
+                val layout = draft?.takeIf { it.id == stored.id } ?: stored
+                // Dropped the moment the store agrees, so the override lasts exactly as long as a
+                // write is in flight and a layout changing underneath the app is still seen.
+                LaunchedEffect(stored) { if (draft == stored) draft = null }
 
                 var editing by remember { mutableStateOf(false) }
                 // Which control the editor is acting on, as its index in the layout's list rather
@@ -171,9 +183,21 @@ class MainActivity : ComponentActivity() {
                 // arithmetic in one coordinate space and does not care.
                 var padSize by remember { mutableStateOf(IntSize.Zero) }
 
-                /** Saves an edit and keeps it showing, which is one write per drag frame. */
+                // One writer, fed the newest edit and nothing else. Separate coroutines per frame
+                // reach DataStore in whatever order they are scheduled in, so an older frame could
+                // overwrite a newer one; a StateFlow with a single collector is ordered by
+                // construction, and conflates the frames that pile up during a save rather than
+                // writing every one of them.
+                val pendingSave = remember { MutableStateFlow<GamepadLayout?>(null) }
+                val currentLibrary by rememberUpdatedState(library)
+                LaunchedEffect(Unit) {
+                    pendingSave.filterNotNull().collect { layoutStore.save(currentLibrary.with(it)) }
+                }
+
+                /** Shows an edit at once and queues it to be stored. */
                 fun saveEdit(edited: GamepadLayout) {
-                    scope.launch { layoutStore.save(library.with(edited)) }
+                    draft = edited
+                    pendingSave.value = edited
                 }
 
                 /** Creates [new], selects it, and opens the editor on it. */
@@ -304,6 +328,7 @@ class MainActivity : ComponentActivity() {
                                 // One transaction again: separately, the library would lose the
                                 // layout while the selection still named it, and the pad would
                                 // flicker through its fallback on the way out.
+                                draft = null
                                 scope.launch {
                                     layoutStore.saveAndSelect(
                                         library.without(layout.id),
