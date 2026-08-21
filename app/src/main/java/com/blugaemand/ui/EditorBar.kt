@@ -55,7 +55,8 @@ private enum class ColorTarget { Resting, Pressed }
  *
  * Options split by what they act on: the pill's panel is the layout — what is on it, how it looks,
  * what it is called — and the head bar beside the pill is the control that is selected. See
- * [SelectionPills].
+ * [SelectionPills]. *Done* is on the head bar too, and belongs to neither: it is the way out of the
+ * editor, taken more often than anything on the panel and no use behind a tap that opens one.
  *
  * Everything destructive is one step away from where a thumb rests. *Delete layout* asks first,
  * because a layout is the only copy of work someone did and there is no undo for it; removing a
@@ -121,6 +122,15 @@ fun EditorBar(
                 )
             }
 
+            // Leaving the editor is not a menu row: it is the thing done most often and the one
+            // thing that is not an edit, and it sat on a page that has to be opened to reach it.
+            // Green because it is the only way out that keeps what you made -- the other one is
+            // red, two rows down, and the pair is the whole of the colour the chrome carries.
+            TapPill(onClick = onDone) {
+                Text("✓", color = OverlayColors.Confirm, fontSize = 12.sp)
+                Text("Done", color = OverlayColors.Confirm, fontSize = 12.sp, maxLines = 1)
+            }
+
             // Beside the pill rather than on a panel page, because nudging is something you watch:
             // the panel covers the top middle of the pad, and arrows on it would be moving a control
             // that may well be underneath it. Here they work with the panel shut, which is how the
@@ -154,7 +164,6 @@ fun EditorBar(
                 onLayoutChange = onLayoutChange,
                 onStartPlacing = onStartPlacing,
                 onDeleteLayout = onDeleteLayout,
-                onDone = onDone,
                 modifier = Modifier.width(240.dp),
             )
         }
@@ -178,7 +187,6 @@ private fun EditorPanel(
     onLayoutChange: (GamepadLayout) -> Unit,
     onStartPlacing: (Placement) -> Unit,
     onDeleteLayout: () -> Unit,
-    onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var page by remember { mutableStateOf(EditorPage.Root) }
@@ -186,7 +194,6 @@ private fun EditorPanel(
     PanelCard(modifier = modifier) {
         when (page) {
             EditorPage.Root -> {
-                PanelEntry(label = "Done", leading = "✓", onClick = onDone)
                 PanelEntry(label = "Add control", trailing = "›") { page = EditorPage.Add }
                 PanelEntry(label = "Add control group", trailing = "›") {
                     page = EditorPage.AddGroup
@@ -203,7 +210,7 @@ private fun EditorPanel(
                 PanelEntry(label = "Rename", trailing = "›") { page = EditorPage.Rename }
                 PanelEntry(
                     label = "Delete layout",
-                    color = OverlayColors.Caption,
+                    color = OverlayColors.Destructive,
                 ) { page = EditorPage.ConfirmDelete }
 
                 val missing = layout.missingButtons()
@@ -215,7 +222,7 @@ private fun EditorPanel(
             }
 
             EditorPage.Add -> {
-                PanelEntry(label = "Add control", leading = "‹") { page = EditorPage.Root }
+                PanelBack { page = EditorPage.Root }
                 // Everything, every time. A control may appear on a layout more than once -- two A
                 // buttons, one under each thumb -- so there is nothing to filter out.
                 ControlId.ALL.forEach { id ->
@@ -227,7 +234,7 @@ private fun EditorPanel(
             }
 
             EditorPage.AddGroup -> {
-                PanelEntry(label = "Add control group", leading = "‹") { page = EditorPage.Root }
+                PanelBack { page = EditorPage.Root }
                 // A switch rather than a second list of the same seven arrangements: which way a
                 // group goes down is one decision about it, not a different thing to place. Held
                 // by the caller and not here, alongside the grid: this panel is destroyed every
@@ -256,7 +263,7 @@ private fun EditorPanel(
             }
 
             EditorPage.Appearance -> {
-                PanelEntry(label = "Appearance", leading = "‹") { page = EditorPage.Root }
+                PanelBack { page = EditorPage.Root }
 
                 val colors = layout.style as? LayoutStyle.Colors
                 PanelEntry(
@@ -320,7 +327,7 @@ private fun EditorPanel(
             }
 
             EditorPage.Rename -> {
-                PanelEntry(label = "Rename", leading = "‹") { page = EditorPage.Root }
+                PanelBack { page = EditorPage.Root }
                 OutlinedTextField(
                     value = layout.name,
                     onValueChange = { onLayoutChange(layout.copy(name = it)) },
@@ -331,9 +338,13 @@ private fun EditorPanel(
             }
 
             EditorPage.ConfirmDelete -> {
-                PanelEntry(label = "Delete layout", leading = "‹") { page = EditorPage.Root }
+                PanelBack { page = EditorPage.Root }
                 PanelCaption("\"${layout.name}\" will be gone for good.")
-                PanelEntry(label = "Delete", onClick = onDeleteLayout)
+                PanelEntry(
+                    label = "Delete",
+                    color = OverlayColors.Destructive,
+                    onClick = onDeleteLayout,
+                )
                 PanelEntry(label = "Keep it") { page = EditorPage.Root }
             }
         }

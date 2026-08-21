@@ -35,6 +35,23 @@ object OverlayColors {
     val Accent = Color(0xFF4C82F7)
     val Label = Color(0xFFDCE2EE)
     val Caption = Color(0xFFA8B1C2)
+
+    /**
+     * The one row that destroys something: *Delete layout*, and the *Delete* that confirms it.
+     *
+     * Lifted towards the light end rather than a flat red, so it still passes as a label on the
+     * panel's near-black instead of reading as an error banner. Nothing else on the chrome is
+     * allowed it — a second red row is what stops the first one meaning anything.
+     */
+    val Destructive = Color(0xFFE8697A)
+
+    /**
+     * The one row that finishes something: *Done*, which leaves the editor.
+     *
+     * Paired with [Destructive] and lifted the same way, so the two colours the chrome spends on
+     * meaning read as a pair rather than as two unrelated accidents.
+     */
+    val Confirm = Color(0xFF63C98E)
     val Scrim = Color(0x59000000)
 }
 

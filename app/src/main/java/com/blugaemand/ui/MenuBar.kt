@@ -77,7 +77,7 @@ fun MenuPanel(
             }
 
             MenuPage.Layouts -> {
-                PanelEntry(label = "Layouts", leading = "‹") { page = MenuPage.Root }
+                PanelBack { page = MenuPage.Root }
 
                 LayoutRows(
                     layouts = library.builtIn,
@@ -101,7 +101,7 @@ fun MenuPanel(
             }
 
             MenuPage.New -> {
-                PanelEntry(label = "New layout", leading = "‹") { page = MenuPage.Layouts }
+                PanelBack { page = MenuPage.Layouts }
                 PanelEntry(label = "Empty", onClick = onNewEmptyLayout)
                 // Copying names the layout that is showing rather than offering all of them: the
                 // list above is how you choose which, and this page stays two rows however many

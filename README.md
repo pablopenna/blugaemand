@@ -208,13 +208,24 @@ host. Only the service and the Compose layer touch the framework.
   The pills share a `Row` and the panels hang beneath it: side-by-side pill-and-panel columns would
   change width as a panel opened and slide the pills sideways every time.
 - `TopBarChrome` — `HoldPill`, `TapPill`, `PillRow`, `Modifier.pillSurface`, `PanelCard`,
-  `PanelEntry` and `PanelCaption`: the shape, the rows and the gestures every pill and panel is
-  built from. A second pill that reimplemented the hold would drift from the first; see the trap
+  `PanelEntry`, `PanelBack` and `PanelCaption`: the shape, the rows and the gestures every pill and
+  panel is built from. A second pill that reimplemented the hold would drift from the first; see the trap
   below for why that gesture is not worth writing twice, and the same goes for the rows now that
   three panels are lists of them. The pill's look is a `Modifier` rather than something `PillRow`
   applies itself, because it has to come *before* whatever gesture or decoration the caller adds or
   the fill paints over it — `HoldPill`'s progress bar is drawn by exactly such a decoration, and
   wrapping instead would have needed `Modifier.then`, which crashes lint.
+**A sub-page's first row says *Back*, not where you are.** `PanelBack` is that row, shared by both
+panels. The page's name is on the row you tapped to get here and its contents say the rest, so
+spending the one row that is a *button* on repeating the title made the button the least informative
+thing on the panel. **Red is spent on one thing** — `OverlayColors.Destructive`, on *Delete layout*
+and the *Delete* that confirms it, against `Confirm` on *Done*. Those two are the whole of the
+colour the chrome carries: a second red row is what would stop the first one meaning anything.
+
+***Done* is a pill, not a panel row.** It is the way out of the editor and belongs to neither scope
+the panel and the head bar are split by — and it is taken more often than anything on the panel,
+which made a row you have to open a menu to reach the wrong shape for it.
+
 - `ConnectionBar` — `ConnectionPill` and `ConnectionPanel`: status, pairing and reconnection.
 - `MenuBar` — `MenuPill` and `MenuPanel`: picking a layout, making one, editing, and quitting. The
   panel's page state lives inside the composable, which is only composed while open, so the menu
@@ -229,7 +240,7 @@ host. Only the service and the Compose layer touch the framework.
   **Split by what an option acts on**: the ☰ Layout panel is the layout — what is on it, how it
   looks, what it is called — while everything scoped to the selected control is a pill in the head
   bar beside it. `SelectionPills` holds those: the trigger and stick modes, *Ungroup* for a plate,
-  and ✕ to remove, each shown only when it applies, alongside `NudgePad`. Mixing the two scopes in
+  and *✕ Remove*, each shown only when it applies, alongside `NudgePad`. Mixing the two scopes in
   one list asked the reader to check what each row applied to before tapping it, and the head bar is
   where the selection was already worked on — and stays reachable with the panel shut.
 
@@ -1021,8 +1032,9 @@ The three built-ins cannot be changed — make your own instead:
    In colours mode a picker sits below the rule — tap *At rest* or *Held* to say which fill it is
    adjusting, then drag on the square and the hue bar; in image mode the art carries its own colours,
    so there is nothing there to pick. Going back to shapes returns the colours you had.
-10. **Done** goes back to the pad. Everything is saved as you go; **Delete layout** asks first,
-   because there is no undo.
+10. **✓ Done**, the green pill beside ☰, goes back to the pad. Everything is saved as you go;
+   **Delete layout**, the one row in red, asks first, because there is no undo. Every sub-page
+   opens with **‹ Back**.
 
 To reach the editor again later, select the layout in the menu — *Edit layout* appears on the root
 page for anything you made.

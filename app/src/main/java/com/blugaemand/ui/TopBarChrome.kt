@@ -209,6 +209,21 @@ fun PanelCard(
 }
 
 /**
+ * The row every sub-page opens with: an arrow in the gutter and the word *Back*.
+ *
+ * It says what tapping it does, not which page you are on. The page had its own name on the row you
+ * tapped to get here and its contents say the rest, so repeating it in the one place that is a
+ * button made the button the least informative thing on the panel.
+ *
+ * A composable of its own rather than a [PanelEntry] with the same two arguments written out at
+ * every sub-page, so all of them keep saying the same word.
+ */
+@Composable
+fun PanelBack(onClick: () -> Unit) {
+    PanelEntry(label = "Back", leading = "‹", onClick = onClick)
+}
+
+/**
  * One row of a panel: an optional gutter glyph, the label, and an optional trailing glyph. The
  * gutter is a fixed slot rather than a prefix on the label, so labels line up under each other
  * whether or not their row has one.

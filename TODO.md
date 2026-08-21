@@ -126,6 +126,11 @@ turns up along the way.
       two limits asymmetric for no reason a user could see: a control that cannot be shrunk past
       being touchable is obvious, one that stops growing half way across the screen is a bug. The
       screen is what bounds a handle drag now. `MIN_CONTROL_EXTENT` stays
+- [x] **Panel and pill wording, from using it** — the ✕ pill says *Remove* rather than naming the
+      selection the ring is already round; every sub-page opens with *‹ Back* rather than repeating
+      its own title on the one row that is a button; *Done* is a green pill on the head bar rather
+      than the first row of a panel that has to be opened to reach it; and *Delete layout* — with
+      the *Delete* that confirms it — is the only thing on the chrome allowed red
 - [x] **More built-in layouts** — **Switch** and **Steam Deck** both ship. As predicted, the
       plumbing was the easy part and Nintendo's A/B/X/Y crossing was the part to think about: it
       swaps *both* pairs, so the key drawn A sends what an Xbox pad's B sends. Unlike Xbox and PS5
