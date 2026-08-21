@@ -10,6 +10,8 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import com.blugaemand.hid.Hat
+import com.blugaemand.input.ControlId
 import com.blugaemand.input.ControlSpec
 import com.blugaemand.input.ResolvedControl
 import com.blugaemand.ui.theme.PadColors
@@ -26,6 +28,11 @@ import com.blugaemand.ui.theme.PadColors
  * A cluster draws as its members, each of which is an ordinary control with an ordinary id — which
  * is the whole reason art needed nothing adding for them. [heldMembers] says which of them are
  * down, by ordinal within the plate; a plate itself is never drawn, only what is on it.
+ *
+ * [pushed] is the one-piece D-pad's extra state: a cross is not merely held or not, it is held in a
+ * direction, and an art pack draws each of them. Null everywhere else, and null on a cross nobody is
+ * touching — [pressed] still says whether it is held, and the two agree because both come from the
+ * same binding.
  */
 fun DrawScope.drawControl(
     control: ResolvedControl,
@@ -34,11 +41,20 @@ fun DrawScope.drawControl(
     stickOffset: Pair<Float, Float>?,
     textMeasurer: TextMeasurer,
     heldMembers: Set<Int> = emptySet(),
+    pushed: Hat? = null,
 ) {
     // Asked before the shape is looked at, so a member's own picture is found by its own id. A
     // cluster's id is never in a pack -- ArtPack.glyph is a map lookup, so it simply misses and
     // falls through to the branch below, which is what should happen and not a thing to shortcut.
-    val glyph = style.glyph(control.spec.id, pressed)
+    //
+    // The cross asks a different question, because it has more answers than held-or-not. Keyed on
+    // the id rather than on `pushed` being non-null, so a layout that gives some other control a
+    // D-pad shape gets its own picture rather than a cross's.
+    val glyph = if (pushed != null && control.spec.id is ControlId.Dpad) {
+        style.dpadGlyph(pushed)
+    } else {
+        style.glyph(control.spec.id, pressed)
+    }
     if (glyph != null) {
         drawGlyph(control, glyph)
         return

@@ -1,6 +1,7 @@
 package com.blugaemand.input.art
 
 import com.blugaemand.hid.GamepadButton
+import com.blugaemand.hid.Hat
 import com.blugaemand.input.ArtPack
 import com.blugaemand.input.ControlIcon
 import com.blugaemand.input.ControlId
@@ -59,5 +60,13 @@ val XBOX_ART: ArtPack = ArtPack(
         // directional glyphs, but the renderer is told only whether the D-pad is held, not which
         // way.
         ControlId.Dpad to Glyph(ControlIcon.XBOX_DPAD, ControlIcon.XBOX_DPAD_PRESSED),
+    ),
+    // Each of these is the whole cross with one arm lit -- see ArtPack.dpadArms. The four
+    // cardinals are all Kenney draws, so a diagonal falls back to the cross lit whole.
+    dpadArms = mapOf(
+        Hat.NORTH to ControlIcon.XBOX_DPAD_UP,
+        Hat.SOUTH to ControlIcon.XBOX_DPAD_DOWN,
+        Hat.WEST to ControlIcon.XBOX_DPAD_LEFT,
+        Hat.EAST to ControlIcon.XBOX_DPAD_RIGHT,
     ),
 )

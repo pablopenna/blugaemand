@@ -56,6 +56,10 @@ fun drawableFor(icon: ControlIcon): Int = when (icon) {
 
     ControlIcon.XBOX_DPAD -> R.drawable.xbox_dpad
     ControlIcon.XBOX_DPAD_PRESSED -> R.drawable.xbox_dpad_all
+    ControlIcon.XBOX_DPAD_UP -> R.drawable.xbox_dpad_up
+    ControlIcon.XBOX_DPAD_DOWN -> R.drawable.xbox_dpad_down
+    ControlIcon.XBOX_DPAD_LEFT -> R.drawable.xbox_dpad_left
+    ControlIcon.XBOX_DPAD_RIGHT -> R.drawable.xbox_dpad_right
 
     ControlIcon.PS_CROSS -> R.drawable.playstation_button_cross_outline
     ControlIcon.PS_CROSS_PRESSED -> R.drawable.playstation_button_color_cross
@@ -87,6 +91,10 @@ fun drawableFor(icon: ControlIcon): Int = when (icon) {
 
     ControlIcon.PS_DPAD -> R.drawable.playstation_dpad
     ControlIcon.PS_DPAD_PRESSED -> R.drawable.playstation_dpad_all
+    ControlIcon.PS_DPAD_UP -> R.drawable.playstation_dpad_up
+    ControlIcon.PS_DPAD_DOWN -> R.drawable.playstation_dpad_down
+    ControlIcon.PS_DPAD_LEFT -> R.drawable.playstation_dpad_left
+    ControlIcon.PS_DPAD_RIGHT -> R.drawable.playstation_dpad_right
 
     // Neither Nintendo's pack nor Valve's has coloured face buttons -- both draw them in one
     // colour, as the real pads are -- so the pressed picture is the solid fill rather than a
@@ -124,6 +132,10 @@ fun drawableFor(icon: ControlIcon): Int = when (icon) {
 
     ControlIcon.SWITCH_DPAD -> R.drawable.switch_dpad
     ControlIcon.SWITCH_DPAD_PRESSED -> R.drawable.switch_dpad_all
+    ControlIcon.SWITCH_DPAD_UP -> R.drawable.switch_dpad_up
+    ControlIcon.SWITCH_DPAD_DOWN -> R.drawable.switch_dpad_down
+    ControlIcon.SWITCH_DPAD_LEFT -> R.drawable.switch_dpad_left
+    ControlIcon.SWITCH_DPAD_RIGHT -> R.drawable.switch_dpad_right
 
     ControlIcon.DECK_A -> R.drawable.steamdeck_button_a_outline
     ControlIcon.DECK_A_PRESSED -> R.drawable.steamdeck_button_a
@@ -157,6 +169,10 @@ fun drawableFor(icon: ControlIcon): Int = when (icon) {
 
     ControlIcon.DECK_DPAD -> R.drawable.steamdeck_dpad
     ControlIcon.DECK_DPAD_PRESSED -> R.drawable.steamdeck_dpad_all
+    ControlIcon.DECK_DPAD_UP -> R.drawable.steamdeck_dpad_up
+    ControlIcon.DECK_DPAD_DOWN -> R.drawable.steamdeck_dpad_down
+    ControlIcon.DECK_DPAD_LEFT -> R.drawable.steamdeck_dpad_left
+    ControlIcon.DECK_DPAD_RIGHT -> R.drawable.steamdeck_dpad_right
 
     // Only the triggers were redrawn for the Switch 2 -- everything else SWITCH2_ART draws is the
     // Switch 1 file, byte for byte. See the note above about the rename.
@@ -189,6 +205,10 @@ fun drawableFor(icon: ControlIcon): Int = when (icon) {
 
     ControlIcon.GAMECUBE_DPAD -> R.drawable.gamecube_dpad
     ControlIcon.GAMECUBE_DPAD_PRESSED -> R.drawable.gamecube_dpad_all
+    ControlIcon.GAMECUBE_DPAD_UP -> R.drawable.gamecube_dpad_up
+    ControlIcon.GAMECUBE_DPAD_DOWN -> R.drawable.gamecube_dpad_down
+    ControlIcon.GAMECUBE_DPAD_LEFT -> R.drawable.gamecube_dpad_left
+    ControlIcon.GAMECUBE_DPAD_RIGHT -> R.drawable.gamecube_dpad_right
 
     ControlIcon.WIIU_A -> R.drawable.wiiu_button_a_outline
     ControlIcon.WIIU_A_PRESSED -> R.drawable.wiiu_button_a
@@ -217,4 +237,8 @@ fun drawableFor(icon: ControlIcon): Int = when (icon) {
 
     ControlIcon.WIIU_DPAD -> R.drawable.wiiu_dpad
     ControlIcon.WIIU_DPAD_PRESSED -> R.drawable.wiiu_dpad_all
+    ControlIcon.WIIU_DPAD_UP -> R.drawable.wiiu_dpad_up
+    ControlIcon.WIIU_DPAD_DOWN -> R.drawable.wiiu_dpad_down
+    ControlIcon.WIIU_DPAD_LEFT -> R.drawable.wiiu_dpad_left
+    ControlIcon.WIIU_DPAD_RIGHT -> R.drawable.wiiu_dpad_right
 }

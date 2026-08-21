@@ -1,9 +1,11 @@
 package com.blugaemand.input
 
 import com.blugaemand.hid.GamepadButton
+import com.blugaemand.hid.Hat
 import com.blugaemand.input.art.ArtPacks
 import com.blugaemand.input.layouts.Layouts
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -216,15 +218,70 @@ class LayoutArtTest {
             }
             .map { it.id }
             .toSet()
-            // The one exception, and not a new one: no ControlIcon names a single D-pad arm, so
-            // the four-arm group falls back to the arrows the specs carry. A plate is what would
-            // make per-arm art worth having -- each member knows its own direction, which a
-            // one-piece cross does not -- so this line is what to delete when that art arrives.
+            // The one exception, and it is now a measured one rather than a pending job. Kenney
+            // draws a D-pad prompt as a *whole cross* in every state it ships -- lit, unlit, one
+            // arm lit, one axis lit -- and ships no picture of an arm on its own. So per-arm art
+            // would put a complete cross on every member, and a four-arm plate would draw four
+            // crosses arranged in a cross. The arrows the specs carry are better at that size, and
+            // this line stays until an arm has a picture of its own to wear. The one-piece cross
+            // does light its pushed arm; that art fits there because there the cross *is* the
+            // control. See ArtPack.dpadArms.
             .filterNot { it is ControlId.DpadButton }
 
         for ((layout, pack) in imageLayouts) {
             for (id in members - drawnAsShapes.getValue(layout.id)) {
                 assertTrue("${pack.id} has no picture for $id", pack.glyph(id, held = false) != null)
+            }
+        }
+    }
+
+    @Test
+    fun `every pack draws its cross being pushed in all four cardinal directions`() {
+        // A pack with a one-piece cross and no arms is not an error -- ArtPack.dpadArms defaults to
+        // empty and degrades to the cross lit whole -- but every pack that ships here does have the
+        // art, and SWITCH2_ART inherits its map from SWITCH_ART rather than declaring one. That
+        // inheritance is a line of code someone can drop while deriving the glyphs, and dropping it
+        // fails nothing else: the plate would simply stop lighting arms and look unfinished.
+        for ((_, pack) in imageLayouts) {
+            for (direction in listOf(Hat.NORTH, Hat.SOUTH, Hat.EAST, Hat.WEST)) {
+                assertTrue(
+                    "${pack.id} has no picture of the cross pushed $direction",
+                    direction in pack.dpadArms,
+                )
+                assertEquals(pack.dpadArms[direction], pack.dpadGlyph(direction))
+            }
+        }
+    }
+
+    @Test
+    fun `a diagonal lights the cross whole, and the dead zone lights nothing`() {
+        // The two answers Kenney's art cannot give directly, resolved in ArtPack rather than left
+        // to each caller. A diagonal has no picture, so it falls back to the pressed one -- honest
+        // about being held without claiming an arm. The dead zone is being touched and sending
+        // nothing, so it draws the resting cross; lighting it would say the host is being told
+        // something it is not.
+        for ((_, pack) in imageLayouts) {
+            val cross = pack.glyphs.getValue(ControlId.Dpad)
+            for (diagonal in listOf(Hat.NORTH_EAST, Hat.SOUTH_EAST, Hat.SOUTH_WEST, Hat.NORTH_WEST)) {
+                assertEquals("${pack.id}: $diagonal", cross.pressed, pack.dpadGlyph(diagonal))
+            }
+            assertEquals("${pack.id}: dead zone", cross.idle, pack.dpadGlyph(Hat.CENTER))
+        }
+    }
+
+    @Test
+    fun `no D-pad arm has a picture, because the pack draws crosses rather than arms`() {
+        // Pins the finding rather than the absence. Every one of these names exists and is a whole
+        // cross with one arm lit, which is why they live in dpadArms and not in glyphs: keyed under
+        // DpadButton they would be picked up by a loose arm button and by every member of a
+        // four-arm plate, and each would wear a complete cross. The day an arm-only picture lands,
+        // this test and the filterNot below it are what to revisit.
+        for ((_, pack) in imageLayouts) {
+            for (direction in ControlId.Direction.entries) {
+                assertNull(
+                    "${pack.id}: $direction",
+                    pack.glyph(ControlId.DpadButton(direction), held = true),
+                )
             }
         }
     }

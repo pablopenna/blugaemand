@@ -1,6 +1,7 @@
 package com.blugaemand.input.art
 
 import com.blugaemand.hid.GamepadButton
+import com.blugaemand.hid.Hat
 import com.blugaemand.input.ArtPack
 import com.blugaemand.input.ControlIcon
 import com.blugaemand.input.ControlId
@@ -56,7 +57,15 @@ val GAMECUBE_ART: ArtPack = ArtPack(
         ControlId.Button(GamepadButton.START) to
             Glyph(ControlIcon.GAMECUBE_START, ControlIcon.GAMECUBE_START_PRESSED),
 
-        // As on the other plates, the whole cross lights rather than the arm being pushed.
+        // The cross at rest and the cross lit whole; the arm being pushed is dpadArms below.
         ControlId.Dpad to Glyph(ControlIcon.GAMECUBE_DPAD, ControlIcon.GAMECUBE_DPAD_PRESSED),
+    ),
+    // Each of these is the whole cross with one arm lit -- see ArtPack.dpadArms. The four
+    // cardinals are all Kenney draws, so a diagonal falls back to the cross lit whole.
+    dpadArms = mapOf(
+        Hat.NORTH to ControlIcon.GAMECUBE_DPAD_UP,
+        Hat.SOUTH to ControlIcon.GAMECUBE_DPAD_DOWN,
+        Hat.WEST to ControlIcon.GAMECUBE_DPAD_LEFT,
+        Hat.EAST to ControlIcon.GAMECUBE_DPAD_RIGHT,
     ),
 )

@@ -1,5 +1,7 @@
 package com.blugaemand.input
 
+import com.blugaemand.hid.Hat
+
 /**
  * The picture a control draws, idle and held. [pressed] is optional: null means the control simply
  * does not animate, which is the right answer for anything an art pack ships only one glyph for.
@@ -37,10 +39,38 @@ data class ArtPack(
      */
     val name: String,
     val glyphs: Map<ControlId, Glyph>,
+    /**
+     * What a one-piece [ControlId.Dpad] draws while pushed, keyed by the direction it is sending.
+     *
+     * Separate from [glyphs] because a cross has more than the two states a [Glyph] can hold, and
+     * because these pictures belong to *that* control alone. Each one is the whole cross with a
+     * single arm lit, which is the only shape Kenney's D-pad art comes in — there is no picture of
+     * an arm on its own — so keying them under [ControlId.DpadButton] instead would put a whole
+     * cross on every arm of a four-button D-pad and four crosses on a plate that already is one.
+     *
+     * **Only the four cardinals are here**, because those are the only ones drawn. A diagonal falls
+     * back to the pressed picture in [glyphs], which lights the cross whole: honest about being
+     * pushed without claiming a direction the art cannot show. So a thumb rolling around the cross
+     * alternates between one lit arm and a lit cross, which is the arrangement's own edge showing
+     * rather than a state being missed.
+     *
+     * Empty is a valid answer, and means the cross only knows idle and pressed.
+     */
+    val dpadArms: Map<Hat, ControlIcon> = emptyMap(),
 ) {
     /** The picture [control] draws while [held], or null if this pack has none for it. */
     fun glyph(control: ControlId, held: Boolean): ControlIcon? {
         val glyph = glyphs[control] ?: return null
         return glyph.pressed.takeIf { held } ?: glyph.idle
     }
+
+    /**
+     * The picture a one-piece [ControlId.Dpad] draws while a thumb on it is sending [direction].
+     *
+     * [Hat.CENTER] is a thumb in the dead zone: touching the cross but sending nothing, so it draws
+     * the resting picture. Lighting anything there would say the host is being told something it is
+     * not — which is what the drawn cross's dead-zone ring already avoids in colours mode.
+     */
+    fun dpadGlyph(direction: Hat): ControlIcon? =
+        dpadArms[direction] ?: glyph(ControlId.Dpad, held = direction != Hat.CENTER)
 }

@@ -83,6 +83,22 @@ class TouchRouter(private val layout: ResolvedLayout) {
         .mapTo(mutableSetOf()) { it.target().index }
 
     /**
+     * Which way the D-pad cross at [controlIndex] is being pushed, or null when nothing is on it.
+     *
+     * The renderer's counterpart to what [state] already works out for the host, and deliberately
+     * the same arithmetic rather than a second opinion about where the sector boundaries are: a
+     * cross that lights an arm it is not sending would be worse than one that lights all four.
+     *
+     * [com.blugaemand.hid.Hat.CENTER] is a real answer here, not a null — a thumb resting in the
+     * dead zone is touching the control and sending nothing, and the art pack has a picture for
+     * exactly that.
+     */
+    fun dpadPush(controlIndex: Int): Hat? {
+        val binding = bindings.values.firstOrNull { it.control.index == controlIndex } ?: return null
+        return binding.control.hatFor(binding.x, binding.y)
+    }
+
+    /**
      * Displacement of a stick's knob as a -1..1 pair, or null when nothing is touching it. The
      * renderer scales this by the stick radius to place the cap.
      *

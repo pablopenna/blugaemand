@@ -15,6 +15,14 @@ package com.blugaemand.input
  *
  * Both sets pair an outline with its solid counterpart, which is the art pack's own idiom.
  *
+ * The `_DPAD_UP`/`_DOWN`/`_LEFT`/`_RIGHT` names break the pairing, and are worth reading carefully
+ * because the picture is not what the name suggests: **each one is the whole cross with that arm
+ * lit**, not a picture of an arm. Kenney draws a D-pad prompt as a complete cross in every state it
+ * ships, which is what makes these the right pictures for a one-piece [ControlId.Dpad] showing which
+ * way it is being pushed — and the wrong ones for a D-pad arm placed as a control of its own, which
+ * would end up wearing a whole cross. There is no picture of a single arm in the pack at all; see
+ * [ArtPack.dpadArms].
+ *
  * The PlayStation names are split on purpose: `PS_` is the art every PlayStation pad shares, and
  * `PS5_` the two glyphs that are the DualSense's own. A PS4 face plate would reuse the first group
  * and pair it with Share and Options rather than inheriting a controller it does not have.
@@ -64,6 +72,10 @@ enum class ControlIcon {
 
     XBOX_DPAD,
     XBOX_DPAD_PRESSED,
+    XBOX_DPAD_UP,
+    XBOX_DPAD_DOWN,
+    XBOX_DPAD_LEFT,
+    XBOX_DPAD_RIGHT,
 
     PS_CROSS,
     PS_CROSS_PRESSED,
@@ -95,6 +107,10 @@ enum class ControlIcon {
 
     PS_DPAD,
     PS_DPAD_PRESSED,
+    PS_DPAD_UP,
+    PS_DPAD_DOWN,
+    PS_DPAD_LEFT,
+    PS_DPAD_RIGHT,
 
     SWITCH_A,
     SWITCH_A_PRESSED,
@@ -128,6 +144,10 @@ enum class ControlIcon {
 
     SWITCH_DPAD,
     SWITCH_DPAD_PRESSED,
+    SWITCH_DPAD_UP,
+    SWITCH_DPAD_DOWN,
+    SWITCH_DPAD_LEFT,
+    SWITCH_DPAD_RIGHT,
 
     DECK_A,
     DECK_A_PRESSED,
@@ -161,6 +181,10 @@ enum class ControlIcon {
 
     DECK_DPAD,
     DECK_DPAD_PRESSED,
+    DECK_DPAD_UP,
+    DECK_DPAD_DOWN,
+    DECK_DPAD_LEFT,
+    DECK_DPAD_RIGHT,
 
     SWITCH2_ZL,
     SWITCH2_ZL_PRESSED,
@@ -188,6 +212,10 @@ enum class ControlIcon {
 
     GAMECUBE_DPAD,
     GAMECUBE_DPAD_PRESSED,
+    GAMECUBE_DPAD_UP,
+    GAMECUBE_DPAD_DOWN,
+    GAMECUBE_DPAD_LEFT,
+    GAMECUBE_DPAD_RIGHT,
 
     WIIU_A,
     WIIU_A_PRESSED,
@@ -216,4 +244,8 @@ enum class ControlIcon {
 
     WIIU_DPAD,
     WIIU_DPAD_PRESSED,
+    WIIU_DPAD_UP,
+    WIIU_DPAD_DOWN,
+    WIIU_DPAD_LEFT,
+    WIIU_DPAD_RIGHT,
 }

@@ -100,6 +100,10 @@ fun GamepadScreen(
                 // the stick renderer -- a layout is free to give ControlId.Stick a plain circle.
                 val stickOffset = (control.spec.shape as? ControlSpec.Shape.Stick)
                     ?.let { router.stickOffset(control.index) }
+                // Keyed on the shape for the same reason, since the sector arithmetic behind it is
+                // the D-pad shape's dead zone and half-width.
+                val pushed = (control.spec.shape as? ControlSpec.Shape.Dpad)
+                    ?.let { router.dpadPush(control.index) }
                 drawControl(
                     control = control,
                     style = padStyle,
@@ -107,6 +111,7 @@ fun GamepadScreen(
                     stickOffset = stickOffset,
                     textMeasurer = textMeasurer,
                     heldMembers = router.activeMembers(control.index),
+                    pushed = pushed,
                 )
             }
         }

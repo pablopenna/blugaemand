@@ -514,6 +514,7 @@ A layout can have either, and both send the host the same thing — one hat.
 | On screen | one cross | four separate controls, put where you like |
 | Diagonals | roll the thumb across it | hold two arms |
 | Resolved by | sector, from where in the cross the touch landed | `Hat.of(up, down, left, right)` |
+| Drawn held | the pushed arm lights, in image mode | the arm itself lights |
 
 The four-button form costs almost nothing: `Hat.of` was already in `hid/GamepadState.kt`, already
 tested for diagonals and opposing-press cancellation, and unused. The hat has always been computed
@@ -527,8 +528,21 @@ Two consequences worth keeping:
 - **A held cross beats the arms.** A layout carrying both is one where the cross is the deliberate
   control, and a stray arm should not override a thumb already on it.
 
-No art pack names the arms, so they draw as shapes with arrow labels; per-arm art is still on the
-backlog.
+**The one-piece cross lights the arm being pushed.** `TouchRouter.dpadPush` answers with the same
+`Hat` the host is being sent — the same arithmetic, not a second opinion about where the sector
+boundaries fall — and `ArtPack.dpadArms` maps four of those onto pictures. Kenney draws the four
+cardinals and no diagonals, so a diagonal falls back to the cross lit whole: honest about being
+pushed without claiming a direction the art cannot show. A thumb in the dead zone draws the *resting*
+cross, because it is touching the control and sending nothing.
+
+**The arms still draw as shapes with arrow labels, and that is now a finding rather than a gap.**
+Every D-pad picture in the pack is a *whole cross* — unlit, one arm lit, one axis lit, all lit — and
+there is no picture of an arm on its own. That is exactly what makes those pictures right for the
+one-piece cross, where the cross *is* the control, and wrong for an arm placed on its own: a
+four-button D-pad would wear four complete crosses, and a four-arm plate would draw a cross made of
+crosses. So the arm pictures live in `dpadArms`, keyed by direction, rather than in `glyphs` under
+`ControlId.DpadButton` where a loose arm and every plate member would pick them up. Per-arm art
+needs art of an arm, which this pack does not have.
 
 User layouts are deliberately allowed to be **incomplete, empty or overlapping**. The layout-sanity
 tests apply to `Layouts.ALL` only; `missingButtons()` is surfaced in the editor as a caption, which

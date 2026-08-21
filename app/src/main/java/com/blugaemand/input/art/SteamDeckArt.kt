@@ -1,6 +1,7 @@
 package com.blugaemand.input.art
 
 import com.blugaemand.hid.GamepadButton
+import com.blugaemand.hid.Hat
 import com.blugaemand.input.ArtPack
 import com.blugaemand.input.ControlIcon
 import com.blugaemand.input.ControlId
@@ -53,5 +54,13 @@ val STEAM_DECK_ART: ArtPack = ArtPack(
         ControlId.Button(GamepadButton.R3) to Glyph(ControlIcon.DECK_RS, ControlIcon.DECK_RS_PRESSED),
 
         ControlId.Dpad to Glyph(ControlIcon.DECK_DPAD, ControlIcon.DECK_DPAD_PRESSED),
+    ),
+    // Each of these is the whole cross with one arm lit -- see ArtPack.dpadArms. The four
+    // cardinals are all Kenney draws, so a diagonal falls back to the cross lit whole.
+    dpadArms = mapOf(
+        Hat.NORTH to ControlIcon.DECK_DPAD_UP,
+        Hat.SOUTH to ControlIcon.DECK_DPAD_DOWN,
+        Hat.WEST to ControlIcon.DECK_DPAD_LEFT,
+        Hat.EAST to ControlIcon.DECK_DPAD_RIGHT,
     ),
 )

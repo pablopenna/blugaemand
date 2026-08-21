@@ -33,4 +33,8 @@ val SWITCH2_ART: ArtPack = ArtPack(
         ControlId.Trigger(Side.RIGHT) to
             Glyph(ControlIcon.SWITCH2_ZR, ControlIcon.SWITCH2_ZR_PRESSED),
     ),
+    // Inherited for the same reason as the rest, and stated rather than defaulted: `dpadArms` is a
+    // separate field with an empty default, so a pack that derives its glyphs and forgets this one
+    // loses its lit arms silently and looks merely unfinished. `LayoutArtTest` also holds the line.
+    dpadArms = SWITCH_ART.dpadArms,
 )

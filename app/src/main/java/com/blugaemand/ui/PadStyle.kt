@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
+import com.blugaemand.hid.Hat
 import com.blugaemand.input.ArtPack
 import com.blugaemand.input.ControlIcon
 import com.blugaemand.input.ControlId
@@ -34,6 +35,14 @@ class PadStyle(
      */
     fun glyph(control: ControlId, held: Boolean): Painter? =
         pack?.glyph(control, held)?.let { painters[it] }
+
+    /**
+     * The picture a one-piece D-pad draws while a thumb on it is sending [direction], or null when
+     * there is no pack. [ArtPack.dpadGlyph] is where the fallbacks live — a diagonal has no picture
+     * of its own and the dead zone draws the resting cross.
+     */
+    fun dpadGlyph(direction: Hat): Painter? =
+        pack?.dpadGlyph(direction)?.let { painters[it] }
 }
 
 /**

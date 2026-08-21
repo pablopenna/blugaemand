@@ -132,13 +132,30 @@ turns up along the way.
 - [ ] Further plates still in the same download, if they are ever wanted: Steam Controller, Steam
       Frame, Nintendo Wii, Meta Quest, Valve Index and Playdate. None was skipped for a reason —
       the three named above were simply the three the backlog asked for
-- [ ] D-pad glyph lighting the direction being pushed rather than the whole cross — the directional
-      art exists, but `drawControl` is told only whether the control is held, not which way. The
-      four-button D-pad needs the same art and does not have it either: each arm is one control, so
-      *it* knows its direction, but no `ControlIcon` names a single arm yet. One conversion run
-      covers both — and now a third case, since the clustered four-arm group is a cross whose
-      members each know their own direction and is the only one of the three that would light
-      correctly the moment the art lands. `LayoutArtTest` has the one `filterNot` to delete
+- [x] **The one-piece cross lights the arm being pushed.** `TouchRouter.dpadPush` returns the same
+      `Hat` the host is being sent — the same arithmetic rather than a second opinion about the
+      sector boundaries, since a cross lighting an arm it is not sending would be worse than one
+      lighting all four — and `ArtPack.dpadArms` maps a direction to a picture. Two answers Kenney's
+      art cannot give directly are settled in `ArtPack` rather than left to each caller: a
+      **diagonal** has no picture and falls back to the cross lit whole, and the **dead zone** draws
+      the *resting* cross, because a thumb there is touching the control and sending nothing
+- [ ] **The four-button D-pad and the four-arm plate still draw arrows, and the reason is not the
+      one this item assumed.** The premise above was that the directional art exists and only needed
+      wiring. It does not: **every D-pad picture Kenney ships is a whole cross** — unlit, one arm
+      lit, one axis lit, all lit — and there is no picture of an arm on its own, in any of the seven
+      packs. That is what makes those pictures right for the one-piece cross, where the cross *is*
+      the control, and wrong for an arm placed on its own:
+
+      - a **four-button D-pad** would wear four complete crosses, one per arm
+      - a **four-arm plate** — the case this item expected to be the one that worked — would draw a
+        cross made of crosses, which is the worst of the three rather than the best
+
+      So the arm pictures went into `ArtPack.dpadArms`, keyed by direction, rather than into
+      `glyphs` under `ControlId.DpadButton` where a loose arm and every plate member would pick them
+      up. **`LayoutArtTest`'s `filterNot` stays**, with the finding written beside it, and a test
+      pins that no pack answers for a `DpadButton` so this cannot drift back. What is actually
+      needed is art of an *arm*, which means drawing it rather than converting it — a much bigger
+      job than a conversion run, and worth deciding on rather than assuming
 - [ ] Import / export layouts as JSON so they can be shared. The format exists and is versioned;
       what is left is the file picker and the share sheet. Two things to decide there: what to do
       with an incoming id that collides with a local layout (copies already take a fresh UUID, so

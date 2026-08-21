@@ -58,6 +58,7 @@ class TouchRouterTest {
     private companion object {
         const val STICK = 0
         const val SOUTH_BUTTON = 1
+        const val DPAD = 3
 
         /** One member of a cluster: offsets and radius are fractions of the layout unit. */
         fun member(button: GamepadButton, dx: Float, dy: Float, radius: Float = 0.1f) =
@@ -275,6 +276,51 @@ class TouchRouterTest {
         val router = router()
         router.down(1, 200f, 450f) // dead centre
         assertEquals(Hat.CENTER, router.state().hat)
+    }
+
+    @Test
+    fun `the direction drawn on the cross is the direction sent to the host`() {
+        // dpadPush exists so the art pack can light one arm, and the only thing that makes that
+        // honest is agreeing with the hat. Walked over all eight sectors and the dead zone rather
+        // than spot-checked, because the failure it guards against is a renderer growing sector
+        // arithmetic of its own that is nearly right.
+        val cases = listOf(
+            0f to -40f, 30f to -30f, 40f to 0f, 30f to 30f,
+            0f to 40f, -30f to 30f, -40f to 0f, -30f to -30f,
+            0f to 0f, // the dead zone, where CENTER is the answer rather than "not pushed"
+        )
+
+        for ((dx, dy) in cases) {
+            val router = router()
+            router.down(1, 200f + dx, 450f + dy)
+            assertEquals("offset ($dx, $dy)", router.state().hat, router.dpadPush(DPAD))
+        }
+    }
+
+    @Test
+    fun `nothing is pushed on a cross nobody is touching`() {
+        val router = router()
+        assertNull(router.dpadPush(DPAD))
+
+        // And a pointer on some other control does not push it either, which is the bug a
+        // bindings-wide search rather than a per-control one would introduce.
+        router.down(1, 800f, 250f)
+        assertNull(router.dpadPush(DPAD))
+    }
+
+    @Test
+    fun `a thumb that rolls across the cross changes which arm is lit`() {
+        // The whole point of a one-piece cross over four arm buttons: no lifting between
+        // directions, and the drawn state has to follow.
+        val router = router()
+        router.down(1, 200f, 410f)
+        assertEquals(Hat.NORTH, router.dpadPush(DPAD))
+
+        router.move(1, 240f, 450f)
+        assertEquals(Hat.EAST, router.dpadPush(DPAD))
+
+        router.up(1)
+        assertNull(router.dpadPush(DPAD))
     }
 
     @Test

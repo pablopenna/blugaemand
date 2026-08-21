@@ -1,6 +1,7 @@
 package com.blugaemand.input.art
 
 import com.blugaemand.hid.GamepadButton
+import com.blugaemand.hid.Hat
 import com.blugaemand.input.ArtPack
 import com.blugaemand.input.ControlIcon
 import com.blugaemand.input.ControlId
@@ -63,5 +64,13 @@ val PLAYSTATION_ART: ArtPack = ArtPack(
 
         // As on the Xbox plate, the whole cross lights up rather than the arm being pushed.
         ControlId.Dpad to Glyph(ControlIcon.PS_DPAD, ControlIcon.PS_DPAD_PRESSED),
+    ),
+    // Each of these is the whole cross with one arm lit -- see ArtPack.dpadArms. The four
+    // cardinals are all Kenney draws, so a diagonal falls back to the cross lit whole.
+    dpadArms = mapOf(
+        Hat.NORTH to ControlIcon.PS_DPAD_UP,
+        Hat.SOUTH to ControlIcon.PS_DPAD_DOWN,
+        Hat.WEST to ControlIcon.PS_DPAD_LEFT,
+        Hat.EAST to ControlIcon.PS_DPAD_RIGHT,
     ),
 )
