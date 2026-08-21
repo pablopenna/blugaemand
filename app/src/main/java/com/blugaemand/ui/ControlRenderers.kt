@@ -252,8 +252,9 @@ private fun DrawScope.drawStick(
     val knobCenter = Offset(center.x + dx * travel, center.y + dy * travel)
 
     // The shaft the cap sits on: same direction, half the travel and smaller, so it hides entirely
-    // under the cap at rest and only leans out from behind it near the edge of the well. That
-    // sliver of a second circle is the whole of the 3D — a stick tilting away from the thumb.
+    // under the cap at rest and only leans out from behind it near the edge of the well. Pale
+    // against both the cap and the well, so that sliver of a second circle reads as a lit shaft —
+    // a stick tilting away from the thumb.
     val shaftTravel = travel * SHAFT_TRAVEL
     drawCircle(
         color = PadColors.StickShaft,

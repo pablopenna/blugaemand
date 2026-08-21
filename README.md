@@ -299,8 +299,8 @@ Consequences worth knowing:
   that size: a hair above the diamond's centre rather than level with it, which is the last place
   it can sit before its touch square meets the stick's. Everything else still derives from
   `DEFAULT_LAYOUT`.
-- **A stick is three circles, and the middle one does the 3D.** Under the cap sits a smaller, darker
-  shaft that travels in the same direction at half the cap's distance. At rest the cap covers it
+- **A stick is three circles, and the middle one does the 3D.** Under the cap sits a smaller, pale
+  grey shaft that travels in the same direction at half the cap's distance. At rest the cap covers it
   completely; near the edge of the well it leans out on the near side, which reads as a stick tilted
   away from the thumb. Two constants in `ControlRenderers` say it — `SHAFT_RADIUS` and
   `SHAFT_TRAVEL` — and nothing about the geometry, the axes or the layout format changes: it is the
