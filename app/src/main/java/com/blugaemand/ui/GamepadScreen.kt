@@ -104,6 +104,8 @@ fun GamepadScreen(
                 // the D-pad shape's dead zone and half-width.
                 val pushed = (control.spec.shape as? ControlSpec.Shape.Dpad)
                     ?.let { router.dpadPush(control.index) }
+                // Not keyed on the shape, unlike those two: a trigger's pull is measured from
+                // where the finger landed and how tall the control is, which every shape has.
                 drawControl(
                     control = control,
                     style = padStyle,
@@ -112,6 +114,7 @@ fun GamepadScreen(
                     textMeasurer = textMeasurer,
                     heldMembers = router.activeMembers(control.index),
                     pushed = pushed,
+                    triggerValue = router.triggerValue(control.index),
                 )
             }
         }

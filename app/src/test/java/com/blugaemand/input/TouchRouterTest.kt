@@ -59,6 +59,7 @@ class TouchRouterTest {
         const val STICK = 0
         const val SOUTH_BUTTON = 1
         const val DPAD = 3
+        const val TRIGGER = 4
 
         /** One member of a cluster: offsets and radius are fractions of the layout unit. */
         fun member(button: GamepadButton, dx: Float, dy: Float, radius: Float = 0.1f) =
@@ -164,7 +165,7 @@ class TouchRouterTest {
         val state = router.state()
         assertTrue(state.isPressed(GamepadButton.SOUTH))
         assertTrue(state.isPressed(GamepadButton.EAST))
-        assertEquals(GamepadState.AXIS_MAX, state.leftTrigger)
+        assertEquals(GamepadState.TRIGGER_TOUCH_REST, state.leftTrigger)
         assertEquals(4, router.activeControls().size)
     }
 
@@ -441,12 +442,234 @@ class TouchRouterTest {
 
     // -- Triggers -------------------------------------------------------------------------
 
+    /**
+     * The left trigger of [layout] is 100 x 50 px at (500, 50), so its nominal throw is 100 px:
+     * TRIGGER_TRAVEL_SPANS of its shorter way across. It is 50 px from the top edge, which is the
+     * nearer one, so sliding up raises it and sliding down lowers it -- and the upward half of the
+     * throw is cut to that 50 px, because that is all the glass there is.
+     */
     @Test
-    fun `a trigger reads fully pulled while touched`() {
+    fun `a trigger rests at the middle of its range while touched`() {
         val router = router()
         router.down(1, 500f, 50f)
-        assertEquals(GamepadState.AXIS_MAX, router.state().leftTrigger)
+        assertEquals(GamepadState.TRIGGER_TOUCH_REST, router.state().leftTrigger)
         assertEquals(GamepadState.AXIS_MIN, router.state().rightTrigger)
+    }
+
+    @Test
+    fun `sliding out towards the edge raises a trigger and back in lowers it`() {
+        val router = router()
+        router.down(1, 500f, 50f)
+
+        router.move(1, 500f, 25f) // half the upward throw, which the top edge cuts to 50 px
+        assertEquals(192, router.state().leftTrigger)
+
+        router.move(1, 500f, 0f) // all of it, at the edge of the glass
+        assertEquals(GamepadState.AXIS_MAX, router.state().leftTrigger)
+
+        router.move(1, 500f, 50f) // back to where it started
+        assertEquals(GamepadState.TRIGGER_TOUCH_REST, router.state().leftTrigger)
+
+        router.move(1, 500f, 100f) // half the downward throw, which has the room to be the full 100
+        assertEquals(65, router.state().leftTrigger)
+
+        router.move(1, 500f, 150f) // all of it
+        assertEquals(GamepadState.TRIGGER_TOUCH_MIN, router.state().leftTrigger)
+
+        router.move(1, 500f, 350f) // and past it
+        assertEquals(GamepadState.TRIGGER_TOUCH_MIN, router.state().leftTrigger)
+    }
+
+    @Test
+    fun `the throw is cut to the room there is, so both rails stay reachable`() {
+        // The point of measuring against the edge: this trigger has 50 px of glass above it and a
+        // nominal throw of 100, so half a nominal throw upwards is already the ceiling. One twice
+        // as far from the edge takes the full 100 px to get there.
+        val router = router()
+        router.down(1, 500f, 50f)
+        router.move(1, 500f, 25f) // 25 px out of the 50 available
+        assertEquals(192, router.state().leftTrigger)
+
+        val inland = GamepadLayout(
+            id = "inland",
+            name = "Inland",
+            controls = listOf(
+                ControlSpec(
+                    ControlId.Trigger(Side.LEFT),
+                    ControlSpec.Shape.Rect(0.5f, 0.4f, width = 0.1f, height = 0.1f),
+                ),
+            ),
+        )
+        val roomy = TouchRouter(ResolvedLayout(inland, 1000f, 500f))
+        roomy.down(1, 500f, 200f) // 200 px from the top, so the nominal 100 px throw fits
+        roomy.move(1, 500f, 150f) // 50 px up
+        assertEquals(192, roomy.state().leftTrigger)
+
+        roomy.move(1, 500f, 175f) // 25 px up reads half as far along
+        assertEquals(160, roomy.state().leftTrigger)
+    }
+
+    @Test
+    fun `a trigger hard against the border can still be run down to the floor`() {
+        // 50 px of glass to the right of it and a nominal throw of 100: without the cap the finger
+        // would run out of screen at the halfway mark and the floor would be unreachable.
+        val cornered = GamepadLayout(
+            id = "cornered",
+            name = "Cornered",
+            controls = listOf(
+                ControlSpec(
+                    ControlId.Trigger(Side.RIGHT),
+                    ControlSpec.Shape.Rect(0.95f, 0.3f, width = 0.1f, height = 0.1f),
+                ),
+            ),
+        )
+        val router = TouchRouter(ResolvedLayout(cornered, 1000f, 500f))
+        router.down(1, 950f, 150f)
+        router.move(1, 1000f, 150f)
+        assertEquals(GamepadState.TRIGGER_TOUCH_MIN, router.state().rightTrigger)
+    }
+
+    /**
+     * A right-hand trigger up and to the right of centre, at (700, 150) and 100 x 50 px, so its
+     * nearer edges are the right one and the top one and it has the full 100 px nominal throw in
+     * every direction. The uncramped case, where the numbers are readable.
+     */
+    private val sided = GamepadLayout(
+        id = "sided",
+        name = "Sided",
+        controls = listOf(
+            ControlSpec(
+                ControlId.Trigger(Side.RIGHT),
+                ControlSpec.Shape.Rect(0.7f, 0.3f, width = 0.1f, height = 0.1f),
+            ),
+        ),
+    )
+
+    private fun sidedRouter() = TouchRouter(ResolvedLayout(sided, 1000f, 500f))
+
+    @Test
+    fun `a trigger is dragged sideways too, towards the middle for more`() {
+        val router = sidedRouter()
+        router.down(1, 700f, 150f)
+        assertEquals(GamepadState.TRIGGER_TOUCH_REST, router.state().rightTrigger)
+
+        router.move(1, 600f, 150f) // left, away from the near edge
+        assertEquals(GamepadState.AXIS_MAX, router.state().rightTrigger)
+
+        router.move(1, 650f, 150f) // halfway back
+        assertEquals(192, router.state().rightTrigger)
+    }
+
+    @Test
+    fun `both directions are relative to the nearer edge, not to the compass`() {
+        // A ZR up in the right-hand corner: sideways it is drawn in off the right edge to raise
+        // it, up and down it is pushed out over the top edge. A trigger along the bottom is the
+        // same rule seen from the other end -- down raises it there.
+        val zr = sidedRouter()
+        zr.down(1, 700f, 150f)
+        zr.move(1, 600f, 150f)
+        assertEquals("left, in off the right edge", GamepadState.AXIS_MAX, zr.state().rightTrigger)
+        zr.move(1, 700f, 50f)
+        assertEquals("up, out over the top edge", GamepadState.AXIS_MAX, zr.state().rightTrigger)
+        zr.move(1, 800f, 150f)
+        assertEquals("right, back out", GamepadState.TRIGGER_TOUCH_MIN, zr.state().rightTrigger)
+        zr.move(1, 700f, 250f)
+        assertEquals("down, back in", GamepadState.TRIGGER_TOUCH_MIN, zr.state().rightTrigger)
+
+        val low = GamepadLayout(
+            id = "low",
+            name = "Low",
+            controls = listOf(
+                ControlSpec(
+                    ControlId.Trigger(Side.LEFT),
+                    ControlSpec.Shape.Rect(0.5f, 0.9f, width = 0.1f, height = 0.1f),
+                ),
+            ),
+        )
+        val bottom = TouchRouter(ResolvedLayout(low, 1000f, 500f))
+        bottom.down(1, 500f, 450f)
+        bottom.move(1, 500f, 500f)
+        assertEquals("down, out over the bottom edge", GamepadState.AXIS_MAX, bottom.state().leftTrigger)
+        bottom.move(1, 500f, 350f)
+        assertEquals("up, back in", GamepadState.TRIGGER_TOUCH_MIN, bottom.state().leftTrigger)
+    }
+
+    @Test
+    fun `a drag counts on one axis only, whichever component is the larger`() {
+        // Both of these move right and up. Sideways they mean less, upwards they mean more, and
+        // nothing in between: the smaller component is dropped rather than added in, so a diagonal
+        // never does something neither of its parts does.
+        val router = sidedRouter()
+
+        router.down(1, 700f, 150f)
+        router.move(1, 760f, 110f) // 60 across, 40 up -- sideways, and back out
+        assertEquals(52, router.state().rightTrigger)
+
+        router.move(1, 740f, 100f) // 40 across, 50 up -- vertical, and out over the top
+        assertEquals(192, router.state().rightTrigger)
+    }
+
+    @Test
+    fun `an exactly diagonal drag counts as a vertical one`() {
+        // Arbitrary, but it has to be one of the two and it has to be the same every time. Read
+        // sideways this same drag would be 77, not 179.
+        val router = sidedRouter()
+        router.down(1, 700f, 150f)
+        router.move(1, 740f, 110f)
+        assertEquals(179, router.state().rightTrigger)
+    }
+
+    @Test
+    fun `the pull is measured from where the finger landed, not from the control`() {
+        // Two touches on opposite edges of the same trigger both start at rest: where within a
+        // control a finger happens to land is not something anyone aims, so it must not be an
+        // input to the value.
+        val router = router()
+        router.down(1, 460f, 30f)
+        assertEquals(GamepadState.TRIGGER_TOUCH_REST, router.state().leftTrigger)
+
+        router.reset()
+        router.down(1, 540f, 70f)
+        assertEquals(GamepadState.TRIGGER_TOUCH_REST, router.state().leftTrigger)
+    }
+
+    @Test
+    fun `a trigger eased right off still reads as touched`() {
+        // The point of the 1..255 range: a finger on a trigger it has run to the floor is not the
+        // same thing as no finger, and 0 is the value the host reads as released.
+        val router = router()
+        router.down(1, 500f, 50f)
+        router.move(1, 500f, 150f)
+
+        assertEquals(GamepadState.TRIGGER_TOUCH_MIN, router.state().leftTrigger)
+        router.up(1)
+        assertEquals(GamepadState.AXIS_MIN, router.state().leftTrigger)
+    }
+
+    @Test
+    fun `the trigger read-out reports what is being sent`() {
+        // The renderer draws this beside the control, and it has to be the same number the host
+        // gets -- a read-out disagreeing with the report would be worse than none.
+        val router = router()
+        assertNull("nothing is touching it", router.triggerValue(TRIGGER))
+
+        router.down(1, 500f, 50f)
+        assertEquals(GamepadState.TRIGGER_TOUCH_REST, router.triggerValue(TRIGGER))
+
+        router.move(1, 500f, 100f)
+        assertEquals(router.state().leftTrigger, router.triggerValue(TRIGGER))
+
+        router.up(1)
+        assertNull(router.triggerValue(TRIGGER))
+    }
+
+    @Test
+    fun `only triggers have a read-out`() {
+        val router = router()
+        router.down(1, 800f, 250f) // the A button
+        router.down(2, 200f, 250f) // the left stick
+        assertNull(router.triggerValue(SOUTH_BUTTON))
+        assertNull(router.triggerValue(STICK))
     }
 
     @Test
@@ -602,11 +825,19 @@ class TouchRouterTest {
         val router = TouchRouter(ResolvedLayout(shoulders, 1000f, 500f))
 
         router.down(1, 500f, 175f) // the upper half, which is the trigger
-        assertEquals(GamepadState.AXIS_MAX, router.state().rightTrigger)
+        assertEquals(GamepadState.TRIGGER_TOUCH_REST, router.state().rightTrigger)
+
+        // And it is analog there too, off the member's own size: 200 x 100 px, so a 200 px throw,
+        // and 50 px down, in from the top edge, is a quarter of the way to the floor. The read-out
+        // answers for the plate, since that is what the binding is on.
+        router.move(1, 500f, 225f)
+        assertEquals(96, router.state().rightTrigger)
+        assertEquals(96, router.triggerValue(0))
 
         router.move(1, 500f, 325f) // the lower half, which is the bumper
         assertEquals(GamepadState.AXIS_MIN, router.state().rightTrigger)
         assertTrue(router.state().isPressed(GamepadButton.R1))
+        assertNull("the finger is on the bumper now", router.triggerValue(0))
     }
 
     @Test

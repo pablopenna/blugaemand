@@ -4,6 +4,7 @@ import com.blugaemand.hid.GamepadButton
 import com.blugaemand.hid.GamepadState
 import com.blugaemand.hid.Hat
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
 import kotlin.math.roundToInt
@@ -22,6 +23,9 @@ class TouchRouter(private val layout: ResolvedLayout) {
 
     private class Binding(
         val control: ResolvedControl,
+        /** Where the finger went down, which is what a trigger's pull is measured against. */
+        val startX: Float,
+        val startY: Float,
         var x: Float,
         var y: Float,
     ) {
@@ -38,12 +42,24 @@ class TouchRouter(private val layout: ResolvedLayout) {
             if (control.members.isEmpty()) control else control.memberAt(x, y) ?: control
     }
 
+    /**
+     * The axis value [trigger] reads for this pointer.
+     *
+     * Asked of the binding rather than of the control, because a pull is measured from where the
+     * finger landed and a control knows nothing about that. Taking the trigger as an argument
+     * rather than re-deriving it keeps this out of the business of deciding whether the pointer is
+     * on one — both callers have already established that, one from a `when` and one from a filter.
+     */
+    private fun Binding.pullOf(trigger: ResolvedControl): Int = GamepadState.triggerFromUnit(
+        trigger.pullAt(startX, startY, x, y, layout.width, layout.height),
+    )
+
     private val bindings = LinkedHashMap<Long, Binding>()
 
     /** Registers a new pointer. Returns true if it landed on a control. */
     fun down(pointerId: Long, x: Float, y: Float): Boolean {
         val control = layout.hitTest(x, y) ?: return false
-        bindings[pointerId] = Binding(control, x, y)
+        bindings[pointerId] = Binding(control, startX = x, startY = y, x = x, y = y)
         return true
     }
 
@@ -110,6 +126,23 @@ class TouchRouter(private val layout: ResolvedLayout) {
         return binding.control.normalisedOffset(binding.x, binding.y)
     }
 
+    /**
+     * What the trigger at [controlIndex] is sending right now, in the 1..255 range a touched
+     * trigger occupies, or null when nothing is on it. The renderer draws it as the read-out under
+     * the control.
+     *
+     * By index like [stickOffset] and [dpadPush], and it answers for a trigger reached as a
+     * cluster member too — the binding is on the plate, and [Binding.target] resolves which member
+     * the finger is over. What it cannot do is answer for two triggers on one plate at once, which
+     * is the same first-pointer-wins simplification those two already make.
+     */
+    fun triggerValue(controlIndex: Int): Int? {
+        val binding = bindings.values.firstOrNull {
+            it.control.index == controlIndex && it.target().id is ControlId.Trigger
+        } ?: return null
+        return binding.pullOf(binding.target())
+    }
+
     /** Builds the state to send to the host from every currently held control. */
     fun state(): GamepadState {
         var state = GamepadState.NEUTRAL
@@ -122,14 +155,15 @@ class TouchRouter(private val layout: ResolvedLayout) {
         // Declared here rather than lifted out of the class so it keeps writing straight into the
         // two accumulators above. A cluster member goes through exactly this, so a member drives a
         // button, an axis or the hat by the same rules a control of its own would.
-        fun apply(control: ResolvedControl, x: Float, y: Float) {
+        fun apply(binding: Binding) {
+            val control = binding.target()
+            val x = binding.x
+            val y = binding.y
             state = when (val id = control.id) {
                 is ControlId.Button -> state.withButton(id.button, true)
 
                 is ControlId.Trigger -> {
-                    // Digital for now: full pull on touch. The descriptor already carries the full
-                    // 0..255 range, so making these analog later is a change here and nowhere else.
-                    val value = GamepadState.AXIS_MAX
+                    val value = binding.pullOf(control)
                     if (id.side == ControlId.Side.LEFT) {
                         state.copy(leftTrigger = value)
                     } else {
@@ -163,7 +197,7 @@ class TouchRouter(private val layout: ResolvedLayout) {
             }
         }
 
-        for (binding in bindings.values) apply(binding.target(), binding.x, binding.y)
+        for (binding in bindings.values) apply(binding)
 
         // A held cross wins. A layout carrying both is a layout where the cross is the deliberate
         // one, and letting a stray arm override a thumb already on the cross would be worse than
@@ -192,6 +226,89 @@ class TouchRouter(private val layout: ResolvedLayout) {
             val scale = if (distance > radius) radius / distance else 1f
             return (dx * scale / radius) to (dy * scale / radius)
         }
+
+        /**
+         * How far a trigger is pulled, as 0..1 with **0.5 at rest**, given where the finger went
+         * down, where it is now, and the surface it is on.
+         *
+         * A touch rests in the middle and the finger slides both ways. Which way means *more*
+         * depends on the axis, and both axes measure from the same place: whichever screen edge
+         * the finger is nearer along the axis in play.
+         *
+         * - **Sideways, in towards the middle of the screen raises it**, back out lowers it.
+         * - **Up or down, out towards the nearer edge raises it**, back in lowers it — so a
+         *   trigger in a top corner is pulled by sliding up and eased off by sliding down, and one
+         *   along the bottom is pulled by sliding down.
+         *
+         * Neither is a fixed compass direction: a layout may put a trigger anywhere, and the rule
+         * has to read the same wherever it lands. That the two senses come out opposite is
+         * deliberate and is a decision about feel — the thumb draws in off the side of the glass
+         * and pushes out over the top of it — not a symmetry anything else depends on.
+         *
+         * **One axis at a time.** Whichever component of the drag is the larger is the one that
+         * counts, and the other is ignored outright rather than added in. Two axes summed would
+         * make a diagonal do something neither of its parts does, and a trigger in a corner —
+         * where both an edge below and an edge beside it are close — has two directions that
+         * plainly mean "less" and no sensible way to combine them. Re-read on every event, so a
+         * drag that turns a corner changes which axis it is answering on.
+         *
+         * **The travel available is capped by the room there is.** The nominal throw is
+         * [TRIGGER_TRAVEL_SPANS] of the control's shorter way across, which keeps a bigger trigger
+         * a longer throw and keeps the throw the same length whichever way it is dragged. But a
+         * trigger sits against an edge, and that way there may be only a few dozen pixels of glass
+         * before the finger runs out of screen — so each direction takes the smaller of the
+         * nominal throw and the distance to the edge that way, and the floor and the ceiling are
+         * both always reachable. The cost is that whichever of the two runs at an edge is touchier
+         * than the other, and that is the right way round: it is reachability that cannot be given
+         * up.
+         */
+        fun ResolvedControl.pullAt(
+            startX: Float,
+            startY: Float,
+            x: Float,
+            y: Float,
+            screenWidth: Float,
+            screenHeight: Float,
+        ): Float {
+            val dx = x - startX
+            val dy = y - startY
+            val horizontal = abs(dx) > abs(dy)
+
+            val moved = if (horizontal) dx else dy
+            // Room either side of where the finger landed, towards the low and high edge of the
+            // axis in play. Measured from the anchor rather than the control's centre so that one
+            // point answers both questions below, and so a finger that landed off-centre gets the
+            // room it actually has.
+            val towardsLow = if (horizontal) startX else startY
+            val towardsHigh = (if (horizontal) screenWidth else screenHeight) - towardsLow
+
+            // The nearer edge is the one with less room. A finger exactly on the midline has no
+            // nearer edge; the tie goes to the low side, which is arbitrary but at least the same
+            // every time.
+            val awayFromEdge = if (towardsLow < towardsHigh) moved else -moved
+            // Sideways that is the direction meaning more, up and down it is the one meaning less.
+            val pull = if (horizontal) awayFromEdge else -awayFromEdge
+
+            val nominal = minOf(extentX, extentY) * 2f * TRIGGER_TRAVEL_SPANS
+            // The glass left the way the finger is actually going, which is what caps the throw.
+            // Asked of the raw movement rather than of [pull], so it stays right however the two
+            // axes assign their signs.
+            val room = if (moved >= 0f) towardsHigh else towardsLow
+            val travel = minOf(nominal, room)
+            if (travel <= 0f) return REST_PULL
+
+            return (REST_PULL + REST_PULL * (pull / travel)).coerceIn(0f, 1f)
+        }
+
+        /** Where a touched trigger rests, as a 0..1 pull: the middle, with room to go either way. */
+        const val REST_PULL = 0.5f
+
+        /**
+         * The nominal throw from rest to either rail, in multiples of the control's shorter way
+         * across — the same measure `drawGlyph` sizes a picture by, and for the same reason: it is
+         * the one extent a control of any shape has that is not distorted by how wide it is drawn.
+         */
+        const val TRIGGER_TRAVEL_SPANS = 2f
 
         /** Which of the eight hat directions a touch inside the D-pad represents. */
         fun ResolvedControl.hatFor(x: Float, y: Float): Hat {

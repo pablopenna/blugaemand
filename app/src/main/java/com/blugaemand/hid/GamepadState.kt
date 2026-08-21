@@ -113,6 +113,27 @@ data class GamepadState(
         const val AXIS_CENTER = 128
         const val AXIS_MAX = 255
 
+        /**
+         * The lowest a trigger reads while a finger is on it.
+         *
+         * One rather than [AXIS_MIN], because a finger resting on a trigger without pulling it is
+         * not the same thing as no finger at all, and [AXIS_MIN] is the value every host reads as
+         * released. Reserving zero for untouched leaves the touched range 1..255 and makes
+         * "touched, at rest" sayable at all.
+         */
+        const val TRIGGER_TOUCH_MIN = 1
+
+        /**
+         * What a trigger reads on touch, before the finger has slid anywhere: the midpoint of the
+         * touched range, equal to `triggerFromUnit(0.5f)`.
+         *
+         * A trigger rests in the middle because it is slid **both ways** — inwards for more, back
+         * out for less — so it has to start with room in both. It is also comfortably over
+         * `GenericHidProfile`'s digital threshold, which is what keeps a plain tap asserting L2 or
+         * R2 for hosts that only read buttons.
+         */
+        const val TRIGGER_TOUCH_REST = 128
+
         val NEUTRAL = GamepadState()
 
         /** Clamps a raw value into the 0..255 range the descriptor declares. */
@@ -131,8 +152,14 @@ data class GamepadState(
         fun axisFromUnit(unit: Float): Int =
             clampAxis(Math.round(AXIS_CENTER + unit.coerceIn(-1f, 1f) * 128f))
 
-        /** Converts a 0f..1f trigger pull into the 0..255 axis range. */
-        fun triggerFromUnit(unit: Float): Int =
-            clampAxis(Math.round(unit.coerceIn(0f, 1f) * AXIS_MAX))
+        /**
+         * Converts a 0f..1f pull on a **touched** trigger into the axis range.
+         *
+         * The floor is [TRIGGER_TOUCH_MIN] and not [AXIS_MIN]; see there for why. A released
+         * trigger does not come through here at all — it is [AXIS_MIN] by resting default.
+         */
+        fun triggerFromUnit(unit: Float): Int = clampAxis(
+            Math.round(TRIGGER_TOUCH_MIN + unit.coerceIn(0f, 1f) * (AXIS_MAX - TRIGGER_TOUCH_MIN)),
+        )
     }
 }

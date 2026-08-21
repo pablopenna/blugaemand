@@ -136,8 +136,13 @@ class GenericHidProfileTest {
         assertEquals(255, GamepadState.axisFromUnit(1f))
         assertEquals(0, GamepadState.axisFromUnit(-99f)) // out of range inputs clamp
         assertEquals(255, GamepadState.axisFromUnit(99f))
-        assertEquals(0, GamepadState.triggerFromUnit(0f))
+        // A touched trigger floors at 1, not 0 -- zero is reserved for one that is not touched
+        // at all, which is the only value a host reads as released.
+        assertEquals(1, GamepadState.triggerFromUnit(0f))
         assertEquals(255, GamepadState.triggerFromUnit(1f))
+        assertEquals(GamepadState.TRIGGER_TOUCH_REST, GamepadState.triggerFromUnit(0.5f))
+        assertEquals(1, GamepadState.triggerFromUnit(-99f)) // out of range inputs clamp
+        assertEquals(255, GamepadState.triggerFromUnit(99f))
     }
 
     @Test

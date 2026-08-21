@@ -164,7 +164,9 @@ host. Only the service and the Compose layer touch the framework.
 - `ResolvedLayout` — converts a layout to pixels once per size change. The renderer, hit-testing
   *and the editor* all read from it, so what is drawn is exactly what is touchable and exactly what
   a drag moves. Untouched by the two modes: presentation never changes where a touch lands.
-- `TouchRouter` — owns `pointerId → control` bindings and produces a `GamepadState`.
+- `TouchRouter` — owns `pointerId → control` bindings and produces a `GamepadState`. A binding
+  keeps the point it went down at, which is what an analog trigger's pull is measured from, and the
+  surface it is on, which is what tells the pull which way is inwards; see *Analog triggers* below.
 - `LayoutJson` — the saved format, and the two small serialisers it needs. See *Layouts* below.
 - `LayoutLibrary` — the built-ins plus the user's own. Whether a layout can be edited is a fact
   about where it came from, not about the layout, so `GamepadLayout` carries no flag saying so;
@@ -548,6 +550,65 @@ User layouts are deliberately allowed to be **incomplete, empty or overlapping**
 tests apply to `Layouts.ALL` only; `missingButtons()` is surfaced in the editor as a caption, which
 is a warning and not an error. A pad with no Start button is a strange pad, but it is allowed to be
 one.
+
+### Analog triggers
+
+A trigger sends a value, not a press, and the value comes from **where the finger has slid to**
+since it went down.
+
+- **A touch rests in the middle** — `128`, `GamepadState.TRIGGER_TOUCH_REST` — because a trigger is
+  slid *both* ways and has to start with room in either. It is also comfortably over
+  `GenericHidProfile`'s digital threshold of 32, so a plain tap still asserts `L2` / `R2` for hosts
+  that only read buttons.
+- **Which way means *more* depends on the axis**, and both axes measure from the same place:
+  whichever screen edge the finger is nearer along the axis in play. **Sideways, in towards the
+  middle of the screen raises it** and back out lowers it. **Up or down, out towards the nearer edge
+  raises it** and back in lowers it. So a ZR up in the right-hand corner — where the built-in
+  layouts put it, at `(0.91, 0.08)` — is raised by sliding *left* or *up* and lowered by sliding
+  *right* or *down*, and a trigger placed along the bottom is raised by sliding *down* instead.
+  Neither is a fixed compass direction, because a layout may put a trigger anywhere and the rule has
+  to read the same wherever it lands. That the two senses come out opposite is deliberate: it is a
+  decision about feel — the thumb draws in off the side of the glass and pushes out over the top of
+  it — and nothing else depends on them agreeing.
+- **One axis at a time.** Whichever component of the drag is the larger is the one that counts, and
+  the other is ignored outright rather than added in. Summing them would make a diagonal do
+  something neither of its parts does, and a trigger in a corner — with an edge above it *and* an
+  edge beside it — has two directions that plainly mean "less" and no sensible way to combine them.
+  The axis is re-read on every event, so a drag that turns a corner changes which one it answers on.
+  An exactly diagonal drag counts as vertical; it has to be one of the two and it has to be the
+  same every time.
+- **The travel available is capped by the room there is.** The nominal throw from rest to either
+  rail is `TRIGGER_TRAVEL_SPANS` of the control's shorter way across — the same measure `drawGlyph`
+  sizes a picture by, and for the same reason: it is the one extent a control of any shape has that
+  is not distorted by how wide it is drawn. But a trigger sits against an edge, and towards that
+  edge there may be only a few dozen pixels of glass before the finger runs out of screen, so **each
+  direction takes the smaller of the nominal throw and the distance to the edge that way**. The
+  floor and the ceiling are therefore both always reachable, however tightly a layout tucks a
+  trigger into a corner. The cost is that whichever of the two runs at an edge is touchier than the
+  other — the built-in shoulder triggers sit 8% of the screen height from the top, which is roughly
+  a third of their nominal throw, so their ceiling comes up fast. Reachability is the thing that
+  cannot be given up; if the top of the range wants a longer pull, the fix is to move the trigger
+  further down the layout.
+- **The touched range is `1..255`, not `0..255`.** A finger on a trigger it has run down to the
+  floor is not the same thing as no finger, and `0` is the value every host reads as released —
+  reserving it is what makes "touched, at rest" sayable. `GamepadState.TRIGGER_TOUCH_MIN` is that
+  floor and `triggerFromUnit` maps onto it; a released trigger never goes through there, it is
+  `AXIS_MIN` by resting default.
+- **The pull is measured from the touch-down point, not from the control.** Where within a trigger
+  a finger happens to land is not something anyone aims, so it must not be an input to the value —
+  two touches on opposite edges of the same trigger both start at rest. The room either side is
+  measured from that same anchor, so one point answers both which edge is nearer and how much
+  glass is left that way.
+
+**While a finger is on one, the value is drawn in a pill just clear of the control** — below it,
+unless the pill would fall off the bottom of the glass, in which case above. `TouchRouter.triggerValue`
+is what the renderer asks, and it is the same number the host is being sent, computed the same way:
+a read-out disagreeing with the report would be worse than no read-out. It answers for a trigger
+reached as a plate member too, positioned against the plate, since the plate is what the binding is
+on.
+
+All of this is `TouchRouter` and the renderer. The descriptor already declared the full range and
+the encoder already forwarded it, so neither changed.
 
 ### The saved format
 

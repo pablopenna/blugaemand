@@ -14,6 +14,7 @@ import com.blugaemand.hid.Hat
 import com.blugaemand.input.ControlId
 import com.blugaemand.input.ControlSpec
 import com.blugaemand.input.ResolvedControl
+import com.blugaemand.ui.theme.OverlayColors
 import com.blugaemand.ui.theme.PadColors
 
 /**
@@ -33,6 +34,10 @@ import com.blugaemand.ui.theme.PadColors
  * direction, and an art pack draws each of them. Null everywhere else, and null on a cross nobody is
  * touching — [pressed] still says whether it is held, and the two agree because both come from the
  * same binding.
+ *
+ * [triggerValue] is the analog trigger's, drawn as a read-out beside the control while a finger is
+ * on it. Nothing else on the pad sends a number a thumb can land anywhere within, so nothing else
+ * needs telling what it is currently sending.
  */
 fun DrawScope.drawControl(
     control: ResolvedControl,
@@ -42,6 +47,7 @@ fun DrawScope.drawControl(
     textMeasurer: TextMeasurer,
     heldMembers: Set<Int> = emptySet(),
     pushed: Hat? = null,
+    triggerValue: Int? = null,
 ) {
     // Asked before the shape is looked at, so a member's own picture is found by its own id. A
     // cluster's id is never in a pack -- ArtPack.glyph is a map lookup, so it simply misses and
@@ -57,24 +63,77 @@ fun DrawScope.drawControl(
     }
     if (glyph != null) {
         drawGlyph(control, glyph)
-        return
-    }
-
-    when (val shape = control.spec.shape) {
-        is ControlSpec.Shape.Circle -> drawCircleControl(control, style, pressed, textMeasurer)
-        is ControlSpec.Shape.Rect -> drawRectControl(control, style, pressed, textMeasurer)
-        is ControlSpec.Shape.Stick -> drawStick(control, style, pressed, stickOffset)
-        is ControlSpec.Shape.Dpad -> drawDpad(control, style, shape, pressed)
-        is ControlSpec.Shape.Cluster -> for (member in control.members) {
-            drawControl(
-                control = member,
-                style = style,
-                pressed = member.index in heldMembers,
-                stickOffset = null,
-                textMeasurer = textMeasurer,
-            )
+    } else {
+        when (val shape = control.spec.shape) {
+            is ControlSpec.Shape.Circle -> drawCircleControl(control, style, pressed, textMeasurer)
+            is ControlSpec.Shape.Rect -> drawRectControl(control, style, pressed, textMeasurer)
+            is ControlSpec.Shape.Stick -> drawStick(control, style, pressed, stickOffset)
+            is ControlSpec.Shape.Dpad -> drawDpad(control, style, shape, pressed)
+            is ControlSpec.Shape.Cluster -> for (member in control.members) {
+                drawControl(
+                    control = member,
+                    style = style,
+                    pressed = member.index in heldMembers,
+                    stickOffset = null,
+                    textMeasurer = textMeasurer,
+                )
+            }
         }
     }
+
+    // Last, and outside the branch above, so it sits over whatever the control drew and reads the
+    // same whether that was a glyph or a shape.
+    if (triggerValue != null) drawTriggerValue(control, triggerValue, textMeasurer)
+}
+
+/**
+ * Draws what a trigger is currently sending, in a pill just clear of the control.
+ *
+ * Below it, unless the pill would fall off the bottom of the glass — a trigger against the lower
+ * edge gets its read-out above instead. Measured against the screen rather than against which half
+ * the control sits in, because what decides this is whether there is room, and a tall enough pad
+ * has room below a control well past the midpoint.
+ *
+ * The pill is sized for `255` however few digits are showing, so it does not twitch wider and
+ * narrower as the value crosses 10 and 100 — the number inside is what should be moving.
+ */
+private fun DrawScope.drawTriggerValue(
+    control: ResolvedControl,
+    value: Int,
+    textMeasurer: TextMeasurer,
+) {
+    val textStyle = TextStyle(
+        color = PadColors.LabelPressed,
+        fontSize = (control.extentY * 0.75f).toSp(),
+    )
+    val measured = textMeasurer.measure(value.toString(), textStyle)
+    val widest = textMeasurer.measure("255", textStyle)
+
+    val padding = widest.size.height * 0.3f
+    val pill = Size(widest.size.width + padding * 2f, widest.size.height + padding)
+    val gap = control.extentY * 0.35f
+
+    val below = control.centerY + control.extentY + gap
+    val top = if (below + pill.height <= size.height) {
+        below
+    } else {
+        control.centerY - control.extentY - gap - pill.height
+    }
+    val left = control.centerX - pill.width / 2f
+
+    drawRoundRect(
+        color = OverlayColors.Pill,
+        topLeft = Offset(left, top),
+        size = pill,
+        cornerRadius = CornerRadius(pill.height / 2f),
+    )
+    drawText(
+        textLayoutResult = measured,
+        topLeft = Offset(
+            control.centerX - measured.size.width / 2f,
+            top + (pill.height - measured.size.height) / 2f,
+        ),
+    )
 }
 
 /**

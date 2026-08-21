@@ -440,8 +440,19 @@ mode. If one of those ever becomes acceptable, Stages 1–3 are the plan to pick
 
 Unordered; pull from here whenever.
 
-- [ ] Analog triggers driven by slide distance or touch pressure (the descriptor already carries the
-      full 0..255 range; only `TouchRouter` needs changing)
+- [x] **Analog triggers** — driven by slide distance, in `TouchRouter` and the renderer alone; the
+      descriptor already carried the full range and the encoder already forwarded it. A touch rests
+      at the middle of the range and the finger slides both ways, against whichever screen edge it
+      is nearer along the axis in play: **sideways, in towards the middle of the screen raises it;
+      up or down, out towards that edge raises it** — so a ZR in the top corner is pulled by sliding
+      left or up, and a trigger along the bottom by sliding down. **One axis at a time**, whichever
+      component of the drag is the larger, because a trigger in a corner has two directions that
+      mean "less" and no sensible way to combine them.
+      **Each direction's throw is capped by the distance to the edge that way**, so both rails stay
+      reachable however tightly a layout tucks a trigger into a corner. The value is drawn in a pill
+      just clear of the control while a finger is on it. **The touched range is 1..255**, leaving 0
+      to mean untouched. Slide rather than touch pressure: pressure would put an Android type in
+      `TouchRouter`, which is the file the whole routing behaviour is JVM-tested through
 - [ ] Haptic feedback on button press, with a sensitivity setting
 - [ ] Turbo / autofire and macro buttons
 - [ ] Motion controls from the device IMU
