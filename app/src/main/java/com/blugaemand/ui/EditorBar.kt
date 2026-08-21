@@ -28,12 +28,15 @@ import com.blugaemand.input.ControlSpec
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutStyle
 import com.blugaemand.input.Placement
+import com.blugaemand.input.StickMode
 import com.blugaemand.input.TriggerMode
 import com.blugaemand.input.art.ArtPacks
 import com.blugaemand.input.describe
 import com.blugaemand.input.missingButtons
 import com.blugaemand.input.other
+import com.blugaemand.input.stickModeOrNull
 import com.blugaemand.input.triggerModeOrNull
+import com.blugaemand.input.withStickMode
 import com.blugaemand.input.withTriggerMode
 import com.blugaemand.ui.theme.OverlayColors
 
@@ -218,6 +221,29 @@ private fun EditorPanel(
                             TriggerMode.PROGRESSIVE ->
                                 "Rests halfway. Slide in or out to change how far it is pulled."
                             TriggerMode.BINARY -> "Fully pulled while touched, like a button."
+                        },
+                    )
+                }
+                // The stick's counterpart, and absent for everything that is not one, for the
+                // reason the trigger's row is: a setting that has nothing to do with a button
+                // should not be a greyed-out row on every button.
+                val stickMode = selectedSpec?.stickModeOrNull()
+                if (selected != null && stickMode != null) {
+                    PanelEntry(
+                        label = "Stick",
+                        trailing = stickMode.describe(),
+                        onClick = {
+                            onLayoutChange(layout.withStickMode(selected, stickMode.other()))
+                        },
+                    )
+                    PanelCaption(
+                        when (stickMode) {
+                            StickMode.FIXED ->
+                                "Sits where it is drawn. Pinch to resize its throw."
+                            StickMode.DYNAMIC ->
+                                "An area to touch, not a stick to find: it appears where your " +
+                                    "thumb lands. Pinch to resize the area; its throw is the " +
+                                    "size it had as a fixed stick."
                         },
                     )
                 }

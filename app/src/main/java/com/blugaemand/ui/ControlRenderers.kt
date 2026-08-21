@@ -14,12 +14,14 @@ import com.blugaemand.hid.Hat
 import com.blugaemand.input.ControlId
 import com.blugaemand.input.ControlSpec
 import com.blugaemand.input.ResolvedControl
+import com.blugaemand.input.StickTouch
+import com.blugaemand.input.isDynamicStick
 import com.blugaemand.ui.theme.OverlayColors
 import com.blugaemand.ui.theme.PadColors
 
 /**
- * Draws one resolved control. [pressed] drives the highlight, and [stickOffset] positions a
- * thumbstick's cap as a -1..1 displacement.
+ * Draws one resolved control. [pressed] drives the highlight, and [stickTouch] says where a
+ * thumbstick is centred and how far its cap has been pushed.
  *
  * A control the layout's art pack has a picture for draws that alone — no plate, no label — because
  * the pack's prompts are whole buttons in their own right. Everything else falls back to the drawn
@@ -43,7 +45,7 @@ fun DrawScope.drawControl(
     control: ResolvedControl,
     style: PadStyle,
     pressed: Boolean,
-    stickOffset: Pair<Float, Float>?,
+    stickTouch: StickTouch?,
     textMeasurer: TextMeasurer,
     heldMembers: Set<Int> = emptySet(),
     pushed: Hat? = null,
@@ -67,14 +69,14 @@ fun DrawScope.drawControl(
         when (val shape = control.spec.shape) {
             is ControlSpec.Shape.Circle -> drawCircleControl(control, style, pressed, textMeasurer)
             is ControlSpec.Shape.Rect -> drawRectControl(control, style, pressed, textMeasurer)
-            is ControlSpec.Shape.Stick -> drawStick(control, style, pressed, stickOffset)
+            is ControlSpec.Shape.Stick -> drawStick(control, style, pressed, stickTouch)
             is ControlSpec.Shape.Dpad -> drawDpad(control, style, shape, pressed)
             is ControlSpec.Shape.Cluster -> for (member in control.members) {
                 drawControl(
                     control = member,
                     style = style,
                     pressed = member.index in heldMembers,
-                    stickOffset = null,
+                    stickTouch = null,
                     textMeasurer = textMeasurer,
                 )
             }
@@ -208,13 +210,32 @@ private fun DrawScope.drawRectControl(
     )
 }
 
+/**
+ * Draws a thumbstick: the well, and the cap displaced within it.
+ *
+ * Both modes come through here and differ only in where the well is. A fixed stick's is its own
+ * centre and is always there; a dynamic one's is wherever the finger currently holding it put it,
+ * and there is no well at all when nobody is. The base position is [StickTouch]'s to say and not
+ * this function's to work out, which is what keeps the cap on screen and the axes on the wire from
+ * ever disagreeing about where centre is.
+ */
 private fun DrawScope.drawStick(
     control: ResolvedControl,
     style: PadStyle,
     pressed: Boolean,
-    stickOffset: Pair<Float, Float>?,
+    stickTouch: StickTouch?,
 ) {
-    val center = Offset(control.centerX, control.centerY)
+    // An area is drawn first and always, so that it is visible with nothing on it -- a control
+    // with nothing of its own to draw is indistinguishable from a layout that has lost one, on
+    // the pad as much as in the editor. Faint, because it is a region rather than a thing to
+    // press, and there is nothing to see there until a thumb puts a stick in it.
+    if (control.isDynamicStick) {
+        drawStickArea(control)
+        // The stick itself exists only while a finger is down, and only where that finger landed.
+        if (stickTouch == null) return
+    }
+
+    val center = Offset(stickTouch?.baseX ?: control.centerX, stickTouch?.baseY ?: control.centerY)
     drawCircle(color = PadColors.StickBase, radius = control.radius, center = center)
     drawCircle(
         color = PadColors.ControlStroke,
@@ -226,7 +247,8 @@ private fun DrawScope.drawStick(
     // The cap may travel right to the edge of the base, so pull it in by its own radius to keep it
     // visually inside the well.
     val travel = control.radius - control.knobRadius
-    val (dx, dy) = stickOffset ?: (0f to 0f)
+    val dx = stickTouch?.offsetX ?: 0f
+    val dy = stickTouch?.offsetY ?: 0f
     val knobCenter = Offset(center.x + dx * travel, center.y + dy * travel)
 
     // The cap keeps its own resting grey — it reads as sitting on top of the well only because it
@@ -235,6 +257,28 @@ private fun DrawScope.drawStick(
         color = if (pressed) style.pressed else PadColors.StickKnob,
         radius = control.knobRadius,
         center = knobCenter,
+    )
+}
+
+/**
+ * The outline of the rectangle a dynamic stick may be spawned in.
+ *
+ * Drawn in the control stroke and nothing else — no fill, no label — because it is not a control
+ * anyone presses and it sits over whatever a layout has put inside it. What it is for is saying
+ * *a stick lives here*: enough to find the region with a thumb, to select it in the editor, and to
+ * tell an empty area apart from a layout that has lost a control.
+ */
+private fun DrawScope.drawStickArea(control: ResolvedControl) {
+    val topLeft = Offset(control.centerX - control.halfWidth, control.centerY - control.halfHeight)
+    val size = Size(control.halfWidth * 2f, control.halfHeight * 2f)
+    val stroke = control.radius * 0.04f
+
+    drawRoundRect(
+        color = PadColors.ControlStroke,
+        topLeft = topLeft,
+        size = size,
+        cornerRadius = CornerRadius(control.radius * 0.5f),
+        style = Stroke(width = stroke),
     )
 }
 

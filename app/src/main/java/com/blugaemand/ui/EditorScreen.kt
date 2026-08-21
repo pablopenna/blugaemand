@@ -179,7 +179,10 @@ fun EditorScreen(
                     // Nothing is held in here, and a control drawn pressed would be a control
                     // showing its pressed colour for no reason the user can act on.
                     pressed = false,
-                    stickOffset = null,
+                    // Nothing is touching anything in here, which for a dynamic stick means its
+                    // area is drawn and the stick inside it is not -- exactly what the pad shows
+                    // before a thumb lands.
+                    stickTouch = null,
                     textMeasurer = textMeasurer,
                 )
             }
@@ -220,8 +223,11 @@ private fun DrawScope.drawGrid(step: Float) {
  * visible when the control itself is under a thumb.
  */
 private fun DrawScope.drawSelection(control: ResolvedControl) {
-    val halfWidth = if (control.radius > 0f) control.radius else control.halfWidth
-    val halfHeight = if (control.radius > 0f) control.radius else control.halfHeight
+    // Through the resolved extents rather than restating which field a shape measures by, so the
+    // ring goes round a dynamic stick's area -- the part of it that is on the glass -- and not
+    // round the throw of the stick it spawns.
+    val halfWidth = control.extentX
+    val halfHeight = control.extentY
     val inset = halfWidth.coerceAtMost(halfHeight) * 0.25f
 
     drawRoundRect(

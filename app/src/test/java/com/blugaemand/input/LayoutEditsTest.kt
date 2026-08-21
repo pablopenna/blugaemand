@@ -663,6 +663,78 @@ class LayoutEditsTest {
         assertEquals(TriggerMode.PROGRESSIVE, TriggerMode.BINARY.other())
     }
 
+    // -- Stick mode -----------------------------------------------------------------------
+
+    @Test
+    fun `a stick starts fixed and switches to dynamic`() {
+        assertEquals(StickMode.FIXED, layout.controls[stick].stickModeOrNull())
+
+        val dynamic = layout.withStickMode(stick, StickMode.DYNAMIC)
+        assertEquals(StickMode.DYNAMIC, dynamic.controls[stick].stickModeOrNull())
+        // The geometry is untouched: the mode says what the numbers mean, not what they are.
+        assertEquals(layout.stick(stick), dynamic.stick(stick))
+
+        assertEquals(layout, dynamic.withStickMode(stick, StickMode.FIXED))
+    }
+
+    @Test
+    fun `a control with no stick has no mode, and setting one is not an edit`() {
+        // Every spec carries the field, the way every spec carries a trigger mode, so the question
+        // the editor asks is not "what is your mode" but "are you a stick at all".
+        assertNull(layout.controls[south].stickModeOrNull())
+        assertNull(layout.controls[trigger].stickModeOrNull())
+
+        assertEquals(layout, layout.withStickMode(south, StickMode.DYNAMIC))
+        assertEquals(layout, layout.withStickMode(99, StickMode.DYNAMIC))
+    }
+
+    @Test
+    fun `the stick modes are named and paired for the row that toggles them`() {
+        assertEquals("fixed", StickMode.FIXED.describe())
+        assertEquals("dynamic", StickMode.DYNAMIC.describe())
+        assertEquals(StickMode.DYNAMIC, StickMode.FIXED.other())
+        assertEquals(StickMode.FIXED, StickMode.DYNAMIC.other())
+    }
+
+    @Test
+    fun `a dynamic stick arrives with a default area, and its own once resized`() {
+        val dynamic = layout.withStickMode(stick, StickMode.DYNAMIC)
+        assertEquals(ControlSpec.Shape.Stick.DEFAULT_AREA_WIDTH, dynamic.stick(stick).areaWidth)
+        assertEquals(ControlSpec.Shape.Stick.DEFAULT_AREA_HEIGHT, dynamic.stick(stick).areaHeight)
+
+        // A pinch on a dynamic stick is a pinch on the area, which is what is drawn and touched.
+        // The throw keeps the radius it was tuned to as a fixed stick, and keeps it across the
+        // switch back -- so nothing about switching modes is lossy.
+        val grown = resolve(dynamic).resizedControl(stick, factor = 1.5f, snap = false)
+        val area = grown.stick(stick)
+        assertEquals(ControlSpec.Shape.Stick.DEFAULT_AREA_WIDTH * 1.5f, area.areaWidth, TOLERANCE)
+        assertEquals(ControlSpec.Shape.Stick.DEFAULT_AREA_HEIGHT * 1.5f, area.areaHeight, TOLERANCE)
+        assertEquals(layout.stick(stick).radius, area.radius, TOLERANCE)
+        assertEquals(layout.stick(stick).knobRadius, area.knobRadius, TOLERANCE)
+    }
+
+    @Test
+    fun `an area may be made far larger than a control, and no smaller`() {
+        // The two limits are about different things: a control is a thing you press, and an area
+        // is the region a stick may be started in -- half the pad is a reasonable answer for one.
+        val dynamic = layout.withStickMode(stick, StickMode.DYNAMIC)
+        val huge = resolve(dynamic).resizedControl(stick, factor = 100f, snap = false)
+        assertEquals(MAX_AREA_EXTENT * height / width, huge.stick(stick).areaWidth, TOLERANCE)
+        assertEquals(MAX_AREA_EXTENT, huge.stick(stick).areaHeight, TOLERANCE)
+
+        // The floor is the shared one: an area too small to land a thumb in is as useless as a
+        // button too small to hit.
+        val tiny = resolve(dynamic).resizedControl(stick, factor = 0.001f, snap = false)
+        assertEquals(MIN_CONTROL_EXTENT * height / width, tiny.stick(stick).areaWidth, TOLERANCE)
+        assertEquals(MIN_CONTROL_EXTENT, tiny.stick(stick).areaHeight, TOLERANCE)
+    }
+
+    @Test
+    fun `a fixed stick still pinches its own throw`() {
+        val grown = resolve().resizedControl(stick, factor = 1.5f, snap = false)
+        assertEquals(layout.stick(stick).radius * 1.5f, grown.stick(stick).radius, TOLERANCE)
+    }
+
     // -- Helpers --------------------------------------------------------------------------
 
     private fun assertOnGrid(pixels: Float) {

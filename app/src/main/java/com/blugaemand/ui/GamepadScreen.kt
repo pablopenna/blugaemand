@@ -98,8 +98,8 @@ fun GamepadScreen(
             for (control in resolved.controls) {
                 // Keyed on the shape rather than the id, because the shape is what dispatches to
                 // the stick renderer -- a layout is free to give ControlId.Stick a plain circle.
-                val stickOffset = (control.spec.shape as? ControlSpec.Shape.Stick)
-                    ?.let { router.stickOffset(control.index) }
+                val stickTouch = (control.spec.shape as? ControlSpec.Shape.Stick)
+                    ?.let { router.stickTouch(control.index) }
                 // Keyed on the shape for the same reason, since the sector arithmetic behind it is
                 // the D-pad shape's dead zone and half-width.
                 val pushed = (control.spec.shape as? ControlSpec.Shape.Dpad)
@@ -110,7 +110,7 @@ fun GamepadScreen(
                     control = control,
                     style = padStyle,
                     pressed = control.index in active,
-                    stickOffset = stickOffset,
+                    stickTouch = stickTouch,
                     textMeasurer = textMeasurer,
                     heldMembers = router.activeMembers(control.index),
                     pushed = pushed,

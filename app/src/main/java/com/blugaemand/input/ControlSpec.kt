@@ -125,6 +125,33 @@ enum class TriggerMode {
 }
 
 /**
+ * How a thumbstick decides where its centre is.
+ *
+ * A setting on the control for the same reasons [TriggerMode] is: the two sticks on a pad are not
+ * obliged to agree — a dynamic left stick to walk with and a fixed right stick to aim with is one
+ * pad — and an id is compared as identity all over the app, so a mode carried on
+ * [ControlId.Stick] would make a fixed left stick and a dynamic left stick two different controls
+ * to `withControlAdded`, `missingButtons` and the editor's add page alike.
+ */
+@Serializable
+enum class StickMode {
+
+    /** The stick is where it is drawn, and a thumb has to find it. What a stick has always been. */
+    FIXED,
+
+    /**
+     * The control is a bare area, and the stick appears wherever inside it a thumb lands, reading
+     * centre; the finger drags it off centre from there and lifting takes it away again.
+     *
+     * The answer to the thing a fixed stick is bad at — a thumb that has to find the stick before
+     * it can push it, in the dark, mid-game. See `TouchRouter` for how one behaves once it exists:
+     * the base follows the finger past full deflection, the area governs spawning and nothing
+     * else, and one area carries one stick at a time.
+     */
+    DYNAMIC,
+}
+
+/**
  * Where a control sits on screen and how big it is, in coordinates normalised to the 0..1 range.
  *
  * Normalised rather than absolute so a layout renders identically on any screen size, and so the
@@ -151,6 +178,15 @@ data class ControlSpec(
      * back as the behaviour it was saved with, and so a hand-written layout can leave it out.
      */
     val triggerMode: TriggerMode = TriggerMode.PROGRESSIVE,
+    /**
+     * Only meaningful for a [ControlId.Stick] drawn as a [Shape.Stick], and ignored by everything
+     * else — carried by every control the way [label] and [triggerMode] are, and shown by some.
+     *
+     * Defaulted for the same reason [triggerMode] is: a layout saved before the setting existed
+     * reads back as the fixed stick it was saved as, and a newer file read by an older build loses
+     * the key and does the same. No format version bump either way.
+     */
+    val stickMode: StickMode = StickMode.FIXED,
 ) {
     @Serializable
     sealed interface Shape {
@@ -183,6 +219,17 @@ data class ControlSpec(
         /**
          * A thumbstick: [radius] is the base the finger may roam within, [knobRadius] the moving
          * cap drawn on top. Both are fractions of the layout unit.
+         *
+         * [areaWidth] and [areaHeight] are the rectangle a [StickMode.DYNAMIC] stick may be
+         * spawned in, and are ignored by a fixed one. They are measured the way
+         * [Rect.width] and [Rect.height] are — width against the screen, height against the unit —
+         * because that is what they are: a box on the glass, and one that should spread with a
+         * wider screen rather than stay the same slice of it.
+         *
+         * Two sizes on one shape rather than two shapes, because the throw and the area are
+         * genuinely independent — the point of a big area is to spawn anywhere in it, not to need
+         * a bigger sweep once you have — and because keeping both on the stick is what lets the
+         * mode switch back and forth without losing either.
          */
         @Serializable
         @SerialName("stick")
@@ -191,7 +238,19 @@ data class ControlSpec(
             override val centerY: Float,
             val radius: Float,
             val knobRadius: Float,
-        ) : Shape
+            val areaWidth: Float = DEFAULT_AREA_WIDTH,
+            val areaHeight: Float = DEFAULT_AREA_HEIGHT,
+        ) : Shape {
+            companion object {
+                /**
+                 * The area a stick switched to [StickMode.DYNAMIC] arrives with, if it has never
+                 * carried one: a fifth of the screen across and a third of it down on a 16:9,
+                 * which is about as much glass as a thumb sweeps without the hand moving.
+                 */
+                const val DEFAULT_AREA_WIDTH = 0.18f
+                const val DEFAULT_AREA_HEIGHT = 0.30f
+            }
+        }
 
         /**
          * A square D-pad cross. [radius] is half the width of the cross, as a fraction of the
@@ -222,7 +281,7 @@ data class ControlSpec(
          * whatever mixture of shapes they are.
          *
          * Members are plain buttons, triggers and D-pad arms. A [Stick] is excluded because a
-         * stick's cap is positioned through `stickOffset`, which is keyed by top-level control; a
+         * stick's cap is positioned through `stickTouch`, which is keyed by top-level control; a
          * nested plate and a one-piece [Dpad] are excluded because neither adds anything a flat list
          * of members does not already do.
          */
@@ -247,6 +306,21 @@ data class ControlSpec(
         }
     }
 }
+
+/**
+ * Whether this control is an area a stick is spawned in rather than a stick drawn where it is.
+ *
+ * All three conditions, and not [ControlSpec.stickMode] alone: the mode is carried by every
+ * control, so it says something only where there is both a stick to spawn and a stick's geometry
+ * to spawn it with. A [ControlId.Stick] given a plain circle stays the circle it was drawn as, the
+ * same way `GamepadScreen` dispatches its rendering on the shape.
+ *
+ * Asked wherever an area behaves unlike a control — [ResolvedControl.contains],
+ * [ResolvedLayout.hitTest], the router's binding and the renderer — so the definition is in one
+ * place and they cannot drift into disagreeing about which controls are areas.
+ */
+fun ControlSpec.isDynamicStick(): Boolean =
+    stickMode == StickMode.DYNAMIC && id is ControlId.Stick && shape is ControlSpec.Shape.Stick
 
 /** Whether this control is one a [ControlSpec.Shape.Cluster] may hold; see there for why. */
 private fun ControlId.canBeClustered(): Boolean = when (this) {

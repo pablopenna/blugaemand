@@ -41,14 +41,33 @@ data class ResolvedControl(
     val id: ControlId get() = spec.id
 
     /**
-     * Half this control's on-screen extent, per axis — which is [radius] for the round shapes and
-     * the half-extents for the ones measured as a box. Everything that has to know how much room a
-     * control actually takes up asks these rather than restating the test.
+     * Whether this is a [StickMode.DYNAMIC] stick's spawning area — a box to touch rather than a
+     * stick to push, and the one control on a pad that is *meant* to have others drawn over it.
      */
-    val extentX: Float get() = if (radius > 0f) radius else halfWidth
-    val extentY: Float get() = if (radius > 0f) radius else halfHeight
+    val isDynamicStick: Boolean get() = spec.isDynamicStick()
 
-    fun contains(x: Float, y: Float): Boolean = when (spec.shape) {
+    /**
+     * Half this control's on-screen extent, per axis — the half-extents for the shapes measured as
+     * a box, and [radius] for the round ones. Everything that has to know how much room a control
+     * actually takes up asks these rather than restating the test.
+     *
+     * The box wins where a control has both, which is the dynamic stick alone: it carries a radius
+     * for the throw of the stick it spawns *and* an area to spawn it in, and the area is the part
+     * that is on the glass. Nothing else sets both, so the order only decides that one case.
+     */
+    val extentX: Float get() = if (halfWidth > 0f) halfWidth else radius
+    val extentY: Float get() = if (halfHeight > 0f) halfHeight else radius
+
+    fun contains(x: Float, y: Float): Boolean = when {
+        // Before the shape is looked at, because a dynamic stick has a stick's shape and a
+        // rectangle's touch area -- the one place the pad breaks "what is drawn is exactly what is
+        // touchable", and it breaks it knowingly: the area is the control, and the stick inside it
+        // is a transient the renderer places from the router.
+        isDynamicStick -> abs(x - centerX) <= halfWidth && abs(y - centerY) <= halfHeight
+        else -> containsShape(x, y)
+    }
+
+    private fun containsShape(x: Float, y: Float): Boolean = when (spec.shape) {
         // A cluster's touch area is its bounding box for the same reason the D-pad's is: what is
         // wanted is a plate with no dead spots in it, not four circles with gaps between them.
         is ControlSpec.Shape.Rect, is ControlSpec.Shape.Cluster ->
@@ -124,9 +143,14 @@ class ResolvedLayout(
             halfWidth = 0f, halfHeight = 0f,
         )
 
+        // A dynamic stick carries both: the radius is the throw of the stick it spawns, the
+        // half-extents are the area it may be spawned in. A fixed one has no area, and leaving it
+        // at zero is what keeps `extentX` answering with the radius for it.
         is ControlSpec.Shape.Stick -> ResolvedControl(
             index, spec, centerX, centerY, radius = shape.radius * unit,
-            knobRadius = shape.knobRadius * unit, halfWidth = 0f, halfHeight = 0f,
+            knobRadius = shape.knobRadius * unit,
+            halfWidth = if (spec.isDynamicStick()) shape.areaWidth * widthReference / 2f else 0f,
+            halfHeight = if (spec.isDynamicStick()) shape.areaHeight * unit / 2f else 0f,
         )
 
         is ControlSpec.Shape.Dpad -> ResolvedControl(
@@ -168,10 +192,19 @@ class ResolvedLayout(
     /**
      * The control under a touch point, or null. When controls overlap the nearest centre wins,
      * which keeps behaviour predictable in tight clusters like the face buttons.
+     *
+     * **Except that a dynamic stick's area always loses.** A Start button sitting inside one is a
+     * Start button, and nearest-centre alone would hand a touch on its edge to an area whose centre
+     * happens to be closer. So an area is a background: anything else containing the point beats
+     * it, however far away its centre is, and the areas are only considered when nothing else was
+     * touched. Between two areas — a layout nobody sensible will make, but a representable one —
+     * nearest centre decides as usual.
      */
-    fun hitTest(x: Float, y: Float): ResolvedControl? =
-        controls.filter { it.contains(x, y) }
-            .minByOrNull { hypot(x - it.centerX, y - it.centerY) }
+    fun hitTest(x: Float, y: Float): ResolvedControl? {
+        val touched = controls.filter { it.contains(x, y) }
+        val drawnOnTop = touched.filterNot { it.isDynamicStick }
+        return drawnOnTop.ifEmpty { touched }.minByOrNull { hypot(x - it.centerX, y - it.centerY) }
+    }
 
     private companion object {
         /** Height as a fraction of width on a 16:9 screen, the ratio the layouts are authored for. */

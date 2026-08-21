@@ -160,6 +160,25 @@ class LayoutSerializationTest {
         assertEquals(TriggerMode.PROGRESSIVE, control.triggerMode)
     }
 
+    @Test
+    fun `a stick saved before stick modes existed reads as fixed, with a default area`() {
+        // Same bargain as the trigger above: every layout already on a phone was written without
+        // the key, and each has to come back as the stick it was saved as. The area comes back as
+        // the default, which is only ever read if someone goes and makes it dynamic.
+        val text = layoutFileOf(
+            """{"id":"old","name":"Old","controls":[{"id":{"type":"stick","side":"LEFT"},""" +
+                """"shape":{"type":"stick","centerX":0.2,"centerY":0.5,"radius":0.18,""" +
+                """"knobRadius":0.08}}],""" +
+                """"style":{"type":"colors","resting":"#FF000000","pressed":"#FFFFFFFF"}}""",
+        )
+        val control = decodeLayouts(text).single().controls.single()
+        assertEquals(StickMode.FIXED, control.stickMode)
+
+        val shape = control.shape as ControlSpec.Shape.Stick
+        assertEquals(ControlSpec.Shape.Stick.DEFAULT_AREA_WIDTH, shape.areaWidth)
+        assertEquals(ControlSpec.Shape.Stick.DEFAULT_AREA_HEIGHT, shape.areaHeight)
+    }
+
     // -- The names the format is made of --------------------------------------------------
 
     @Test
@@ -272,6 +291,10 @@ class LayoutSerializationTest {
                 ControlSpec(
                     id = ControlId.Stick(ControlId.Side.RIGHT),
                     shape = ControlSpec.Shape.Stick(0.78f, 0.8f, radius = 0.18f, knobRadius = 0.08f),
+                    // Dynamic for the same reason the trigger above is binary: it is the value
+                    // that is not the default, so this file is what pins the mode's own names and
+                    // the names of the area fields that only a dynamic stick reads.
+                    stickMode = StickMode.DYNAMIC,
                 ),
                 ControlSpec(
                     id = ControlId.Dpad,
@@ -325,7 +348,8 @@ class LayoutSerializationTest {
                                     "radius": 0.072
                                 },
                                 "label": "Y",
-                                "triggerMode": "PROGRESSIVE"
+                                "triggerMode": "PROGRESSIVE",
+                                "stickMode": "FIXED"
                             },
                             {
                                 "id": {
@@ -340,7 +364,8 @@ class LayoutSerializationTest {
                                     "height": 0.11
                                 },
                                 "label": "LT",
-                                "triggerMode": "BINARY"
+                                "triggerMode": "BINARY",
+                                "stickMode": "FIXED"
                             },
                             {
                                 "id": {
@@ -352,10 +377,13 @@ class LayoutSerializationTest {
                                     "centerX": 0.78,
                                     "centerY": 0.8,
                                     "radius": 0.18,
-                                    "knobRadius": 0.08
+                                    "knobRadius": 0.08,
+                                    "areaWidth": 0.18,
+                                    "areaHeight": 0.3
                                 },
                                 "label": "",
-                                "triggerMode": "PROGRESSIVE"
+                                "triggerMode": "PROGRESSIVE",
+                                "stickMode": "DYNAMIC"
                             },
                             {
                                 "id": {
@@ -369,7 +397,8 @@ class LayoutSerializationTest {
                                     "deadZone": 0.25
                                 },
                                 "label": "",
-                                "triggerMode": "PROGRESSIVE"
+                                "triggerMode": "PROGRESSIVE",
+                                "stickMode": "FIXED"
                             },
                             {
                                 "id": {
@@ -383,7 +412,8 @@ class LayoutSerializationTest {
                                     "radius": 0.055
                                 },
                                 "label": "▲",
-                                "triggerMode": "PROGRESSIVE"
+                                "triggerMode": "PROGRESSIVE",
+                                "stickMode": "FIXED"
                             },
                             {
                                 "id": {
@@ -406,7 +436,8 @@ class LayoutSerializationTest {
                                                 "radius": 0.06
                                             },
                                             "label": "B",
-                                            "triggerMode": "PROGRESSIVE"
+                                            "triggerMode": "PROGRESSIVE",
+                                            "stickMode": "FIXED"
                                         },
                                         {
                                             "id": {
@@ -420,12 +451,14 @@ class LayoutSerializationTest {
                                                 "radius": 0.06
                                             },
                                             "label": "A",
-                                            "triggerMode": "PROGRESSIVE"
+                                            "triggerMode": "PROGRESSIVE",
+                                            "stickMode": "FIXED"
                                         }
                                     ]
                                 },
                                 "label": "",
-                                "triggerMode": "PROGRESSIVE"
+                                "triggerMode": "PROGRESSIVE",
+                                "stickMode": "FIXED"
                             }
                         ],
                         "style": {

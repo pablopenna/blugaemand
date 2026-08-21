@@ -24,6 +24,17 @@ const val MIN_CONTROL_EXTENT: Float = 0.02f
 const val MAX_CONTROL_EXTENT: Float = 0.40f
 
 /**
+ * Largest a [StickMode.DYNAMIC] stick's spawning area may be made, in the same units.
+ *
+ * Far past [MAX_CONTROL_EXTENT], because the two limits are about different things. That one keeps
+ * a control the size of a thing you press; an area is not pressed, it is the region a stick may be
+ * *started* in, and half the pad is a perfectly reasonable answer for one — that is the whole
+ * appeal of a dynamic stick. The floor is shared: an area too small to land a thumb in is as
+ * useless as a button too small to hit.
+ */
+const val MAX_AREA_EXTENT: Float = 1.0f
+
+/**
  * Spacing of the editor's grid, in **pixels**, derived from the layout unit so it is square on
  * screen.
  *
@@ -93,7 +104,12 @@ fun ResolvedLayout.resizedControl(index: Int, factor: Float, snap: Boolean): Gam
     // Pulled back on screen afterwards because a plate grows about its centre and its whole
     // bounding box grows with it, so one near an edge would otherwise scale straight off the side.
     // A single control can do that too, but by half a radius rather than half a plate.
-    return ResolvedLayout(layout.replacingShape(index) { it.scaledBy(scale) }, width, height)
+    // The whole spec and not just its shape, because what a stick's numbers mean depends on the
+    // mode it is in: a pinch on a dynamic one is a pinch on the area it is drawn as.
+    val resized = layout.replacingSpec(index) { spec ->
+        spec.copy(shape = spec.shape.scaledBy(scale, area = spec.isDynamicStick()))
+    }
+    return ResolvedLayout(resized, width, height)
         .let { grown -> grown.movedControl(index, 0f, 0f, snap = false) }
 }
 
@@ -184,6 +200,41 @@ fun ControlSpec.triggerModeOrNull(): TriggerMode? = when (val shape = shape) {
     else -> if (id is ControlId.Trigger) triggerMode else null
 }
 
+/**
+ * [this] with the stick at [index] switched to [mode].
+ *
+ * A control that is not a stick comes back unchanged rather than refusing, the way
+ * [withTriggerMode] does, and for the same reason: [stickModeOrNull] is what decides whether the
+ * editor offers the row at all. No recursion into a plate either — a [ControlSpec.Shape.Cluster]
+ * cannot hold a stick, so there is nowhere for one to hide.
+ *
+ * The area a dynamic stick appears with is whatever the shape already carries, which for a stick
+ * that has never been dynamic is [ControlSpec.Shape.Stick.DEFAULT_AREA_WIDTH] and its height. So
+ * switching back and forth is lossless: the throw keeps the radius it was tuned to and the area
+ * keeps the size it was dragged to.
+ */
+fun GamepadLayout.withStickMode(index: Int, mode: StickMode): GamepadLayout =
+    if (index !in controls.indices) this
+    else copy(
+        controls = controls.mapIndexed { i, spec ->
+            if (i == index && spec.id is ControlId.Stick && spec.shape is ControlSpec.Shape.Stick) {
+                spec.copy(stickMode = mode)
+            } else {
+                spec
+            }
+        },
+    )
+
+/**
+ * The mode this control's stick is in, or null if it is not a stick — which is also the editor's
+ * test for whether to offer the setting.
+ *
+ * Both halves asked, matching [isDynamicStick]: the setting is only meaningful where there is a
+ * stick to spawn and a stick's geometry to spawn it with.
+ */
+fun ControlSpec.stickModeOrNull(): StickMode? =
+    if (id is ControlId.Stick && shape is ControlSpec.Shape.Stick) stickMode else null
+
 /** [this] without the control at [index]. An index that is not there is not an error. */
 fun GamepadLayout.withControlRemovedAt(index: Int): GamepadLayout =
     if (index !in controls.indices) this
@@ -233,6 +284,15 @@ fun TriggerMode.other(): TriggerMode = when (this) {
     TriggerMode.PROGRESSIVE -> TriggerMode.BINARY
 }
 
+/** How a stick mode is named in the editor — *"fixed"*, *"dynamic"*. Beside [TriggerMode.describe]. */
+fun StickMode.describe(): String = name.lowercase()
+
+/** The other of the two, which is what tapping the editor's row switches to. */
+fun StickMode.other(): StickMode = when (this) {
+    StickMode.FIXED -> StickMode.DYNAMIC
+    StickMode.DYNAMIC -> StickMode.FIXED
+}
+
 /** [value] rounded to the nearest multiple of [step]. */
 fun snapToGrid(value: Float, step: Float): Float =
     if (step <= 0f) value else (value / step).roundToInt() * step
@@ -253,10 +313,13 @@ private fun ControlId.Side.spelled(): String =
 private fun GamepadLayout.replacingShape(
     index: Int,
     transform: (ControlSpec.Shape) -> ControlSpec.Shape,
+): GamepadLayout = replacingSpec(index) { it.copy(shape = transform(it.shape)) }
+
+private fun GamepadLayout.replacingSpec(
+    index: Int,
+    transform: (ControlSpec) -> ControlSpec,
 ): GamepadLayout = copy(
-    controls = controls.mapIndexed { i, spec ->
-        if (i == index) spec.copy(shape = transform(spec.shape)) else spec
-    },
+    controls = controls.mapIndexed { i, spec -> if (i == index) transform(spec) else spec },
 )
 
 /**
@@ -399,9 +462,20 @@ private class Scale(
         return limited(snapped)
     }
 
-    fun of(value: Float, referencePixels: Float): Float {
+    /**
+     * One size field scaled, in pixels against its own reference, held between the limits.
+     *
+     * [ceiling] is a parameter for the one field that has a different one — a dynamic stick's
+     * spawning area, which is meant to be large; see [MAX_AREA_EXTENT]. The floor is not, because
+     * the reason for it is the same for every kind of control: below it a thumb misses.
+     */
+    fun of(
+        value: Float,
+        referencePixels: Float,
+        ceiling: Float = MAX_CONTROL_EXTENT,
+    ): Float {
         val min = MIN_CONTROL_EXTENT * unitPixels
-        val max = MAX_CONTROL_EXTENT * unitPixels
+        val max = ceiling * unitPixels
         // Clamped before snapping and again after: snapping a clamped value can round it back
         // outside the limits, and at the bottom end that is how a control becomes too small to
         // touch and so impossible to grab hold of again.
@@ -419,8 +493,14 @@ private class Scale(
  * - **Dpad** scales only its radius. `deadZone` is already a fraction *of* that radius, so scaling
  *   it too would compound and the dead zone would swallow the cross.
  * - **Rect** scales both extents, each against its own reference; see [Scale].
+ *
+ * [area] says this is a [StickMode.DYNAMIC] stick, in which case the pinch lands on the spawning
+ * area and the throw is left alone. That is what the gesture is on: the area is what is drawn and
+ * what is touched, and growing the throw with it would mean a bigger region to start a stick in
+ * cost you a longer sweep to push it — the opposite of what a bigger area is asked for. The throw
+ * is still the radius, still tuned by pinching the stick in fixed mode, and kept across the switch.
  */
-private fun ControlSpec.Shape.scaledBy(scale: Scale): ControlSpec.Shape = when (this) {
+private fun ControlSpec.Shape.scaledBy(scale: Scale, area: Boolean): ControlSpec.Shape = when (this) {
     is ControlSpec.Shape.Circle -> copy(radius = scale.of(radius, scale.unit))
 
     is ControlSpec.Shape.Rect -> copy(
@@ -428,7 +508,12 @@ private fun ControlSpec.Shape.scaledBy(scale: Scale): ControlSpec.Shape = when (
         height = scale.of(height, scale.unit),
     )
 
-    is ControlSpec.Shape.Stick -> {
+    is ControlSpec.Shape.Stick -> if (area) {
+        copy(
+            areaWidth = scale.of(areaWidth, scale.widthPixels, MAX_AREA_EXTENT),
+            areaHeight = scale.of(areaHeight, scale.unit, MAX_AREA_EXTENT),
+        )
+    } else {
         val scaled = scale.of(radius, scale.unit)
         copy(radius = scaled, knobRadius = knobRadius * (scaled / radius))
     }

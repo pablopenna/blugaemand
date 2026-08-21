@@ -10,7 +10,9 @@ labels, and **Xbox**, **PS5**, **Switch**, **Switch 2**, **Steam Deck**, **Wii U
 buttons out. **You can also make your own**,
 from empty or as a copy of one of those, and move, resize, add and remove controls on it — including
 whole arrangements dropped as **one control**, so a face diamond is a single plate that sends A, B,
-X or Y depending on where you touch it. Layouts and the choice of one are saved between launches. 
+X or Y depending on where you touch it. Triggers are analog or binary per control, and a stick is
+either fixed where it is drawn or **dynamic** — an area where the stick appears under your thumb
+wherever it lands. Layouts and the choice of one are saved between launches. 
 Verified end-to-end against **Linux** and **Windows**.
 Two pills sit at the top edge, each opening
 its panel on a 600 ms hold: the left one is connection status and pairing, the right one
@@ -163,10 +165,13 @@ host. Only the service and the Compose layer touch the framework.
   "moves both" suggests.
 - `ResolvedLayout` — converts a layout to pixels once per size change. The renderer, hit-testing
   *and the editor* all read from it, so what is drawn is exactly what is touchable and exactly what
-  a drag moves. Untouched by the two modes: presentation never changes where a touch lands.
+  a drag moves. Untouched by the two modes: presentation never changes where a touch lands. **One
+  control breaks that invariant on purpose** — a dynamic stick is a rectangle you touch with a
+  stick drawn somewhere inside it; see *Two kinds of thumbstick*.
 - `TouchRouter` — owns `pointerId → control` bindings and produces a `GamepadState`. A binding
-  keeps the point it went down at, which is what an analog trigger's pull is measured from, and the
-  surface it is on, which is what tells the pull which way is inwards; see *Analog triggers* below.
+  keeps the point it went down at, which is what an analog trigger's pull is measured from and where
+  a dynamic stick appears, and the surface it is on, which is what tells the pull which way is
+  inwards; see *Analog triggers* and *Two kinds of thumbstick* below.
 - `LayoutJson` — the saved format, and the two small serialisers it needs. See *Layouts* below.
 - `LayoutLibrary` — the built-ins plus the user's own. Whether a layout can be edited is a fact
   about where it came from, not about the layout, so `GamepadLayout` carries no flag saying so;
@@ -460,7 +465,7 @@ own id simply misses and falls through to drawing the members.
 
 Members are plain buttons, triggers and D-pad arms; a `require` in the shape's constructor — which
 runs on deserialise too, so a hand-edited file is caught — rejects anything else and rejects an empty
-plate. A `Stick` is out because a stick's cap is positioned through `stickOffset`, which is keyed by
+plate. A `Stick` is out because a stick's cap is positioned through `stickTouch`, which is keyed by
 top-level control; a nested plate and a one-piece cross are out because neither adds anything a flat
 list of members does not. `decodeLayouts` converts those `require` failures into
 `SerializationException`, which is what it promises to throw and what `LayoutStore` catches — without
@@ -634,6 +639,80 @@ buy nothing.
 All of this is `TouchRouter`, `LayoutEdits` and the renderer. The descriptor already declared the
 full range and the encoder already forwarded it, so neither changed.
 
+### Two kinds of thumbstick
+
+A stick is set to one of two `StickMode`s — fixed or dynamic — by the row the editor shows when one
+is selected. **Fixed is what a stick has always been**: it sits where it is drawn, and the thumb has
+to find it. **Dynamic is a rectangular area with no stick drawn in it.** A touch anywhere inside
+makes one appear at that point reading `0,0`, the finger drags it off centre from there, and lifting
+takes it away again. It is the answer to the thing a fixed stick is bad at — a thumb hunting for the
+stick before it can push it, in the dark, mid-game.
+
+The mode lives on `ControlSpec` and not on `ControlId.Stick`, for exactly the reasons the trigger's
+does: an id is compared as identity all over the app, so a mode carried there would make a fixed
+left stick and a dynamic left stick two different controls to `withControlAdded`, `missingButtons`
+and the editor's add page. Per control rather than per layout, too — a dynamic left stick to walk
+with and a fixed right stick to aim with is one pad.
+
+**The anchor was already there.** A `Binding` keeps the point the finger went down at, because that
+is what an analog trigger's pull is measured from. A dynamic stick is the same idea on both axes:
+the offset is measured about the touch-down point instead of about the control's centre. That is the
+whole of the routing change.
+
+- **It breaks "what is drawn is exactly what is touchable"**, which is the invariant `ResolvedLayout`
+  exists to hold — and it breaks it the honest way. **The area is the control**: `contains` and
+  `extentX`/`extentY` answer with the rectangle, so hit-testing, dragging, the on-screen clamp and
+  the editor's selection ring are all about the thing on the glass. The stick inside it is a
+  transient the renderer places from the router, the way the trigger read-out already is.
+- **The renderer is told where the base is, not just how far the cap has moved.** `stickTouch` hands
+  back a `StickTouch` — base in pixels, offset as a -1..1 pair — because a dynamic stick has to say
+  where its centre *is*. Same rule as `triggerValue`: one answer, from the binding, so the picture
+  cannot disagree with what the host is being sent. A fixed stick answers there too, about its own
+  centre, which is what leaves the renderer with one case instead of two.
+- **The base follows the finger, and off the area if it goes there.** Once the finger is a full
+  deflection out, the base is dragged up behind it to sit exactly one radius back, rather than
+  pinning where the stick appeared. So the stick stays at full throw in the direction it is being
+  pushed, the thumb can keep going as far as it likes, and turning around turns the stick with it
+  instead of swinging it through a centre now somewhere behind the hand. **The area is for spawning
+  only** — it decides where a stick may be *started* and has no say over anything after that, which
+  is the rule that already lets a thumb roll off a button without releasing it.
+- **The area loses to anything drawn on top of it.** A Start button inside the rectangle is a Start
+  button: `hitTest` gives the touch to any non-area control containing the point, however far its
+  centre is, and only falls back to the areas when nothing else was touched. This makes the area the
+  first control *meant* to overlap others, so the *no built-in layout has overlapping controls* test
+  skips pairs involving one.
+- **One stick per area: first finger wins, the second is ignored.** Not queued, not stacked — a
+  second stick out of the same area would fight the first for the same two axes. So `down` refuses
+  an area that already has a pointer on it, which is a new thing for it to refuse; every other
+  control takes as many fingers as land on it. A finger refused that way binds to nothing at all,
+  exactly as a touch on bare glass does.
+- **A small dead zone at the anchor**, `TouchRouter.DYNAMIC_DEAD_ZONE`, 12% of the radius, with the
+  rest of the throw stretched over what is left so the value climbs from zero at its edge rather than
+  jumping to it. The anchor is wherever the thumb happened to land rather than anywhere it aimed, so
+  without one every spawn would start with a few pixels of drift on both axes. A constant and not a
+  field on the shape, unlike the D-pad's: it compensates for a thumb, which is the same everywhere,
+  not for a layout's taste in sizes. **The fixed stick gets none** — it has never had one, and its
+  centre is a place you can feel.
+
+**The throw and the area are sized separately**, and both live on `ControlSpec.Shape.Stick`: the
+`radius` is how far the stick travels, `areaWidth` and `areaHeight` are the rectangle it may be
+spawned in — measured like a `Rect`'s, against the screen and against the layout unit respectively.
+A pinch on a dynamic stick resizes **the area**, since that is what is drawn and what is touched;
+growing the region a stick can be started in should not cost a longer sweep to push it. Which leaves
+the throw tuned by pinching the stick as a fixed one and switching back — nothing is lost across the
+switch, in either direction. An area may be made far larger than any control: `MAX_AREA_EXTENT` is
+`1.0` against `MAX_CONTROL_EXTENT`'s `0.40`, because half the pad is a perfectly reasonable answer
+for a region and an absurd one for a button. The floor is shared — a thumb misses either.
+
+**An empty area still draws its outline**, faint, on the pad as much as in the editor. It is the one
+control with nothing of its own to draw, and an invisible one is indistinguishable from a layout that
+has lost a control.
+
+**A saved layout carries `"stickMode"` on every control** and `"areaWidth"` / `"areaHeight"` on every
+stick, defaulted, on the same bargain the trigger mode struck: a layout saved before any of this
+existed comes back as the fixed stick it was, a newer file loads on an older build as a fixed stick
+too, and no format version bump is needed either way.
+
 ### The saved format
 
 `LayoutJson` writes `{"version": 1, "layouts": [...]}` — always a list, so saving the whole library
@@ -758,8 +837,9 @@ edit the layout editor makes — all on the JVM:
   clamping, and a walk of the descriptor's item stream verifying it is structurally sound and
   declares exactly 9 bytes.
 - `TouchRouterTest` — pointer binding and release, multitouch independence, stick normalisation and
-  circular clamping, D-pad sectors, and layout sanity (no overlaps, every button reachable, unique
-  ids). The sanity tests run over `Layouts.ALL`, so a new built-in is covered by adding it — and
+  circular clamping, dynamic sticks (where one appears, the dead zone at the anchor, the base
+  following the finger, the area losing to what is drawn on it and taking one finger at a time),
+  D-pad sectors, and layout sanity (no overlaps, every button reachable, unique ids). The sanity tests run over `Layouts.ALL`, so a new built-in is covered by adding it — and
   only over `Layouts.ALL`, since a user layout is entitled to be empty or to overlap.
 - `LayoutArtTest` — invariants for layouts drawn with art: the pack covers every control bar a
   declared list of exceptions (the sticks, and the PS button), anything falling back to its shape
@@ -878,11 +958,17 @@ The three built-ins cannot be changed — make your own instead:
 7. **Trigger** appears only while a trigger is selected — or a plate with one on it — and switches
    that trigger between **progressive** (rests halfway, slide to pull it) and **binary** (fully
    pulled while touched, like a button). Each trigger is set on its own, so one pad can have both.
-8. **Appearance** picks how the pad is drawn: *Shapes and colours*, or one of the seven art packs.
+8. **Stick** appears only while a thumbstick is selected, and switches it between **fixed** — where
+   it is drawn, pinch to resize its throw — and **dynamic**, an area where the stick appears under
+   your thumb wherever it lands inside it and vanishes when you lift. Pinching a dynamic stick
+   resizes the *area*, which can be made much bigger than any button; its throw is whatever size it
+   had as a fixed stick, so switch back, pinch, and switch again to change that. Anything you place
+   inside the area still works normally — a touch on it presses it and spawns no stick.
+9. **Appearance** picks how the pad is drawn: *Shapes and colours*, or one of the seven art packs.
    In colours mode a picker sits below the rule — tap *At rest* or *Held* to say which fill it is
    adjusting, then drag on the square and the hue bar; in image mode the art carries its own colours,
    so there is nothing there to pick. Going back to shapes returns the colours you had.
-9. **Done** goes back to the pad. Everything is saved as you go; **Delete layout** asks first,
+10. **Done** goes back to the pad. Everything is saved as you go; **Delete layout** asks first,
    because there is no undo.
 
 To reach the editor again later, select the layout in the menu — *Edit layout* appears on the root

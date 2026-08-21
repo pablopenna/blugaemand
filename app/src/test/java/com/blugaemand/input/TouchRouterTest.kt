@@ -221,15 +221,20 @@ class TouchRouterTest {
         // By index, not by side: a layout may carry the same control twice, so the renderer asks
         // about the one it is drawing rather than about a side.
         val router = router()
-        assertNull(router.stickOffset(STICK))
+        assertNull(router.stickTouch(STICK))
 
         router.down(1, 200f, 250f)
         router.move(1, 300f, 250f)
-        assertEquals(1f, router.stickOffset(STICK)!!.first, 0.001f)
-        assertEquals(0f, router.stickOffset(STICK)!!.second, 0.001f)
+        assertEquals(1f, router.stickTouch(STICK)!!.offsetX, 0.001f)
+        assertEquals(0f, router.stickTouch(STICK)!!.offsetY, 0.001f)
+
+        // A fixed stick's base is its own centre, which is what lets the renderer draw both kinds
+        // from one answer.
+        assertEquals(200f, router.stickTouch(STICK)!!.baseX, 0.001f)
+        assertEquals(250f, router.stickTouch(STICK)!!.baseY, 0.001f)
 
         router.up(1)
-        assertNull(router.stickOffset(STICK))
+        assertNull(router.stickTouch(STICK))
     }
 
     @Test
@@ -269,6 +274,173 @@ class TouchRouterTest {
         assertEquals(setOf(SOUTH_BUTTON), router.activeControls())
         assertTrue("still held by the other", router.state().isPressed(GamepadButton.SOUTH))
     }
+
+    // -- Dynamic sticks -------------------------------------------------------------------
+
+    /**
+     * The same left stick made dynamic, with a button dropped inside its area.
+     *
+     * Resolved against the same 1000x500 surface, the area is 400 x 400 pixels about (200, 250) —
+     * so it spans x 0..400 and y 50..450 — the throw is still the stick's own radius of 100, and
+     * the button sits at (100, 150) with a radius of 30, wholly inside the area and deliberately
+     * overlapping it. That overlap is the point: an area is the one control others are meant to be
+     * drawn on top of.
+     */
+    private val dynamicLayout = layout.copy(
+        controls = listOf(
+            layout.controls[STICK].copy(
+                shape = (layout.controls[STICK].shape as ControlSpec.Shape.Stick).copy(
+                    areaWidth = 0.4f,
+                    areaHeight = 0.8f,
+                ),
+                stickMode = StickMode.DYNAMIC,
+            ),
+            ControlSpec(
+                ControlId.Button(GamepadButton.START),
+                ControlSpec.Shape.Circle(0.1f, 0.3f, radius = 0.06f),
+            ),
+        ),
+    )
+
+    private fun dynamicRouter() = TouchRouter(ResolvedLayout(dynamicLayout, 1000f, 500f))
+
+    /** Index of the button sitting on the area in [dynamicLayout]. */
+    private val onTheArea = 1
+
+    @Test
+    fun `a dynamic stick appears where the thumb lands, reading centre`() {
+        val router = dynamicRouter()
+        // Nowhere near the control's own centre, and well outside the throw radius of a fixed one.
+        router.down(1, 380f, 430f)
+
+        val touch = router.stickTouch(STICK)!!
+        assertEquals("the base is the touch point", 380f, touch.baseX, 0.001f)
+        assertEquals(430f, touch.baseY, 0.001f)
+        assertEquals(0f, touch.offsetX, 0.001f)
+        assertEquals(0f, touch.offsetY, 0.001f)
+
+        val state = router.state()
+        assertEquals(GamepadState.AXIS_CENTER, state.leftStickX)
+        assertEquals(GamepadState.AXIS_CENTER, state.leftStickY)
+    }
+
+    @Test
+    fun `a thumb that has not really moved still reads centre`() {
+        // The reason for the dead zone: the anchor is wherever a thumb happened to land rather
+        // than a place anyone aimed at, so a few pixels of drift on touch-down must be nothing.
+        val router = dynamicRouter()
+        router.down(1, 200f, 250f)
+        router.move(1, 210f, 255f) // 11 pixels, inside the 12-pixel dead zone
+
+        assertEquals(GamepadState.AXIS_CENTER, router.state().leftStickX)
+        assertEquals(GamepadState.AXIS_CENTER, router.state().leftStickY)
+    }
+
+    @Test
+    fun `deflection is measured about the anchor, not about the control`() {
+        val router = dynamicRouter()
+        router.down(1, 100f, 150f + 40f) // clear of the button, and off the control's centre
+        router.move(1, 200f, 190f) // a full radius to the right of where it landed
+
+        val state = router.state()
+        assertEquals(GamepadState.AXIS_MAX, state.leftStickX)
+        assertEquals(GamepadState.AXIS_CENTER, state.leftStickY)
+        // A fixed stick asked the same thing would have read the touch as being left of centre.
+        assertEquals(100f, router.stickTouch(STICK)!!.baseX, 0.001f)
+    }
+
+    @Test
+    fun `the base follows the finger past full deflection`() {
+        val router = dynamicRouter()
+        router.down(1, 200f, 250f)
+        router.move(1, 500f, 250f) // 300 pixels out, three times the throw
+
+        // Dragged along behind the finger, one radius back, so the stick is still at full throw
+        // and the thumb can keep going as far as it likes.
+        val touch = router.stickTouch(STICK)!!
+        assertEquals(400f, touch.baseX, 0.001f)
+        assertEquals(250f, touch.baseY, 0.001f)
+        assertEquals(1f, touch.offsetX, 0.001f)
+        assertEquals(GamepadState.AXIS_MAX, router.state().leftStickX)
+
+        // And turning around turns the stick with it, rather than swinging it through a centre
+        // left somewhere behind the hand: coming back 50 pixels from a base now at 400 pushes the
+        // stick the other way, by the 50 travelled less the 12-pixel dead zone over the 88 of
+        // throw that is left beyond it.
+        router.move(1, 350f, 250f)
+        assertEquals(-38f / 88f, unitOf(router.state().leftStickX), 0.01f)
+    }
+
+    @Test
+    fun `the area is for spawning only, and a stick outlives leaving it`() {
+        val router = dynamicRouter()
+        router.down(1, 380f, 430f)
+        router.move(1, 900f, 430f) // right off the area and most of the way across the screen
+
+        assertEquals(GamepadState.AXIS_MAX, router.state().leftStickX)
+        assertEquals(setOf(STICK), router.activeControls())
+    }
+
+    @Test
+    fun `a touch outside the area spawns nothing`() {
+        val router = dynamicRouter()
+        assertFalse(router.down(1, 600f, 250f))
+        assertNull(router.stickTouch(STICK))
+    }
+
+    @Test
+    fun `the stick disappears when the finger lifts`() {
+        val router = dynamicRouter()
+        router.down(1, 380f, 430f)
+        router.move(1, 380f, 330f)
+        assertTrue(router.stickTouch(STICK) != null)
+
+        router.up(1)
+        assertNull(router.stickTouch(STICK))
+        assertEquals(GamepadState.AXIS_CENTER, router.state().leftStickY)
+    }
+
+    @Test
+    fun `a control drawn on the area wins the touch`() {
+        // Nearest-centre alone would give this to the area, whose centre is 100 pixels from the
+        // touch against the button's 20. A Start button inside an area is a Start button.
+        val router = dynamicRouter()
+        router.down(1, 100f, 170f)
+
+        assertEquals(setOf(onTheArea), router.activeControls())
+        assertTrue(router.state().isPressed(GamepadButton.START))
+        assertNull("no stick was spawned", router.stickTouch(STICK))
+    }
+
+    @Test
+    fun `one stick per area, and the second finger is ignored`() {
+        val router = dynamicRouter()
+        assertTrue(router.down(1, 200f, 250f))
+        // Ignored outright rather than queued or stacked: a second stick out of the same area
+        // would fight the first for the same two axes.
+        assertFalse(router.down(2, 380f, 430f))
+
+        router.move(2, 380f, 130f)
+        assertEquals("the second finger drives nothing", 200f, router.stickTouch(STICK)!!.baseX, 0.001f)
+        assertEquals(GamepadState.AXIS_CENTER, router.state().leftStickY)
+
+        // And once the first lifts, the area is free again.
+        router.up(1)
+        assertTrue(router.down(3, 380f, 430f))
+    }
+
+    @Test
+    fun `a fixed stick still takes as many fingers as land on it`() {
+        // The refusal above is the dynamic area's alone, and not a new rule for sticks generally.
+        val router = router()
+        assertTrue(router.down(1, 200f, 250f))
+        assertTrue(router.down(2, 250f, 250f))
+    }
+
+    /** A -1..1 axis value read back out of the byte the host is sent. */
+    private fun unitOf(axis: Int): Float =
+        (axis - GamepadState.AXIS_CENTER).toFloat() /
+            (GamepadState.AXIS_MAX - GamepadState.AXIS_CENTER)
 
     // -- D-pad ----------------------------------------------------------------------------
 
@@ -1032,6 +1204,11 @@ class TouchRouterTest {
                     for (j in i + 1 until pad.controls.size) {
                         val a = pad.controls[i]
                         val b = pad.controls[j]
+                        // A dynamic stick's area is the one control meant to have others on top
+                        // of it -- see ResolvedLayout.hitTest, which resolves that deliberately
+                        // rather than ambiguously. No built-in layout ships one yet, so this
+                        // exemption is here for the day one does rather than covering for one.
+                        if (a.isDynamicStick || b.isDynamicStick) continue
                         assertFalse(
                             "${layout.id}: ${a.id} overlaps ${b.id} at ${w.toInt()}x${h.toInt()}",
                             overlaps(a, b),
