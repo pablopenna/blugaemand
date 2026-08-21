@@ -21,19 +21,14 @@ import kotlin.math.roundToInt
 /** Smallest a control may be made, as a fraction of [ResolvedLayout.unit]. Below this a thumb misses it. */
 const val MIN_CONTROL_EXTENT: Float = 0.02f
 
-/** Largest a control may be made. The PS5 D-pad, the biggest thing shipped, is 0.21f. */
-const val MAX_CONTROL_EXTENT: Float = 0.40f
-
 /**
- * Largest a [StickMode.DYNAMIC] stick's spawning area may be made, in the same units.
- *
- * Far past [MAX_CONTROL_EXTENT], because the two limits are about different things. That one keeps
- * a control the size of a thing you press; an area is not pressed, it is the region a stick may be
- * *started* in, and half the pad is a perfectly reasonable answer for one — that is the whole
- * appeal of a dynamic stick. The floor is shared: an area too small to land a thumb in is as
- * useless as a button too small to hit.
+ * **There is no matching maximum.** There was one, and it was wrong twice over: a number picked
+ * against the biggest thing that shipped is a guess about layouts nobody has made yet, and it made
+ * the two limits asymmetric for no reason a user could see — a control that could not be shrunk
+ * past being touchable is obvious, a control that stops growing half way across the screen is a
+ * bug. What actually bounds a resize is the glass: [resizedControl] holds the edge being dragged
+ * inside the surface, which is a limit you can see the reason for.
  */
-const val MAX_AREA_EXTENT: Float = 1.0f
 
 /**
  * Spacing of the editor's grid, in **pixels**, derived from the layout unit so it is square on
@@ -178,10 +173,12 @@ fun ResolvedControl.handleAt(x: Float, y: Float, radius: Float): ResizeHandle? =
 /**
  * [layout] with one control resized by dragging [handle] a pixel delta.
  *
- * **The opposite edge stays put.** Dragging the right edge to the right widens the control
- * rightwards rather than growing it about its centre, which is what makes a handle feel like it is
- * holding the edge it is drawn on. The centre moves to follow, and is clamped back on screen the
- * way a drag is.
+ * **The opposite edge stays exactly where it is.** Dragging the right edge to the right widens the
+ * control rightwards rather than growing it about its centre, which is what makes a handle feel
+ * like it is holding the edge it is drawn on. Everything below exists to keep that true: the size
+ * is worked out from where the dragged edge ends up, snapping lands on that edge rather than on the
+ * size, and the growth stops at the screen so the on-screen clamp never has to shove the control
+ * back and take the anchored edge with it.
  *
  * A corner scales both axes by one factor and keeps the shape; an edge scales its own axis, for a
  * control whose axes are independent ([ControlSpec.scalesPerAxis]) and both for one whose are not.
@@ -198,10 +195,12 @@ fun ResolvedLayout.resizedControl(
     val halfHeight = control.extentY
     if (halfWidth <= 0f || halfHeight <= 0f) return layout
 
-    // The edge follows the finger, so half the control's size changes by the whole delta -- the
-    // opposite half is anchored and does not.
-    var factorX = if (handle.dx != 0) 1f + handle.dx * dxPixels / halfWidth else 1f
-    var factorY = if (handle.dy != 0) 1f + handle.dy * dyPixels / halfHeight else 1f
+    var factorX = if (handle.dx == 0) 1f else {
+        draggedHalfExtent(control.centerX, halfWidth, handle.dx, dxPixels, snap, width) / halfWidth
+    }
+    var factorY = if (handle.dy == 0) 1f else {
+        draggedHalfExtent(control.centerY, halfHeight, handle.dy, dyPixels, snap, height) / halfHeight
+    }
     if (handle.isCorner || !control.spec.scalesPerAxis()) {
         // A corner averages its two axes rather than picking one, so a diagonal drag answers to
         // both halves of itself; an edge takes the axis it drove and ignores the one it did not.
@@ -214,20 +213,16 @@ fun ResolvedLayout.resizedControl(
         factorY = together
     }
 
-    val scale = Scale(
-        factorX.coerceAtLeast(0f),
-        factorY.coerceAtLeast(0f),
-        if (snap) gridStep else 0f,
-        unit,
-        width,
-    )
+    // No grid: the snapping already happened, to the edge the finger is holding. Snapping the size
+    // as well would round it to a multiple of the step and jump the control the moment a handle was
+    // touched -- a 288 px wide trigger became 270 px on the first pixel of the drag.
+    val scale = Scale(factorX, factorY, stepPixels = 0f, unit, width)
     val resized = layout.replacingSpec(index) { spec ->
         spec.copy(shape = spec.shape.scaledBy(scale, area = spec.isDynamicStick()))
     }
 
-    // Measured after the fact rather than predicted, because the limits and the grid both move the
-    // size the finger asked for, and the anchored edge has to hold against what the control ended
-    // up as -- not against what was requested.
+    // Measured after the fact rather than predicted, because the floor on size can move what the
+    // finger asked for, and the anchored edge has to hold against what the control ended up as.
     val grown = ResolvedLayout(resized, width, height)
     val after = grown.controls.getOrNull(index) ?: return resized
     val anchoredX = control.centerX - handle.dx * halfWidth + handle.dx * after.extentX
@@ -238,6 +233,33 @@ fun ResolvedLayout.resizedControl(
         if (handle.dy != 0) anchoredY - after.centerY else 0f,
         snap = false,
     )
+}
+
+/**
+ * Half the control's new extent along one axis, given where the edge being dragged has got to.
+ *
+ * The whole of the handle's behaviour on one axis. The edge follows the finger; [snap] rounds
+ * **that edge** to the grid, which is what puts one control's side on the same line as another's
+ * rather than merely making the two the same size; and it is held inside `0..limit`, so a control
+ * grows until it reaches the glass and then stops. The opposite edge is never consulted after it is
+ * read, which is what keeps it still.
+ *
+ * Never negative: dragging an edge past the far side of the control collapses it rather than
+ * turning it inside out, and [Scale] puts the floor under it from there.
+ */
+private fun ResolvedLayout.draggedHalfExtent(
+    center: Float,
+    half: Float,
+    direction: Int,
+    delta: Float,
+    snap: Boolean,
+    limit: Float,
+): Float {
+    val anchored = center - direction * half
+    var edge = center + direction * half + delta
+    if (snap) edge = snapToGrid(edge, gridStep)
+    edge = edge.coerceIn(0f, limit)
+    return (direction * (edge - anchored) / 2f).coerceAtLeast(0f)
 }
 
 /**
@@ -570,12 +592,10 @@ private class Scale(
      * The one factor a whole cluster scales by, so its arrangement comes out the same shape.
      *
      * Every number inside a plate is a fraction of the unit — offsets and sizes alike — so a single
-     * multiplier is all it takes, and the limits work out in those fractions directly without going
-     * near pixels: a member of stored size `s` ends up at `s * f`, which has to land between
-     * [MIN_CONTROL_EXTENT] and [MAX_CONTROL_EXTENT] like any other control. The smallest member sets
-     * the floor and the largest the ceiling, and those two can genuinely cross on a hand-edited file
-     * that already breaks the limits, hence the ordered bounds — an inverted `coerceIn` throws, and
-     * it would throw mid-pinch.
+     * multiplier is all it takes, and the floor works out in those fractions directly without going
+     * near pixels: a member of stored size `s` ends up at `s * f`, which has to stay above
+     * [MIN_CONTROL_EXTENT] like any other control. The smallest member is the one that decides,
+     * since it is the first to reach it.
      *
      * Snapping is applied to the plate's own extent once rather than to each member, for the reason
      * [withPlacement] snaps a drop point once: per-member rounding pulls the arrangement out of
@@ -585,9 +605,7 @@ private class Scale(
     fun forCluster(members: List<ControlSpec>): Float {
         val sizes = members.flatMap { it.shape.sizeFields() }.filter { it > 0f }
         if (sizes.isEmpty()) return factor
-        val low = MIN_CONTROL_EXTENT / sizes.min()
-        val high = MAX_CONTROL_EXTENT / sizes.max()
-        val limited = { f: Float -> f.coerceIn(minOf(low, high), maxOf(low, high)) }
+        val limited = { f: Float -> f.coerceAtLeast(MIN_CONTROL_EXTENT / sizes.min()) }
 
         val scaled = limited(factor)
         if (stepPixels <= 0f) return scaled
@@ -605,33 +623,28 @@ private class Scale(
      * — an edge handle drags one of them and leaves the other alone. It defaults to the uniform
      * factor, which is what a pinch and every single-size shape use.
      *
-     * [ceiling] is a parameter for the one field that has a different one — a dynamic stick's
-     * spawning area, which is meant to be large; see [MAX_AREA_EXTENT]. The floor is not, because
-     * the reason for it is the same for every kind of control: below it a thumb misses.
+     * There is only a floor to hold it against, and it is the same one for every kind of control:
+     * below it a thumb misses.
      */
     fun of(
         value: Float,
         referencePixels: Float,
         factor: Float = this.factor,
-        ceiling: Float = MAX_CONTROL_EXTENT,
     ): Float {
         val min = MIN_CONTROL_EXTENT * unitPixels
-        val max = ceiling * unitPixels
-        // Clamped before snapping and again after: snapping a clamped value can round it back
-        // outside the limits, and at the bottom end that is how a control becomes too small to
-        // touch and so impossible to grab hold of again.
-        var pixels = (value * referencePixels * factor).coerceIn(min, max)
-        if (stepPixels > 0f) pixels = snapToGrid(pixels, stepPixels).coerceIn(min, max)
+        // Clamped before snapping and again after: snapping a clamped value can round it back under
+        // the floor, and that is how a control becomes too small to touch and so impossible to grab
+        // hold of again.
+        var pixels = (value * referencePixels * factor).coerceAtLeast(min)
+        if (stepPixels > 0f) pixels = snapToGrid(pixels, stepPixels).coerceAtLeast(min)
         return pixels / referencePixels
     }
 
     /** [of] against the horizontal factor — the width of the shapes that have one. */
-    fun ofX(value: Float, referencePixels: Float, ceiling: Float = MAX_CONTROL_EXTENT): Float =
-        of(value, referencePixels, factorX, ceiling)
+    fun ofX(value: Float, referencePixels: Float): Float = of(value, referencePixels, factorX)
 
     /** [of] against the vertical factor. */
-    fun ofY(value: Float, referencePixels: Float, ceiling: Float = MAX_CONTROL_EXTENT): Float =
-        of(value, referencePixels, factorY, ceiling)
+    fun ofY(value: Float, referencePixels: Float): Float = of(value, referencePixels, factorY)
 }
 
 /**
@@ -659,8 +672,8 @@ private fun ControlSpec.Shape.scaledBy(scale: Scale, area: Boolean): ControlSpec
 
     is ControlSpec.Shape.Stick -> if (area) {
         copy(
-            areaWidth = scale.ofX(areaWidth, scale.widthPixels, MAX_AREA_EXTENT),
-            areaHeight = scale.ofY(areaHeight, scale.unit, MAX_AREA_EXTENT),
+            areaWidth = scale.ofX(areaWidth, scale.widthPixels),
+            areaHeight = scale.ofY(areaHeight, scale.unit),
         )
     } else {
         val scaled = scale.of(radius, scale.unit)
@@ -678,10 +691,10 @@ private fun ControlSpec.Shape.scaledBy(scale: Scale, area: Boolean): ControlSpec
 }
 
 /**
- * Every size field of a shape, in the units [MIN_CONTROL_EXTENT] and [MAX_CONTROL_EXTENT] are
- * expressed in — which for a cluster member is all of them, since a plate measures everything
- * against the layout unit. Full width and height for a rectangle rather than halves, matching what
- * [Scale.of] clamps for one at top level, so a member is held to the same limits as a control.
+ * Every size field of a shape, in the units [MIN_CONTROL_EXTENT] is expressed in — which for a
+ * cluster member is all of them, since a plate measures everything against the layout unit. Full
+ * width and height for a rectangle rather than halves, matching what [Scale.of] clamps for one at
+ * top level, so a member is held to the same floor as a control.
  */
 private fun ControlSpec.Shape.sizeFields(): List<Float> = when (this) {
     is ControlSpec.Shape.Circle -> listOf(radius)

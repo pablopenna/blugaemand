@@ -111,8 +111,20 @@ turns up along the way.
       shoulder button can now be made longer without also being made taller. The opposite edge stays
       anchored, so a handle holds the edge it is drawn on rather than growing the control about its
       centre. Only two shapes have a size per axis to stretch — a `Rect` and a dynamic stick's
-      area — so an edge handle on anything measured by a radius scales it whole; `scalesPerAxis`
+      area — so an edge handle on anything measured by a radius resizes it whole; `scalesPerAxis`
       is the one place that line is drawn. The pinch still works and is unchanged
+- [x] **A handle holds the edge it is drawn on, and three things had to be right for it to.** The
+      size comes from where the dragged edge ends up, so half the extent changes by half the delta
+      and the edge keeps up with the thumb rather than running at twice its speed. **Snapping lands
+      that edge on the grid**, not the size — rounding the size jumped a 288 px trigger to 270 px on
+      the first pixel of a drag. And growth stops when the edge reaches the glass, rather than
+      running on and being shoved back by the on-screen clamp, which would take the anchored edge
+      with it
+- [x] **The maximum size is gone** — `MAX_CONTROL_EXTENT` and `MAX_AREA_EXTENT` both. A ceiling
+      picked against the biggest built-in was a guess about layouts nobody has made, and it made the
+      two limits asymmetric for no reason a user could see: a control that cannot be shrunk past
+      being touchable is obvious, one that stops growing half way across the screen is a bug. The
+      screen is what bounds a handle drag now. `MIN_CONTROL_EXTENT` stays
 - [x] **More built-in layouts** — **Switch** and **Steam Deck** both ship. As predicted, the
       plumbing was the easy part and Nintendo's A/B/X/Y crossing was the part to think about: it
       swaps *both* pairs, so the key drawn A sends what an Xbox pad's B sends. Unlike Xbox and PS5
@@ -486,10 +498,9 @@ Unordered; pull from here whenever.
       - **`stickTouch` replaced `stickOffset`**, answering with the base *and* the offset, so a
         dynamic stick can say where its centre is and a fixed one answers about its own — one case
         for the renderer, and no way for the picture to disagree with the report.
-      - **The throw and the area are sized separately**, both on `Shape.Stick`. A pinch on a dynamic
-        stick resizes the area, capped by `MAX_AREA_EXTENT` (`1.0`, against a control's `0.40`);
-        the throw is the radius, tuned by pinching as a fixed stick, and nothing is lost across the
-        switch either way. Worth revisiting if it turns out nobody finds that.
+      - **The throw and the area are sized separately**, both on `Shape.Stick`. A resize of a
+        dynamic stick applies to the area; the throw is the radius, tuned by resizing it as a fixed
+        stick, and nothing is lost across the switch either way. Worth revisiting if it turns out nobody finds that.
       - **The anchor does not move.** A spawned stick is centred on the touch-down point until the
         finger lifts; past the radius the value clamps. The area governs spawning only, so the
         finger may leave it. (Tried it the other way first, with the base towed along behind a

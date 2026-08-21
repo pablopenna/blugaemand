@@ -509,14 +509,29 @@ Decisions in there that are easy to undo by accident:
   could not be made longer without also being made taller. Only a `Rect` and a dynamic stick's area
   have a size per axis to stretch — everything else is one radius — and `scalesPerAxis` is the one
   place that is decided; an edge handle on a round control scales it whole rather than doing nothing.
-- **A handle anchors the opposite edge.** Dragging the right edge right widens the control
-  rightwards instead of growing it about its centre, which is what makes a handle feel like it is
-  holding the edge it is drawn on. The new centre is worked out from the size the control *ended up*
-  as, measured after the limits and the grid have had their say, rather than from the size the finger
-  asked for — otherwise a control at its size limit would keep sliding while the finger kept moving.
-- **A plate scales by one factor, clamped by its smallest and largest member.** The size limits
-  exist so nothing becomes too small to grab hold of, and what a thumb aims at is a button, not the
-  plate. Snapping applies to the plate's own extent once, not to each member — rounding them
+- **A handle anchors the opposite edge, and everything else about one exists to keep that true.**
+  Dragging the right edge right widens the control rightwards instead of growing it about its
+  centre, which is what makes a handle feel like it is holding the edge it is drawn on. So the size
+  is worked out from where the dragged edge ends up (`draggedHalfExtent`), never from a factor
+  applied to the whole: half the extent changes by *half* the delta, and a handle that changes it by
+  all of the delta moves the edge at twice the speed of the thumb — which is what a control
+  "changing shape under the finger" actually is.
+- **Snapping lands the dragged edge on the grid, not the size.** Rounding the size instead jumps the
+  control the moment a handle is touched, and jumps it to a multiple of the step, which is nowhere
+  near where the edge was — a 288 px trigger became 270 px on the first pixel of the drag. The edge
+  is also what has to line up with another control's, which is what the grid is for.
+- **Growth stops at the glass.** The dragged edge is held inside the surface, so a control grows
+  until it reaches the screen and then stops, with the anchored edge still still. Doing it any later
+  — letting the size run and relying on the on-screen clamp afterwards — would shove the whole
+  control back and take the anchored edge with it.
+- **There is no maximum size.** There was, and it was wrong twice over: a number picked against the
+  biggest thing that shipped is a guess about layouts nobody has made yet, and it made the two
+  limits asymmetric for no reason a user could see. A control that cannot be shrunk past being
+  touchable is obvious; a control that stops growing half way across the screen is a bug.
+  `MIN_CONTROL_EXTENT` stays, and it is the only one.
+- **A plate scales by one factor, floored by its smallest member.** The floor exists so nothing
+  becomes too small to grab hold of, and what a thumb aims at is a button, not the plate — so the
+  smallest member is the one that decides, since it is the first to reach it. Snapping applies to the plate's own extent once, not to each member — rounding them
   separately is what would pull the arrangement out of shape — and a resized plate is pulled back on
   screen afterwards, because it grows about its centre by half a plate rather than half a radius.
 - **Clamping on screen takes the whole `ControlSpec`, not the bare shape.** A plate's extent comes
@@ -725,9 +740,9 @@ A pinch — or a handle drag — on a dynamic stick resizes **the area**, since 
 and what is touched;
 growing the region a stick can be started in should not cost a longer sweep to push it. Which leaves
 the throw tuned by pinching the stick as a fixed one and switching back — nothing is lost across the
-switch, in either direction. An area may be made far larger than any control: `MAX_AREA_EXTENT` is
-`1.0` against `MAX_CONTROL_EXTENT`'s `0.40`, because half the pad is a perfectly reasonable answer
-for a region and an absurd one for a button. The floor is shared — a thumb misses either.
+switch, in either direction. An area may be made as large as the screen, which is what one is for —
+half the pad is a perfectly reasonable answer for a region. The floor is shared with every other
+control: a thumb misses either.
 
 **An empty area still draws its outline**, faint, on the pad as much as in the editor. It is the one
 control with nothing of its own to draw, and an invisible one is indistinguishable from a layout that
@@ -968,10 +983,12 @@ The three built-ins cannot be changed — make your own instead:
    It holds what applies to the layout as a whole; what applies to the control you selected sits as
    pills beside it, in the head bar, where they stay reachable with the menu shut.
 3. **Drag** a control to move it, **pinch** it to resize, or drag one of the **eight arrows** that
-   appear around whatever is selected. The four on the corners keep the control's proportions; the
-   four on the edges stretch that side alone, so a shoulder button can be made longer without being
-   made taller. Anything drawn as a circle — a button, a D-pad, a stick — has one size and no second
-   axis, so its side arrows grow it whole. **Grid** toggles snapping, which applies to
+   appear around whatever is selected. Each holds the edge it is on: the opposite side stays where
+   it is and the one you are dragging follows your finger, until it reaches the edge of the screen.
+   The four on the corners keep the control's proportions; the four on the edges stretch that side
+   alone, so a shoulder button can be made longer without being made taller. Anything drawn as a
+   circle — a button, a D-pad, a stick — has one size and no second axis, so its side arrows grow it
+   whole. Nothing has a maximum size. **Grid** toggles snapping, which applies to
    sizes as well as positions, so two buttons meant to match can be made to match. The **◀▲▼▶
    arrows** beside the pill move whatever is selected one step at a time — a whole grid cell with
    snapping on, a fifth of one with it off, which is finer than a thumb can place anything.

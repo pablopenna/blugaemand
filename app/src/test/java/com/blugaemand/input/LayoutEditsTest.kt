@@ -195,19 +195,19 @@ class LayoutEditsTest {
     }
 
     @Test
-    fun `a control cannot be grown past the screen`() {
+    fun `a pinch has no ceiling`() {
+        // There was one, and a control that stopped growing half way across the screen read as a
+        // bug rather than as a limit. What bounds a resize now is the glass; see the handle tests.
         val huge = resolve().resizedControl(south, factor = 1000f, snap = false)
-        assertEquals(MAX_CONTROL_EXTENT, huge.circle(south).radius, TOLERANCE)
+        assertEquals(100f, huge.circle(south).radius, TOLERANCE)
     }
 
     @Test
-    fun `a snapped resize still respects the limits`() {
-        // Snapping after clamping can round back outside them, and at the bottom end that is how a
-        // control becomes too small to grab hold of again.
+    fun `a snapped resize still respects the floor`() {
+        // Snapping after clamping can round back under it, and that is how a control becomes too
+        // small to grab hold of again.
         val tiny = resolve().resizedControl(south, factor = 0.001f, snap = true)
         assertTrue(tiny.circle(south).radius >= MIN_CONTROL_EXTENT)
-        val huge = resolve().resizedControl(south, factor = 1000f, snap = true)
-        assertTrue(huge.circle(south).radius <= MAX_CONTROL_EXTENT)
     }
 
     @Test
@@ -252,13 +252,25 @@ class LayoutEditsTest {
 
     @Test
     fun `an edge handle stretches one axis and anchors the opposite edge`() {
-        // The trigger is 100 x 50 about (500, 50), so its left edge is at 450. Pulling the right
-        // edge 50 px right doubles the width and leaves that edge exactly where it was.
-        val after = resolve().resizedControl(trigger, ResizeHandle.RIGHT, 50f, 0f, snap = false)
+        // The trigger is 100 x 50 about (500, 50), so its edges are at 450 and 550. The edge goes
+        // where the finger goes -- 100 px right puts it at 650 -- and the other one does not move.
+        val after = resolve().resizedControl(trigger, ResizeHandle.RIGHT, 100f, 0f, snap = false)
         assertEquals(0.2f, after.rect(trigger).width, TOLERANCE)
         assertEquals(0.1f, after.rect(trigger).height, TOLERANCE)
-        assertEquals(550f, after.pixelCenterX(trigger), TOLERANCE)
+        assertEquals(450f, after.leftEdge(trigger), TOLERANCE)
+        assertEquals(650f, after.rightEdge(trigger), TOLERANCE)
         assertEquals(50f, after.pixelCenterY(trigger), TOLERANCE)
+    }
+
+    @Test
+    fun `the edge follows the finger rather than running ahead of it`() {
+        // Half the extent changes by half the delta, not by all of it. Getting that wrong moves the
+        // dragged edge at twice the speed of the thumb, which reads as the whole control changing.
+        for (delta in listOf(-30f, -10f, 0f, 10f, 30f, 200f)) {
+            val after = resolve().resizedControl(trigger, ResizeHandle.RIGHT, delta, 0f, snap = false)
+            assertEquals(550f + delta, after.rightEdge(trigger), TOLERANCE)
+            assertEquals(450f, after.leftEdge(trigger), TOLERANCE)
+        }
     }
 
     @Test
@@ -266,7 +278,7 @@ class LayoutEditsTest {
         // The point of having both: an edge is free to stretch, a corner is not.
         val before = layout.rect(trigger)
         val after = resolve()
-            .resizedControl(trigger, ResizeHandle.BOTTOM_RIGHT, 25f, 12.5f, snap = false)
+            .resizedControl(trigger, ResizeHandle.BOTTOM_RIGHT, 50f, 25f, snap = false)
             .rect(trigger)
         assertEquals(before.width * 1.5f, after.width, TOLERANCE)
         assertEquals(before.height * 1.5f, after.height, TOLERANCE)
@@ -276,17 +288,18 @@ class LayoutEditsTest {
     fun `an edge handle on a round control scales it whole`() {
         // A circle has one radius and no second axis to stretch, so the side handles grow it the
         // way the corners do -- and the anchored edge still holds: 800 - 50 stays at 750.
-        val after = resolve().resizedControl(south, ResizeHandle.RIGHT, 25f, 0f, snap = false)
+        val after = resolve().resizedControl(south, ResizeHandle.RIGHT, 50f, 0f, snap = false)
         assertEquals(0.15f, after.circle(south).radius, TOLERANCE)
-        assertEquals(825f, after.pixelCenterX(south), TOLERANCE)
+        assertEquals(750f, after.leftEdge(south), TOLERANCE)
         assertEquals(250f, after.pixelCenterY(south), TOLERANCE)
     }
 
     @Test
-    fun `dragging a handle inwards shrinks, and stops at the limit`() {
-        val shrunk = resolve().resizedControl(south, ResizeHandle.RIGHT, -25f, 0f, snap = false)
+    fun `dragging a handle inwards shrinks, and stops at the floor`() {
+        val shrunk = resolve().resizedControl(south, ResizeHandle.RIGHT, -50f, 0f, snap = false)
         assertEquals(0.05f, shrunk.circle(south).radius, TOLERANCE)
 
+        // Dragged past the far side it collapses rather than turning inside out.
         val past = resolve().resizedControl(south, ResizeHandle.RIGHT, -1000f, 0f, snap = false)
         assertEquals(MIN_CONTROL_EXTENT, past.circle(south).radius, TOLERANCE)
     }
@@ -296,25 +309,30 @@ class LayoutEditsTest {
         // The other shape with a size per axis. Its area is 0.18 x 0.30, so 180 x 150 px.
         val dynamic = layout.withStickMode(stick, StickMode.DYNAMIC)
         val after = resolve(dynamic)
-            .resizedControl(stick, ResizeHandle.BOTTOM, 0f, 37.5f, snap = false)
+            .resizedControl(stick, ResizeHandle.BOTTOM, 0f, 75f, snap = false)
             .stick(stick)
         assertEquals(ControlSpec.Shape.Stick.DEFAULT_AREA_WIDTH, after.areaWidth, TOLERANCE)
         assertEquals(ControlSpec.Shape.Stick.DEFAULT_AREA_HEIGHT * 1.5f, after.areaHeight, TOLERANCE)
     }
 
     @Test
-    fun `a snapped handle drag lands the size on the grid`() {
+    fun `snapping lands the dragged edge on the grid and leaves the other one alone`() {
+        // The edge is what snaps, not the size. Rounding the size instead jumps the control the
+        // moment a handle is touched -- and to a multiple of the step, which is nowhere near where
+        // the edge was.
         val after = resolve().resizedControl(trigger, ResizeHandle.RIGHT, 33f, 0f, snap = true)
-        assertOnGrid(after.rect(trigger).width * width)
+        assertOnGrid(after.rightEdge(trigger))
+        assertEquals(575f, after.rightEdge(trigger), TOLERANCE)
+        assertEquals(450f, after.leftEdge(trigger), TOLERANCE)
     }
 
     @Test
-    fun `a handle never pushes a control off screen`() {
-        // The anchored edge would take the trigger past the right edge long before the size limit
-        // did, so the clamp a drag uses applies here as well.
+    fun `a handle grows a control until it reaches the glass, and no further`() {
+        // No ceiling on the size any more; the screen is the limit, and it is one you can see.
         val after = resolve().resizedControl(trigger, ResizeHandle.RIGHT, 10_000f, 0f, snap = false)
-        val half = after.rect(trigger).width * width / 2f
-        assertTrue(after.pixelCenterX(trigger) + half <= width + TOLERANCE)
+        assertEquals(width, after.rightEdge(trigger), TOLERANCE)
+        assertEquals(450f, after.leftEdge(trigger), TOLERANCE)
+        assertTrue(after.rect(trigger).width > MAX_CONTROL_EXTENT_WAS)
     }
 
     @Test
@@ -601,13 +619,6 @@ class LayoutEditsTest {
     }
 
     @Test
-    fun `a plate cannot be scaled until a member is bigger than the limit`() {
-        val grown = resolve(plated).resizedControl(0, factor = 100f, snap = false)
-        val radius = (grown.cluster(0).members.first().shape as ControlSpec.Shape.Circle).radius
-        assertEquals(MAX_CONTROL_EXTENT, radius, TOLERANCE)
-    }
-
-    @Test
     fun `a plate scaled on the grid lands on it as a unit`() {
         // Snapped once, by the plate's own extent, rather than per member -- rounding each of them
         // separately is what would pull the arrangement out of shape.
@@ -823,15 +834,12 @@ class LayoutEditsTest {
     }
 
     @Test
-    fun `an area may be made far larger than a control, and no smaller`() {
-        // The two limits are about different things: a control is a thing you press, and an area
-        // is the region a stick may be started in -- half the pad is a reasonable answer for one.
+    fun `an area is held to the same floor as a control`() {
+        // It never had the same ceiling and now neither has one: an area is the region a stick may
+        // be started in, and half the pad is a reasonable answer for one.
         val dynamic = layout.withStickMode(stick, StickMode.DYNAMIC)
-        val huge = resolve(dynamic).resizedControl(stick, factor = 100f, snap = false)
-        assertEquals(MAX_AREA_EXTENT * height / width, huge.stick(stick).areaWidth, TOLERANCE)
-        assertEquals(MAX_AREA_EXTENT, huge.stick(stick).areaHeight, TOLERANCE)
 
-        // The floor is the shared one: an area too small to land a thumb in is as useless as a
+        // An area too small to land a thumb in is as useless as a button too small to hit: an area too small to land a thumb in is as useless as a
         // button too small to hit.
         val tiny = resolve(dynamic).resizedControl(stick, factor = 0.001f, snap = false)
         assertEquals(MIN_CONTROL_EXTENT * height / width, tiny.stick(stick).areaWidth, TOLERANCE)
@@ -864,9 +872,18 @@ class LayoutEditsTest {
     private fun GamepadLayout.stick(index: Int) = shapeOf(index) as ControlSpec.Shape.Stick
     private fun GamepadLayout.rect(index: Int) = shapeOf(index) as ControlSpec.Shape.Rect
     private fun GamepadLayout.pixelCenterX(index: Int) = shapeOf(index).centerX * width
+
+    /** The edges of a control, which is what a handle drag is really about. */
+    private fun GamepadLayout.leftEdge(index: Int) = resolvedAt(index).let { it.centerX - it.extentX }
+    private fun GamepadLayout.rightEdge(index: Int) = resolvedAt(index).let { it.centerX + it.extentX }
+    private fun GamepadLayout.resolvedAt(index: Int) =
+        ResolvedLayout(this, width, height).controls[index]
     private fun GamepadLayout.pixelCenterY(index: Int) = shapeOf(index).centerY * height
 
     private companion object {
+        /** The ceiling a control used to have, kept only to show that it no longer applies. */
+        const val MAX_CONTROL_EXTENT_WAS = 0.40f
+
         const val TOLERANCE = 1e-4f
     }
 }
