@@ -12,11 +12,14 @@ from empty or as a copy of one of those, and move, resize, add and remove contro
 whole arrangements dropped as **one control**, so a face diamond is a single plate that sends A, B,
 X or Y depending on where you touch it. Triggers are binary by default and analog per control if
 you want the slide, and a stick is either fixed where it is drawn or **dynamic** — an area where
-the stick appears under your thumb wherever it lands. Layouts and the choice of one are saved between launches. 
+the stick appears under your thumb wherever it lands. Every pad can be **faded**, down to a quarter
+solid, so a game underneath shows through it, and one drawn as shapes can take one of six
+**themes**. The phone's gyroscope can drive either stick — **motion aiming**, off by default.
+Layouts and the choice of one are saved between launches.
 Verified end-to-end against **Linux** and **Windows**.
 Two pills sit at the top edge, each opening
 its panel on a 600 ms hold: the left one is connection status and pairing, the right one
-(**☰ Menu**) picks or creates a layout, opens the editor, and quits.
+(**☰ Menu**) picks or creates a layout, opens the editor, sets motion aiming, and quits.
 
 **[TODO.md](TODO.md) is the live backlog** — what is done, what is next, and a *Known constraints*
 section recording things that are permanently impossible so they do not get rediscovered. Read it
@@ -93,34 +96,41 @@ host. Only the service and the Compose layer touch the framework.
 ### Data flow
 
 ```
-  finger on glass
-        │
-        ▼
-  GamepadScreen ──── pointer events (Initial pass, all changes)
-        │
-        ▼
-  TouchRouter ────── pointerId → control binding, hit-testing against ResolvedLayout
-        │
-        ▼
-  GamepadState ───── immutable snapshot: 6 axes + hat + 16-bit button mask
-        │
-        ▼
-  HidGamepadService  coalesces to ~100 Hz, drops unchanged reports
-        │
-        ▼
-  GamepadProfile.encode() ── 9 raw bytes
-        │
-        ▼
-  BluetoothHidDevice.sendReport()  →  host
+  finger on glass                      phone turning in the hand
+        │                                        │
+        ▼                                        ▼
+  GamepadScreen ──── pointer events        MotionSensor ──── gyroscope, rad/s
+        │            (Initial pass)              │
+        ▼                                        ▼
+  TouchRouter ────── pointerId → control   MotionSettings.aimOf() ── a stick offset
+        │            binding, hit-tested          │
+        ▼            against ResolvedLayout       │
+  GamepadState ───── 6 axes + hat + 16-bit mask   │
+        │                                         │
+        └──────────────► withAim() ◄──────────────┘
+                            │
+                            ▼
+              HidGamepadService  sends on change, no faster than 100 Hz,
+                            │    drops reports identical to the last
+                            ▼
+              GamepadProfile.encode() ── 9 raw bytes
+                            │
+                            ▼
+              BluetoothHidDevice.sendReport()  →  host
 ```
+
+The two sources are combined in `MainActivity`, not in either of them: fingers arrive on a pointer
+event and the phone's own rotation on a sensor callback, so whichever arrives has to be able to send
+the pair.
 
 ### Modules
 
 | Package | Android-free | Contents |
 |---|---|---|
 | `hid/` | mostly | `GamepadState`, `GamepadProfile`, `GenericHidProfile` are pure Kotlin; `HidGamepadService` is not |
-| `input/` | yes | `ControlSpec`, `ControlIcon`, `ArtPack`, `GamepadLayout`, `LayoutStyle`, `LayoutJson`, `LayoutLibrary`, `LayoutEdits`, `Placement`, `ControlGroups`, `ResolvedLayout`, `TouchRouter`, `art/`, `layouts/` |
-| `data/` | no | `LayoutStore` — the only file outside `hid/` and `ui/` that touches Android |
+| `input/` | yes | `ControlSpec`, `ControlIcon`, `ArtPack`, `GamepadLayout`, `LayoutStyle`, `PadThemes`, `LayoutJson`, `LayoutLibrary`, `LayoutEdits`, `Placement`, `ControlGroups`, `ResolvedLayout`, `TouchRouter`, `art/`, `layouts/` |
+| `motion/` | mostly | `Motion` — settings and the gyro-to-stick mapping — is pure Kotlin; `MotionSensor` is not |
+| `data/` | no | `LayoutStore`, `SettingsStore` — the only files outside `hid/`, `motion/` and `ui/` that touch Android |
 | `ui/` | mostly | `GamepadScreen`, `EditorScreen`, `ControlRenderers`, `PadStyle`, `ControlIcons`, `TopBar`, `TopBarChrome`, `ConnectionBar`, `MenuBar`, `EditorBar`, `ColorPicker`, `theme/`; `ColorMath` is plain Kotlin |
 
 **`hid/`**
@@ -141,6 +151,9 @@ host. Only the service and the Compose layer touch the framework.
   `List<ControlSpec>` plus a `LayoutStyle`.
 - `LayoutStyle` — which of the two presentations a layout uses, `Colors` or `Images`. A layout is in
   exactly one; see *Two presentations* below.
+- `PadThemes` — six ready-made resting/pressed colour pairs the editor offers, `Slate` first because
+  it is what the pad has always been drawn in. A starting point for the colour picker, not a
+  replacement for it; see *Opacity and themes*.
 - `ControlIcon` — one picture from an art pack, as an enum of names. Deliberately not a drawable
   resource ID: those are reassigned every build, so a saved layout holding one would come back
   pointing at a different picture. That was a hypothetical when it was written and is now load-
@@ -182,8 +195,20 @@ host. Only the service and the Compose layer touch the framework.
   they will land on, and the built-in arrangements of several at once. `ControlGroups.clustered`
   restates one of those arrangements as a single control; see *A cluster* below.
 
+**`motion/`**
+
+- `Motion` — `MotionSettings` (off, which stick, how sensitive, inverted or not) and `aimOf`, the
+  mapping from a gyroscope reading to a stick offset. Plain Kotlin, and tested as such: whether
+  aiming *feels* right is a thing to judge with a phone in hand, but whether it aims the same
+  direction with the phone held the other way up is not.
+- `MotionSensor` — the gyroscope, registered only while motion is switched on, reporting on a sensor
+  thread. See *Motion aiming*.
+
 **`data/`**
 
+- `SettingsStore` — a second Preferences DataStore, for settings that are about the app and the
+  phone rather than about a layout. A separate file rather than more keys in `LayoutStore`, because
+  DataStore allows one instance per file and two delegates over one name is a crash.
 - `LayoutStore` — a Preferences DataStore holding two keys: the user's layouts as JSON, and the id
   of the selected one. Preferences rather than a typed `DataStore<T>` because the payload is already
   one string. Stored JSON that will not parse is reported as an empty library and **left where it
@@ -806,6 +831,83 @@ stick, defaulted, on the same bargain the trigger mode struck: a layout saved be
 existed comes back as the fixed stick it was, a newer file loads on an older build as a fixed stick
 too, and no format version bump is needed either way.
 
+### Motion aiming
+
+The phone's gyroscope drives one of the thumbsticks. Off by default, switched on from **☰ Menu →
+Motion**, along with which stick it drives, how sensitive it is and whether the vertical is
+inverted.
+
+**It is not a motion axis on the wire, on purpose.** The report descriptor has four stick axes, two
+triggers and a hat; adding gyro axes to it would produce axes no host maps to anything — Windows
+would list two more sliders in `joy.cpl` and no game would read them. What games do read is a
+thumbstick, so that is where the phone's movement goes. It is also what every gyro-aim setup on a
+desktop does, which means it is useful the moment it is switched on rather than after a host-side
+driver that does not exist.
+
+**Rate, not angle.** The deflection is proportional to how fast the phone is turning, not to how far
+it has been turned from some remembered pose. Integrating to an angle needs a resting pose to
+measure against and drifts away from it within a minute; a rate mapping self-centres the instant the
+phone stops moving, needs no calibration, and is what a stick pushed and released does anyway. Full
+deflection is `MotionAim.FULL_SCALE_RATE`, 4 rad/s — about 230°/s, a brisk flick of the wrists
+rather than anything a hand does while merely holding a phone.
+
+- **Added to the stick, not substituted for it.** A thumb already on that stick and the phone's own
+  movement combine, the way they do on a desktop setup: the stick makes the turn, the phone makes
+  the last few degrees of it. A stick nobody is touching rests at centre, so there the sum is the
+  aim alone.
+- **The screen's rotation is part of the mapping.** The sensor frame is fixed to the phone's
+  *natural* orientation, and the pad is held in landscape — the device axis running across the
+  screen is a different one in each of the two landscapes. `sensorLandscape` flips between them
+  without the activity being recreated, so the rotation is read per event rather than cached; a pad
+  that aims backwards when picked up the other way round is unusable rather than merely wrong.
+- **Roll is ignored.** Turning the phone in the plane of its own screen points the barrel where it
+  already was.
+- **The dead zone is a turn rate**, `MotionAim.DEAD_ZONE_RATE`, and it is round rather than square:
+  what is being rejected is hand tremor and gyroscope bias, which is a speed and not a pair of
+  speeds. Without it, a phone lying on a table still walks the stick off centre — and a stick that
+  never quite reads zero is a stick a game reads as permanently held.
+- **Clamped by length, not per axis**, so a fast diagonal swing stays on its diagonal instead of
+  being squared off into the corner it never pointed at.
+- **It stops while the pad is not the thing on screen.** The gyroscope goes on reporting while the
+  editor or a panel is up, and without a gate on it a stick would move on the host because the phone
+  was tilted while someone was laying out buttons. Derived from what is being shown rather than
+  released at each of the five places that covers the pad, because the gyroscope only had to be
+  forgotten at one of them to be left aiming.
+- **App-wide, not part of a layout.** This is a setting about the phone and the hands holding it. On
+  a layout it would have to be set again for every pad and would travel inside every shared file.
+
+A phone with no gyroscope says so on the page rather than hiding the row: a missing *Motion* entry
+reads as a build without the feature, and the reason it would do nothing is worth one line.
+
+### Opacity and themes
+
+**Opacity** is `GamepadLayout.opacity`, set from **Appearance → Opacity** in six steps from solid
+down to `MIN_OPACITY`, 25%. What it is for is seeing through the pad: a phone is a screen before it
+is a controller, and a translucent pad over a streamed or emulated game is the whole reason to want
+it.
+
+- **On the layout, not on the `LayoutStyle`.** It means the same thing for a pad drawn from an art
+  pack as for one drawn as shapes, and a copy on each of the two styles would be a setting silently
+  lost every time someone tried a pack and came back.
+- **One layer for the whole pad**, via `withOpacity` in `ControlRenderers` — not an alpha on each
+  colour, which is a different picture: per-colour alpha lets a face plate show through the stick
+  drawn over it, and a stick's cap show through its own base. Compositing the lot and fading that
+  keeps a translucent pad looking like the pad, only fainter. The layer is skipped entirely at full
+  opacity, since it costs an offscreen buffer per frame.
+- **The floor is not zero.** A pad faded to nothing is a blank screen that still takes touches, with
+  no visible row to bring it back with.
+- **The editor fades the pad and not its own furniture.** The grid, the selection ring and the resize
+  handles stay solid: they belong to the editor rather than to the layout, and a faint pad is
+  exactly when they are most needed.
+
+**Themes** are `PadThemes.ALL`, offered under **Appearance → Themes** while a layout is in colours
+mode. The picker underneath can make any colour at all, which is exactly the problem — a resting
+fill and a pressed fill that obviously is not it take a few goes to find, and most people want a pad
+that looks deliberate rather than a colour wheel. Tapping one applies it straight to the layout and
+stays on the page, because trying them one after another is how a theme gets picked. Each row is
+swatched in its *pressed* colour, the one that tells them apart; the resting fills are all dark by
+design, and labels flip between white and black off the fill's luminance anyway.
+
 ### The saved format
 
 `LayoutJson` writes `{"version": 1, "layouts": [...]}` — always a list, so saving the whole library
@@ -832,7 +934,8 @@ every one of them.
           "shape": { "type": "circle", "centerX": 0.87, "centerY": 0.295, "radius": 0.072 },
           "label": "Y", "triggerMode": "PROGRESSIVE" }
       ],
-      "style": { "type": "colors", "resting": "#FF262B36", "pressed": "#FF4C82F7" }
+      "style": { "type": "colors", "resting": "#FF262B36", "pressed": "#FF4C82F7" },
+      "opacity": 1.0
     }
   ]
 }
@@ -852,6 +955,10 @@ every one of them.
   makes the `Int` negative — which is no use in a file meant to be shared and hand-edited. Reading
   is lenient in the two ways someone editing one by hand would expect: the `#` is optional, and six
   digits mean opaque.
+- **`"opacity"` is defaulted**, on the same bargain the trigger and stick modes struck: a layout
+  saved before it existed comes back fully solid, a newer file loads on an older build as the pad it
+  is, and no format version moves. It is clamped when it is read into a `PadStyle` rather than
+  refused when it is parsed — a hand-edited `0` is a mistake to correct, not a file to reject.
 - `encodeDefaults` is on, so a layout keeps the values it was saved with even if a default later
   moves. `ignoreUnknownKeys` is on too, so a field added by a newer build does not stop an older one
   reading the rest.
@@ -872,10 +979,15 @@ Everything on the roadmap goes through one of these:
 
 ### Design decisions that are easy to undo by accident
 
-- **Reports are coalesced, not sent per touch event.** Sending from the touch handler would put
+- **Reports are rate-capped, not sent per touch event.** Sending from the touch handler would put
   hundreds of reports per second on the L2CAP interrupt channel and show up as lag, not
-  responsiveness. The send loop runs at 100 Hz on a dedicated max-priority thread and skips reports
-  identical to the last one.
+  responsiveness. The send loop waits on a change, sends it, and then holds the line for
+  `MIN_SEND_GAP_MS` — 10 ms — before looking again, on a dedicated max-priority thread, skipping
+  reports identical to the last one. **The cap is applied after a send rather than by polling on a
+  timer**: a poll makes every change wait for the next tick, which costs an isolated button press
+  half the interval on average and the whole of it at worst, for nothing — there was no traffic to
+  coalesce it with. Waiting on a change gives the same ceiling on the wire, no wait at all for a
+  press arriving into a quiet channel, and an idle pad that wakes nothing up. See *Latency*.
 - **A pointer stays bound to the control it went down on** until release, even if it strays. Real
   gamepads behave that way, and it stops a stick being stolen mid-swing.
 - **Sizes scale from `ResolvedLayout.unit`, not screen height.** `unit` is
@@ -889,6 +1001,49 @@ Everything on the roadmap goes through one of these:
   Bluetooth runtime permission to be *granted*, not merely declared. The activity binds first (so
   the UI can show status with nothing granted) and only calls `startForegroundService` once the
   permission is held.
+
+---
+
+## Latency
+
+`LatencyProbe` measures **the part of input lag the app controls**, and says so in the log every ten
+seconds while a host is connected, plus once more when the connection ends:
+
+```
+I Blugaemand: latency: 412 reports, waiting 0.31/1.94/9.87 ms, sending 0.12/0.4/2.1 ms (median/p95/worst)
+```
+
+**The numbers in that line are made up** — it is there to show the shape of the output, not to
+report a measurement. Nothing has been measured on hardware yet.
+
+- **waiting** — from the moment a change to the gamepad's state is recorded to the moment a send is
+  attempted. This is what the rate cap costs, and it is the number `MIN_SEND_GAP_MS` should be
+  argued about with.
+- **sending** — how long `BluetoothHidDevice.sendReport` itself took. That is the stack's, not the
+  pump's, and it is measured separately so that a pump tuned against what is really L2CAP
+  back-pressure is not tuned against the wrong thing.
+
+Percentiles over a rolling window of the last 1024 reports, nearest-rank — a running mean over a
+whole session would be dominated by whatever the pad was doing an hour ago, and an interpolated
+percentile invents a value between two samples that were both really measured.
+
+**What it does not measure** is everything past `sendReport`: the radio, the host's Bluetooth stack,
+its HID driver, and the game's own polling. Those need measuring from the other end, which needs the
+phone and a host in the same room:
+
+1. **Host-side arrival.** On Linux, `evtest /dev/input/eventN` timestamps every event the kernel
+   produces. Comparing its clock to the phone's needs them synchronised, so the useful figure from
+   it is not an absolute one but a *distribution* — press a button a few hundred times and look at
+   the spread of gaps, which is where the radio's retransmissions show up.
+2. **Glass to pixel.** Point a phone camera in slow motion (240 fps, so ±4 ms) at the pad and the
+   host's screen together, and count frames from the thumb landing to the game reacting. Crude, and
+   the only number that is actually end-to-end.
+3. **Then revisit the cap.** With (1) and (2) in hand, the question worth asking is whether 100 Hz
+   is the right ceiling at all — a Bluetooth Classic HID connection with a 7.5 ms interval cannot
+   deliver much more, and a lower cap may cost nothing measurable while saving power.
+
+None of that has been done yet; [TODO.md](TODO.md) tracks it. What has landed is the instrumentation
+and a pump that no longer makes an isolated press wait for a tick.
 
 ---
 
@@ -980,6 +1135,17 @@ edit the layout editor makes — all on the JVM:
   Every group is also checked clustered, the load-bearing one being that on 16:9 — the aspect the
   geometry is authored against — a plate puts its members in exactly the pixels the loose group
   would. Off 16:9 the two deliberately part company, which is the point of the unit fractions.
+- `MotionTest` — the gyro-to-stick mapping: which way each turn aims, that the *other* landscape
+  aims the same way rather than the opposite one, that roll aims at nothing, the round dead zone,
+  clamping by length, and that an aim adds to what a thumb is already sending without wrapping past
+  the rail. Waving a phone about tells you whether aiming feels right; it does not tell you any of
+  these.
+- `LatencyProbeTest` — the arithmetic behind the latency line: nearest-rank percentiles, the ring
+  buffer keeping the most recent window, and — the trap it sets — a partly filled buffer
+  summarising only what is in it rather than counting its untouched zeros as instant reports.
+- `PadThemesTest` — the ready-made colour pairs: distinct names, fully opaque colours, and a
+  measured luminance gap between resting and pressed, because "these two look different on my phone"
+  is how a pair that reads as one colour on someone else's gets shipped.
 - Cluster behaviour is tested where the rest of that behaviour lives rather than in a file of its
   own: routing and the no-dead-spots rule in `TouchRouterTest`, moving, scaling and ungrouping in
   `LayoutEditsTest` — including that a plate resolves to the same arrangement on 16:9 and on 4:3,
@@ -1081,9 +1247,16 @@ The three built-ins cannot be changed — make your own instead:
    In colours mode a picker sits below the rule — tap *At rest* or *Held* to say which fill it is
    adjusting, then drag on the square and the hue bar; in image mode the art carries its own colours,
    so there is nothing there to pick. Going back to shapes returns the colours you had.
-10. **✓ Done**, the green pill at the head of the bar, goes back to the pad. Everything is saved as you go;
+   **Themes**, above the picker, is six ready-made pairs — one tap each, and the picker still tunes
+   whichever you land on.
+10. **Opacity**, the first row on *Appearance*, fades the whole pad in six steps from solid to a
+   quarter, so a game underneath shows through it. It applies to art packs as much as to shapes.
+   The editor's grid, selection ring and handles stay solid however faint the pad is.
+11. **✓ Done**, the green pill at the head of the bar, goes back to the pad. Everything is saved as you go;
    **Delete layout**, the one row in red, asks first, because there is no undo. Every sub-page
    opens with **‹ Back**.
+
+Motion aiming is not part of a layout — it is a setting about the phone, on **☰ Menu → Motion**.
 
 To reach the editor again later, select the layout in the menu — *Edit layout* appears on the root
 page for anything you made.

@@ -523,9 +523,68 @@ Unordered; pull from here whenever.
         fixed stick still has none.
 - [ ] Haptic feedback on button press, with a sensitivity setting
 - [ ] Turbo / autofire and macro buttons
-- [ ] Motion controls from the device IMU
-- [ ] Measure end-to-end latency and revisit the 10 ms send interval with real numbers
-- [ ] Adjustable control opacity and a few pad themes
+- [x] **Motion controls from the device IMU** — the gyroscope drives one thumbstick, off by default,
+      set from *☰ Menu → Motion*: on or off, which stick, sensitivity, and whether the vertical is
+      inverted. `motion/Motion.kt` is the mapping as plain Kotlin and `MotionSensor` is the reader.
+      See *Motion aiming* in the README for the whole of it; what was settled while building it:
+      - **A stick, not a motion axis.** The descriptor has no gyro axes and adding them would
+        produce axes no host maps to anything — Windows would list two more sliders in `joy.cpl` and
+        no game would read them. A thumbstick is the thing games do read, which is also what every
+        desktop gyro-aim setup targets.
+      - **Rate, not angle.** Deflection is proportional to turn rate, so it self-centres when the
+        phone stops, needs no resting pose and cannot drift. `FULL_SCALE_RATE` is 4 rad/s.
+      - **Added to the stick rather than replacing it**, so a thumb and the phone combine: the stick
+        makes the turn and the phone the last few degrees of it.
+      - **The screen rotation is part of the mapping**, read per event. The sensor frame is fixed to
+        the phone's natural orientation and `sensorLandscape` flips between the two landscapes
+        without the activity noticing — cached, aiming would invert whenever the phone was picked up
+        the other way up.
+      - **Round dead zone, clamped by length.** Both are about the fact that a turn is one quantity
+        and not two: a square dead zone rejects a diagonal tremor it should not, and a per-axis
+        clamp squares a fast diagonal swing off into a corner the phone never pointed at.
+      - **It stops while the pad is not on screen**, derived from what is being shown rather than
+        released at each of the five places that covers the pad — the gyroscope goes on reporting
+        the whole time the editor is up, and only had to be forgotten at one of them to be left
+        aiming.
+      - **App-wide, in a `SettingsStore` of its own.** It is a setting about the phone and the hands
+        holding it; on a layout it would be set again for every pad and travel inside every shared
+        file. A second DataStore file rather than more keys in `LayoutStore`, because DataStore
+        allows one instance per file.
+- [x] **Instrumented the send path's latency** — `LatencyProbe` measures the two halves the app
+      controls (how long a change waited for a send, and how long `sendReport` itself took) as
+      nearest-rank percentiles over a rolling window of 1024 reports, logged every ten seconds while
+      connected and once more when the connection ends. See *Latency* in the README.
+- [x] **Revisited the send interval, structurally** — the pump waited on a timer and now waits on a
+      change, holding the line for `MIN_SEND_GAP_MS` after each send. Same 100 Hz ceiling on the
+      wire; an isolated press no longer pays half an interval on average for a coalescing there was
+      no traffic to do. An idle pad now wakes nothing up, where the poll ran a hundred times a
+      second through a pause in play.
+- [ ] **Measure end-to-end latency on hardware, and set the ceiling from the numbers** — the open
+      half of the item above, and the half that needs a phone and a host in one room. The probe
+      gives the in-app figure; what is missing is host-side arrival (`evtest` timestamps, read as a
+      distribution rather than an absolute, since the clocks are not synchronised) and a glass-to-
+      pixel count from a 240 fps camera. Only with those is *is 100 Hz the right ceiling at all*
+      answerable — a Classic HID link on a 7.5 ms interval cannot deliver much more, and a lower cap
+      may cost nothing measurable while saving power. Procedure written up under *Latency* in the
+      README
+- [x] **Adjustable control opacity and a few pad themes** — `GamepadLayout.opacity`, six steps from
+      solid to `MIN_OPACITY` (25%), and `PadThemes.ALL`, six resting/pressed colour pairs. Both on
+      the editor's *Appearance* page.
+      - **Opacity is on the layout, not the `LayoutStyle`** — it means the same thing under an art
+        pack as under shapes, and a copy on each style would be lost every time someone tried a pack
+        and came back. Defaulted, so no format version bump; clamped when read rather than refused
+        when parsed, since a hand-edited `0` is a mistake to correct and not a file to reject.
+      - **One layer for the whole pad**, `withOpacity` in `ControlRenderers`, not an alpha per
+        colour: per-colour alpha lets a plate show through the stick drawn over it and a stick's cap
+        through its own base. The layer is skipped at full opacity, being an offscreen buffer per
+        frame.
+      - **The floor is not zero.** A pad faded to nothing still takes touches and has no visible row
+        to bring it back with.
+      - **The editor fades the pad and not its own furniture** — grid, selection ring and handles
+        stay solid, which is exactly when they are most needed.
+      - **A theme is a starting point, not a replacement for the picker.** Applied straight to the
+        layout without leaving the page, since trying them one after another is how one gets picked.
+        Rows are swatched in the *pressed* colour, the one that tells them apart.
 - [ ] Handle host-initiated output reports if any target ever sends rumble or LED data
 - [ ] Reconnect automatically to the last host on launch
 - [ ] Instrumented test for the service's registration lifecycle
