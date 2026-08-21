@@ -3,9 +3,11 @@ package com.blugaemand.ui
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -105,7 +107,7 @@ private fun DrawScope.drawTriggerValue(
     textMeasurer: TextMeasurer,
 ) {
     val textStyle = TextStyle(
-        color = PadColors.LabelPressed,
+        color = PadColors.LabelOnDark,
         fontSize = (control.extentY * 0.75f).toSp(),
     )
     val measured = textMeasurer.measure(value.toString(), textStyle)
@@ -164,8 +166,9 @@ private fun DrawScope.drawCircleControl(
     textMeasurer: TextMeasurer,
 ) {
     val center = Offset(control.centerX, control.centerY)
+    val fill = if (pressed) style.pressed else style.resting
     drawCircle(
-        color = if (pressed) style.pressed else style.resting,
+        color = fill,
         radius = control.radius,
         center = center,
     )
@@ -175,7 +178,7 @@ private fun DrawScope.drawCircleControl(
         center = center,
         style = Stroke(width = control.radius * 0.08f),
     )
-    drawLabel(control.spec.label, center, control.radius, pressed, textMeasurer)
+    drawLabel(control.spec.label, center, control.radius, fill, textMeasurer)
 }
 
 private fun DrawScope.drawRectControl(
@@ -187,9 +190,10 @@ private fun DrawScope.drawRectControl(
     val topLeft = Offset(control.centerX - control.halfWidth, control.centerY - control.halfHeight)
     val size = Size(control.halfWidth * 2f, control.halfHeight * 2f)
     val corner = CornerRadius(control.halfHeight * 0.4f)
+    val fill = if (pressed) style.pressed else style.resting
 
     drawRoundRect(
-        color = if (pressed) style.pressed else style.resting,
+        color = fill,
         topLeft = topLeft,
         size = size,
         cornerRadius = corner,
@@ -205,7 +209,7 @@ private fun DrawScope.drawRectControl(
         control.spec.label,
         Offset(control.centerX, control.centerY),
         control.halfHeight,
-        pressed,
+        fill,
         textMeasurer,
     )
 }
@@ -262,14 +266,20 @@ private fun DrawScope.drawStick(
         center = Offset(center.x + dx * shaftTravel, center.y + dy * shaftTravel),
     )
 
-    // The cap keeps its own resting grey — it reads as sitting on top of the well only because it
-    // is lighter than the base — and takes the layout's colour only while in use.
+    // The cap wears the layout's own two colours, the same as every other control: resting until a
+    // thumb is on it, pressed while there is.
     drawCircle(
-        color = if (pressed) style.pressed else PadColors.StickKnob,
+        color = if (pressed) style.pressed else style.resting,
         radius = control.knobRadius,
         center = knobCenter,
     )
 }
+
+/** Black or white, whichever the WCAG contrast ratio favours on [fill]. */
+private fun labelOn(fill: Color) =
+    if (fill.luminance() > LABEL_FLIP) PadColors.LabelOnLight else PadColors.LabelOnDark
+
+private const val LABEL_FLIP = 0.18f
 
 private const val SHAFT_RADIUS = 0.72f
 private const val SHAFT_TRAVEL = 0.4f
@@ -330,16 +340,24 @@ private fun DrawScope.drawDpad(
     )
 }
 
+/**
+ * Draws a control's label, in whichever of black or white reads better on [fill].
+ *
+ * A layout picks its own two colours from the palette, so no single label colour can stay legible
+ * across them — pale grey on a pale fill is what this avoids. The pick is the WCAG contrast
+ * comparison between white and black on that fill, which crosses over at a relative luminance of
+ * about 0.18.
+ */
 private fun DrawScope.drawLabel(
     label: String,
     center: Offset,
     reference: Float,
-    pressed: Boolean,
+    fill: Color,
     textMeasurer: TextMeasurer,
 ) {
     if (label.isEmpty()) return
     val style = TextStyle(
-        color = if (pressed) PadColors.LabelPressed else PadColors.Label,
+        color = labelOn(fill),
         fontSize = (reference * 0.7f).toSp(),
     )
     val measured = textMeasurer.measure(label, style)

@@ -16,12 +16,10 @@ object PadColors {
     val ControlFill = Color(0xFF262B36)
     val ControlFillPressed = Color(0xFF4C82F7)
     val ControlStroke = Color(0xFF3C4353)
-    val Label = Color(0xFFCBD2E0)
-    val LabelPressed = Color(0xFFFFFFFF)
+    val LabelOnDark = Color(0xFFFFFFFF)
+    val LabelOnLight = Color(0xFF11141A)
     val StickBase = Color(0xFF1D2129)
-    val StickKnob = Color(0xFF39414F)
     val StickShaft = Color(0xFFC3CAD8)
-    val StickKnobActive = Color(0xFF4C82F7)
 }
 
 /**

@@ -319,9 +319,16 @@ Consequences worth knowing:
   free of `androidx` imports — the thing that lets its tests run on the JVM and will let
   `GamepadLayout` serialise without a custom serialiser. `PadStyle` converts at the `ui/` boundary.
 
-Only the two fills that change with press state belong to the layout. Strokes, labels, the stick
-well and the canvas stay in `PadColors`: they are the pad's chrome rather than the layout's
-identity, and a layout free to recolour its strokes is a layout free to make itself invisible.
+Only the two fills that change with press state belong to the layout — the stick's cap included, so
+a thumbstick wears the same two colours as every button. Strokes, the stick well and shaft and the
+canvas stay in `PadColors`: they are the pad's chrome rather than the layout's identity, and a
+layout free to recolour its strokes is a layout free to make itself invisible.
+
+**A label is not a layout colour either, and it is not a fixed one.** `labelOn` picks black or white
+by the WCAG contrast ratio against whichever fill the control is currently drawn in, crossing over
+at a relative luminance of about 0.18. One grey could not stay readable across a palette that runs
+from near-black to near-white, and asking a layout to name a label colour would let it name an
+unreadable one.
 
 ### The eight built-in plates
 
