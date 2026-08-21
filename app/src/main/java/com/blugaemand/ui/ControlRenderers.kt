@@ -251,6 +251,16 @@ private fun DrawScope.drawStick(
     val dy = stickTouch?.offsetY ?: 0f
     val knobCenter = Offset(center.x + dx * travel, center.y + dy * travel)
 
+    // The shaft the cap sits on: same direction, half the travel and smaller, so it hides entirely
+    // under the cap at rest and only leans out from behind it near the edge of the well. That
+    // sliver of a second circle is the whole of the 3D — a stick tilting away from the thumb.
+    val shaftTravel = travel * SHAFT_TRAVEL
+    drawCircle(
+        color = PadColors.StickShaft,
+        radius = control.knobRadius * SHAFT_RADIUS,
+        center = Offset(center.x + dx * shaftTravel, center.y + dy * shaftTravel),
+    )
+
     // The cap keeps its own resting grey — it reads as sitting on top of the well only because it
     // is lighter than the base — and takes the layout's colour only while in use.
     drawCircle(
@@ -259,6 +269,9 @@ private fun DrawScope.drawStick(
         center = knobCenter,
     )
 }
+
+private const val SHAFT_RADIUS = 0.62f
+private const val SHAFT_TRAVEL = 0.5f
 
 /**
  * The outline of the rectangle a dynamic stick may be spawned in.
