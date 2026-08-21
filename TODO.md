@@ -453,6 +453,14 @@ Unordered; pull from here whenever.
       just clear of the control while a finger is on it. **The touched range is 1..255**, leaving 0
       to mean untouched. Slide rather than touch pressure: pressure would put an Android type in
       `TouchRouter`, which is the file the whole routing behaviour is JVM-tested through
+- [x] **Binary or progressive, per trigger** — a `TriggerMode` on `ControlSpec`, switched from the
+      editor's root page while a trigger is selected. Binary is 255 while touched and 0 otherwise,
+      which is what a trigger did before it was analog; progressive is the slide above. On the spec
+      and not on `ControlId.Trigger`, because an id is compared as identity all over the app and a
+      mode carried there would make a binary ZR and a progressive ZR two different controls. Per
+      control and not per layout: a progressive accelerator and a digital handbrake is one pad.
+      Defaulted rather than required, so no format version bump — an older file reads as
+      progressive, and an older build reads a newer file as progressive too
 - [ ] Haptic feedback on button press, with a sensitivity setting
 - [ ] Turbo / autofire and macro buttons
 - [ ] Motion controls from the device IMU

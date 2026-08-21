@@ -553,8 +553,24 @@ one.
 
 ### Analog triggers
 
-A trigger sends a value, not a press, and the value comes from **where the finger has slid to**
-since it went down.
+A trigger sends a value, not a press, and **each one is set to one of two `TriggerMode`s** —
+progressive or binary — by the row the editor shows when it is selected.
+
+**Binary is the simple one: `255` while a finger is on it, `0` when there is not.** What a trigger
+did before it was analog at all, and kept because plenty of games only ask whether the trigger is
+down; for those, a value that has to be aimed is worse than a tap. Nothing about where the finger
+goes matters, so a binary trigger can be tucked anywhere a button can.
+
+The mode lives on `ControlSpec`, not on `ControlId.Trigger`. An id is what a control *is*, and it is
+compared as one all over the app — `withControlAdded` counts copies by it, `missingButtons`
+subtracts by it, the editor's add page lists by it — so a mode carried there would make a binary ZR
+and a progressive ZR two different controls to every one of those. It is also per control and not
+per layout, because the two triggers on a pad are not obliged to agree: a progressive accelerator
+and a digital handbrake is one pad. `LayoutEdits.withTriggerMode` sets it, and sets it on *every*
+trigger of a plate — a plate is one thing to select, so it has to be one thing to set.
+
+**Progressive is the interesting one**, and the rest of this section is about it. Its value comes
+from **where the finger has slid to** since it went down.
 
 - **A touch rests in the middle** — `128`, `GamepadState.TRIGGER_TOUCH_REST` — because a trigger is
   slid *both* ways and has to start with room in either. It is also comfortably over
@@ -605,10 +621,18 @@ unless the pill would fall off the bottom of the glass, in which case above. `To
 is what the renderer asks, and it is the same number the host is being sent, computed the same way:
 a read-out disagreeing with the report would be worse than no read-out. It answers for a trigger
 reached as a plate member too, positioned against the plate, since the plate is what the binding is
-on.
+on. A binary trigger gets one as well, pinned at `255` — the read-out says what is going to the
+host, which is as true of a switch as of a pull, and it is how the mode shows on the pad at all.
 
-All of this is `TouchRouter` and the renderer. The descriptor already declared the full range and
-the encoder already forwarded it, so neither changed.
+**A saved layout carries `"triggerMode"` on every control**, like `"label"`, and it is defaulted
+rather than required. That is deliberately *not* a format version bump: a layout saved before the
+setting existed comes back progressive, which is the behaviour it was saved with, and a layout
+saved with it loads on an older build as progressive too — `ignoreUnknownKeys` skips the field.
+Bumping the version would instead have made old files unreadable until a migration was written, to
+buy nothing.
+
+All of this is `TouchRouter`, `LayoutEdits` and the renderer. The descriptor already declared the
+full range and the encoder already forwarded it, so neither changed.
 
 ### The saved format
 
@@ -625,7 +649,7 @@ and sharing a single layout are the same shape and there is one version number t
       "controls": [
         { "id": { "type": "button", "button": "WEST" },
           "shape": { "type": "circle", "centerX": 0.87, "centerY": 0.295, "radius": 0.072 },
-          "label": "Y" }
+          "label": "Y", "triggerMode": "PROGRESSIVE" }
       ],
       "style": { "type": "colors", "resting": "#FF262B36", "pressed": "#FF4C82F7" }
     }
@@ -851,11 +875,14 @@ The three built-ins cannot be changed — make your own instead:
    each where the plate was drawing it.
 6. **Remove** takes out whatever is selected. A caption names any button left with no control — a
    warning, not an error.
-7. **Appearance** picks how the pad is drawn: *Shapes and colours*, or one of the seven art packs.
+7. **Trigger** appears only while a trigger is selected — or a plate with one on it — and switches
+   that trigger between **progressive** (rests halfway, slide to pull it) and **binary** (fully
+   pulled while touched, like a button). Each trigger is set on its own, so one pad can have both.
+8. **Appearance** picks how the pad is drawn: *Shapes and colours*, or one of the seven art packs.
    In colours mode a picker sits below the rule — tap *At rest* or *Held* to say which fill it is
    adjusting, then drag on the square and the hue bar; in image mode the art carries its own colours,
    so there is nothing there to pick. Going back to shapes returns the colours you had.
-8. **Done** goes back to the pad. Everything is saved as you go; **Delete layout** asks first,
+9. **Done** goes back to the pad. Everything is saved as you go; **Delete layout** asks first,
    because there is no undo.
 
 To reach the editor again later, select the layout in the menu — *Edit layout* appears on the root

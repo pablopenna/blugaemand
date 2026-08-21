@@ -97,6 +97,34 @@ sealed interface ControlId {
 }
 
 /**
+ * How an analog trigger turns a touch into the value it sends.
+ *
+ * A setting on the control rather than on the layout, because the two triggers on a pad are not
+ * obliged to agree: a racing game wants a progressive accelerator and a digital handbrake, and that
+ * is one pad.
+ *
+ * Not part of [ControlId.Trigger]. An id is what a control *is*, and it is compared as one all over
+ * the app — `withControlAdded` counts copies by it, `missingButtons` subtracts by it, the editor's
+ * add page lists by it. A mode carried there would make a binary ZR and a progressive ZR two
+ * different controls to every one of those.
+ */
+@Serializable
+enum class TriggerMode {
+
+    /**
+     * Full pull the moment it is touched: [com.blugaemand.hid.GamepadState.AXIS_MAX] while a finger
+     * is on it, released when it lifts.
+     *
+     * What a trigger did before it was analog at all, kept because plenty of games only ask whether
+     * the trigger is down and a slide that has to be aimed is worse than a tap for those.
+     */
+    BINARY,
+
+    /** The value follows how far the finger has slid; see `TouchRouter.pullAt` for the rules. */
+    PROGRESSIVE,
+}
+
+/**
  * Where a control sits on screen and how big it is, in coordinates normalised to the 0..1 range.
  *
  * Normalised rather than absolute so a layout renders identically on any screen size, and so the
@@ -115,6 +143,14 @@ data class ControlSpec(
      * pack has no glyph for the control and it falls back to its shape.
      */
     val label: String = "",
+    /**
+     * Only meaningful for a [ControlId.Trigger], and ignored by every other control — like [label],
+     * which is likewise carried by everything and shown only by some.
+     *
+     * Defaulted rather than required so that every layout saved before the setting existed reads
+     * back as the behaviour it was saved with, and so a hand-written layout can leave it out.
+     */
+    val triggerMode: TriggerMode = TriggerMode.PROGRESSIVE,
 ) {
     @Serializable
     sealed interface Shape {

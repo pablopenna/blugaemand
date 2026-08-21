@@ -145,6 +145,21 @@ class LayoutSerializationTest {
         assertEquals("n", decodeLayouts(text).single().id)
     }
 
+    @Test
+    fun `a control saved before trigger modes existed reads as progressive`() {
+        // The other direction, and the reason the setting is defaulted rather than required: every
+        // layout already on a phone was written without this key, and each one has to come back as
+        // the behaviour it was saved with rather than refusing to load.
+        val text = layoutFileOf(
+            """{"id":"old","name":"Old","controls":[{"id":{"type":"trigger","side":"LEFT"},""" +
+                """"shape":{"type":"rect","centerX":0.09,"centerY":0.08,"width":0.12,""" +
+                """"height":0.11},"label":"LT"}],""" +
+                """"style":{"type":"colors","resting":"#FF000000","pressed":"#FFFFFFFF"}}""",
+        )
+        val control = decodeLayouts(text).single().controls.single()
+        assertEquals(TriggerMode.PROGRESSIVE, control.triggerMode)
+    }
+
     // -- The names the format is made of --------------------------------------------------
 
     @Test
@@ -250,6 +265,9 @@ class LayoutSerializationTest {
                     id = ControlId.Trigger(ControlId.Side.LEFT),
                     shape = ControlSpec.Shape.Rect(0.09f, 0.08f, width = 0.12f, height = 0.11f),
                     label = "LT",
+                    // The one control here that is not on the default, so the mode's own names are
+                    // pinned by this file the way every other name in the format is.
+                    triggerMode = TriggerMode.BINARY,
                 ),
                 ControlSpec(
                     id = ControlId.Stick(ControlId.Side.RIGHT),
@@ -306,7 +324,8 @@ class LayoutSerializationTest {
                                     "centerY": 0.25,
                                     "radius": 0.072
                                 },
-                                "label": "Y"
+                                "label": "Y",
+                                "triggerMode": "PROGRESSIVE"
                             },
                             {
                                 "id": {
@@ -320,7 +339,8 @@ class LayoutSerializationTest {
                                     "width": 0.12,
                                     "height": 0.11
                                 },
-                                "label": "LT"
+                                "label": "LT",
+                                "triggerMode": "BINARY"
                             },
                             {
                                 "id": {
@@ -334,7 +354,8 @@ class LayoutSerializationTest {
                                     "radius": 0.18,
                                     "knobRadius": 0.08
                                 },
-                                "label": ""
+                                "label": "",
+                                "triggerMode": "PROGRESSIVE"
                             },
                             {
                                 "id": {
@@ -347,7 +368,8 @@ class LayoutSerializationTest {
                                     "radius": 0.13,
                                     "deadZone": 0.25
                                 },
-                                "label": ""
+                                "label": "",
+                                "triggerMode": "PROGRESSIVE"
                             },
                             {
                                 "id": {
@@ -360,7 +382,8 @@ class LayoutSerializationTest {
                                     "centerY": 0.75,
                                     "radius": 0.055
                                 },
-                                "label": "▲"
+                                "label": "▲",
+                                "triggerMode": "PROGRESSIVE"
                             },
                             {
                                 "id": {
@@ -382,7 +405,8 @@ class LayoutSerializationTest {
                                                 "centerY": 0.0,
                                                 "radius": 0.06
                                             },
-                                            "label": "B"
+                                            "label": "B",
+                                            "triggerMode": "PROGRESSIVE"
                                         },
                                         {
                                             "id": {
@@ -395,11 +419,13 @@ class LayoutSerializationTest {
                                                 "centerY": 0.1,
                                                 "radius": 0.06
                                             },
-                                            "label": "A"
+                                            "label": "A",
+                                            "triggerMode": "PROGRESSIVE"
                                         }
                                     ]
                                 },
-                                "label": ""
+                                "label": "",
+                                "triggerMode": "PROGRESSIVE"
                             }
                         ],
                         "style": {

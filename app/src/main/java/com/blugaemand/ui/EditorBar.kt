@@ -28,9 +28,13 @@ import com.blugaemand.input.ControlSpec
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutStyle
 import com.blugaemand.input.Placement
+import com.blugaemand.input.TriggerMode
 import com.blugaemand.input.art.ArtPacks
 import com.blugaemand.input.describe
 import com.blugaemand.input.missingButtons
+import com.blugaemand.input.other
+import com.blugaemand.input.triggerModeOrNull
+import com.blugaemand.input.withTriggerMode
 import com.blugaemand.ui.theme.OverlayColors
 
 /** Which page of the editor is showing. */
@@ -194,6 +198,28 @@ private fun EditorPanel(
                 // design, so ungrouping is how a single button in a group gets tuned.
                 if (selectedSpec?.shape is ControlSpec.Shape.Cluster) {
                     PanelEntry(label = "Ungroup", onClick = onUngroupSelected)
+                }
+                // The one setting a control carries that is neither its position nor its size, so
+                // it lives with the selection rather than on a page of its own -- and it is absent
+                // for everything that is not a trigger, which is nearly everything. A row that
+                // showed greyed out on every button would be a permanent reminder of a setting
+                // that has nothing to do with them.
+                val triggerMode = selectedSpec?.triggerModeOrNull()
+                if (selected != null && triggerMode != null) {
+                    PanelEntry(
+                        label = "Trigger",
+                        trailing = triggerMode.describe(),
+                        onClick = {
+                            onLayoutChange(layout.withTriggerMode(selected, triggerMode.other()))
+                        },
+                    )
+                    PanelCaption(
+                        when (triggerMode) {
+                            TriggerMode.PROGRESSIVE ->
+                                "Rests halfway. Slide in or out to change how far it is pulled."
+                            TriggerMode.BINARY -> "Fully pulled while touched, like a button."
+                        },
+                    )
                 }
                 PanelEntry(
                     label = "Grid",

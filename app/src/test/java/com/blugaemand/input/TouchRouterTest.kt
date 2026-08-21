@@ -663,6 +663,95 @@ class TouchRouterTest {
         assertNull(router.triggerValue(TRIGGER))
     }
 
+    /** [layout] with its trigger switched to binary, which is the only difference. */
+    private fun binaryRouter() =
+        TouchRouter(ResolvedLayout(layout.withTriggerMode(TRIGGER, TriggerMode.BINARY), 1000f, 500f))
+
+    @Test
+    fun `a binary trigger is fully pulled while touched, wherever the finger goes`() {
+        val router = binaryRouter()
+        router.down(1, 500f, 50f)
+        assertEquals(GamepadState.AXIS_MAX, router.state().leftTrigger)
+
+        // Every one of these means something on a progressive trigger and nothing on this one.
+        router.move(1, 500f, 0f) // out over the top edge
+        assertEquals(GamepadState.AXIS_MAX, router.state().leftTrigger)
+        router.move(1, 500f, 150f) // in, a full throw
+        assertEquals(GamepadState.AXIS_MAX, router.state().leftTrigger)
+        router.move(1, 400f, 50f) // sideways
+        assertEquals(GamepadState.AXIS_MAX, router.state().leftTrigger)
+
+        router.up(1)
+        assertEquals(GamepadState.AXIS_MIN, router.state().leftTrigger)
+    }
+
+    @Test
+    fun `the read-out shows what a binary trigger is sending too`() {
+        val router = binaryRouter()
+        assertNull(router.triggerValue(TRIGGER))
+        router.down(1, 500f, 50f)
+        assertEquals(GamepadState.AXIS_MAX, router.triggerValue(TRIGGER))
+    }
+
+    @Test
+    fun `the mode belongs to the control, so two triggers need not agree`() {
+        val mixed = GamepadLayout(
+            id = "mixed",
+            name = "Mixed",
+            controls = listOf(
+                ControlSpec(
+                    ControlId.Trigger(Side.LEFT),
+                    ControlSpec.Shape.Rect(0.2f, 0.1f, width = 0.1f, height = 0.1f),
+                    triggerMode = TriggerMode.BINARY,
+                ),
+                ControlSpec(
+                    ControlId.Trigger(Side.RIGHT),
+                    ControlSpec.Shape.Rect(0.8f, 0.1f, width = 0.1f, height = 0.1f),
+                ),
+            ),
+        )
+        val router = TouchRouter(ResolvedLayout(mixed, 1000f, 500f))
+        router.down(1, 200f, 50f)
+        router.down(2, 800f, 50f)
+        assertEquals(GamepadState.AXIS_MAX, router.state().leftTrigger)
+        assertEquals(GamepadState.TRIGGER_TOUCH_REST, router.state().rightTrigger)
+    }
+
+    @Test
+    fun `a binary trigger on a plate is binary there too`() {
+        // The mode is read off whichever control the pointer resolves to, so a member answers for
+        // itself rather than for the plate it is on.
+        val shoulders = GamepadLayout(
+            id = "shoulders",
+            name = "Shoulders",
+            controls = listOf(
+                ControlSpec(
+                    ControlId.Cluster,
+                    ControlSpec.Shape.Cluster(
+                        0.5f,
+                        0.5f,
+                        members = listOf(
+                            ControlSpec(
+                                ControlId.Trigger(Side.RIGHT),
+                                ControlSpec.Shape.Rect(0f, -0.15f, width = 0.4f, height = 0.2f),
+                                triggerMode = TriggerMode.BINARY,
+                            ),
+                            ControlSpec(
+                                ControlId.Button(GamepadButton.R1),
+                                ControlSpec.Shape.Rect(0f, 0.15f, width = 0.4f, height = 0.2f),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val router = TouchRouter(ResolvedLayout(shoulders, 1000f, 500f))
+        router.down(1, 500f, 175f)
+        router.move(1, 500f, 225f) // a slide that would read 96 on a progressive one
+        assertEquals(GamepadState.AXIS_MAX, router.state().rightTrigger)
+        assertEquals(GamepadState.AXIS_MAX, router.triggerValue(0))
+    }
+
     @Test
     fun `only triggers have a read-out`() {
         val router = router()

@@ -590,6 +590,79 @@ class LayoutEditsTest {
         assertEquals("A", layout.controls[south].describe())
     }
 
+    // -- Trigger mode ---------------------------------------------------------------------
+
+    @Test
+    fun `a trigger starts progressive and switches to binary`() {
+        assertEquals(TriggerMode.PROGRESSIVE, layout.controls[trigger].triggerModeOrNull())
+
+        val binary = layout.withTriggerMode(trigger, TriggerMode.BINARY)
+        assertEquals(TriggerMode.BINARY, binary.controls[trigger].triggerModeOrNull())
+        // The setting and nothing else: a mode is not a move, and the control it is set on has to
+        // come back the same size in the same place.
+        assertEquals(layout.controls[trigger].shape, binary.controls[trigger].shape)
+        assertEquals(
+            layout.controls.filterIndexed { i, _ -> i != trigger },
+            binary.controls.filterIndexed { i, _ -> i != trigger },
+        )
+    }
+
+    @Test
+    fun `setting the mode on a plate sets every trigger on it`() {
+        // A plate is one thing to select, so it is one thing to set. The bumper beside the trigger
+        // is not a trigger and comes back untouched.
+        val shoulders = GamepadLayout(
+            id = "shoulders",
+            name = "Shoulders",
+            controls = listOf(
+                ControlSpec(
+                    ControlId.Cluster,
+                    ControlSpec.Shape.Cluster(
+                        0.5f,
+                        0.1f,
+                        members = listOf(
+                            ControlSpec(
+                                ControlId.Trigger(Side.LEFT),
+                                ControlSpec.Shape.Rect(0f, -0.1f, width = 0.4f, height = 0.15f),
+                            ),
+                            ControlSpec(
+                                ControlId.Button(GamepadButton.L1),
+                                ControlSpec.Shape.Rect(0f, 0.1f, width = 0.4f, height = 0.15f),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        assertEquals(TriggerMode.PROGRESSIVE, shoulders.controls[0].triggerModeOrNull())
+
+        val binary = shoulders.withTriggerMode(0, TriggerMode.BINARY)
+        val members = binary.cluster(0).members
+        assertEquals(TriggerMode.BINARY, members[0].triggerMode)
+        assertEquals(shoulders.cluster(0).members[1], members[1])
+        assertEquals(TriggerMode.BINARY, binary.controls[0].triggerModeOrNull())
+    }
+
+    @Test
+    fun `a control with no trigger has no mode, and setting one is not an edit`() {
+        // Every spec carries the field, the way every spec carries a label, so the question the
+        // editor asks is not "what is your mode" but "have you a trigger at all".
+        assertNull(layout.controls[south].triggerModeOrNull())
+        assertNull(plated.controls[0].triggerModeOrNull())
+
+        assertEquals(layout, layout.withTriggerMode(south, TriggerMode.BINARY))
+        assertEquals(plated, plated.withTriggerMode(0, TriggerMode.BINARY))
+        assertEquals(layout, layout.withTriggerMode(99, TriggerMode.BINARY))
+    }
+
+    @Test
+    fun `the modes are named and paired for the row that toggles them`() {
+        assertEquals("progressive", TriggerMode.PROGRESSIVE.describe())
+        assertEquals("binary", TriggerMode.BINARY.describe())
+        assertEquals(TriggerMode.BINARY, TriggerMode.PROGRESSIVE.other())
+        assertEquals(TriggerMode.PROGRESSIVE, TriggerMode.BINARY.other())
+    }
+
     // -- Helpers --------------------------------------------------------------------------
 
     private fun assertOnGrid(pixels: Float) {

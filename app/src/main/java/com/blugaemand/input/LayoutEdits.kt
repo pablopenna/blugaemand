@@ -151,6 +151,39 @@ fun GamepadLayout.withControlAdded(id: ControlId): GamepadLayout {
 /** How far each further copy of a control is nudged, in normalised units. */
 private const val DUPLICATE_OFFSET = 0.04f
 
+/**
+ * [this] with the trigger at [index] switched to [mode] — and every trigger on it, if it is a plate.
+ *
+ * A plate is one thing to select, so it has to be one thing to set: a shoulder pair holding ZL and
+ * the bumper beside it is selected as the pair, and there is no way to reach into it but to
+ * ungroup. Setting all of them is the answer that matches what was tapped. A plate with two
+ * triggers on it is rare enough that both taking the mode is not a surprise.
+ *
+ * A control with no trigger anywhere in it comes back unchanged rather than refusing, so the editor
+ * does not have to ask twice — [triggerModeOrNull] is what decides whether the row is offered at
+ * all.
+ */
+fun GamepadLayout.withTriggerMode(index: Int, mode: TriggerMode): GamepadLayout =
+    if (index !in controls.indices) this
+    else copy(
+        controls = controls.mapIndexed { i, spec ->
+            if (i == index) spec.withTriggerMode(mode) else spec
+        },
+    )
+
+/**
+ * The mode the triggers on this control are in, or null if there are none — which is also the
+ * editor's test for whether to offer the setting.
+ *
+ * The first one found, for a plate carrying more than one. They can only disagree in a hand-edited
+ * file, because [withTriggerMode] sets them together, and answering for the first is better than
+ * refusing to answer: the row still shows, and tapping it puts them back in step.
+ */
+fun ControlSpec.triggerModeOrNull(): TriggerMode? = when (val shape = shape) {
+    is ControlSpec.Shape.Cluster -> shape.members.firstNotNullOfOrNull { it.triggerModeOrNull() }
+    else -> if (id is ControlId.Trigger) triggerMode else null
+}
+
 /** [this] without the control at [index]. An index that is not there is not an error. */
 fun GamepadLayout.withControlRemovedAt(index: Int): GamepadLayout =
     if (index !in controls.indices) this
@@ -186,11 +219,33 @@ fun ControlSpec.describe(): String = when (val shape = shape) {
     else -> id.describe()
 }
 
+/**
+ * How a trigger mode is named in the editor — *"progressive"*, *"binary"*.
+ *
+ * Beside [ControlId.describe] and not in the panel that shows it, so the two names a control is
+ * offered under both come from here.
+ */
+fun TriggerMode.describe(): String = name.lowercase()
+
+/** The other of the two, which is what tapping the editor's row switches to. */
+fun TriggerMode.other(): TriggerMode = when (this) {
+    TriggerMode.BINARY -> TriggerMode.PROGRESSIVE
+    TriggerMode.PROGRESSIVE -> TriggerMode.BINARY
+}
+
 /** [value] rounded to the nearest multiple of [step]. */
 fun snapToGrid(value: Float, step: Float): Float =
     if (step <= 0f) value else (value / step).roundToInt() * step
 
 // -- Internals ----------------------------------------------------------------------------
+
+/** [this] with [mode] on it if it is a trigger, or on its triggers if it is a plate. */
+private fun ControlSpec.withTriggerMode(mode: TriggerMode): ControlSpec = when (val shape = shape) {
+    is ControlSpec.Shape.Cluster ->
+        copy(shape = shape.copy(members = shape.members.map { it.withTriggerMode(mode) }))
+
+    else -> if (id is ControlId.Trigger) copy(triggerMode = mode) else this
+}
 
 private fun ControlId.Side.spelled(): String =
     name.lowercase().replaceFirstChar { it.uppercase() }

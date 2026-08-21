@@ -43,16 +43,23 @@ class TouchRouter(private val layout: ResolvedLayout) {
     }
 
     /**
-     * The axis value [trigger] reads for this pointer.
+     * The axis value [trigger] reads for this pointer, by whichever [TriggerMode] it is set to.
      *
      * Asked of the binding rather than of the control, because a pull is measured from where the
      * finger landed and a control knows nothing about that. Taking the trigger as an argument
      * rather than re-deriving it keeps this out of the business of deciding whether the pointer is
      * on one — both callers have already established that, one from a `when` and one from a filter.
+     *
+     * A binary trigger reads [GamepadState.AXIS_MAX] and not the touched range's ceiling, which is
+     * the same number: it is not a pull run to the top, it is a switch, and the value a switch
+     * sends is the axis maximum. The two agreeing is why the distinction costs nothing.
      */
-    private fun Binding.pullOf(trigger: ResolvedControl): Int = GamepadState.triggerFromUnit(
-        trigger.pullAt(startX, startY, x, y, layout.width, layout.height),
-    )
+    private fun Binding.valueOf(trigger: ResolvedControl): Int = when (trigger.spec.triggerMode) {
+        TriggerMode.BINARY -> GamepadState.AXIS_MAX
+        TriggerMode.PROGRESSIVE -> GamepadState.triggerFromUnit(
+            trigger.pullAt(startX, startY, x, y, layout.width, layout.height),
+        )
+    }
 
     private val bindings = LinkedHashMap<Long, Binding>()
 
@@ -135,12 +142,16 @@ class TouchRouter(private val layout: ResolvedLayout) {
      * cluster member too — the binding is on the plate, and [Binding.target] resolves which member
      * the finger is over. What it cannot do is answer for two triggers on one plate at once, which
      * is the same first-pointer-wins simplification those two already make.
+     *
+     * A [TriggerMode.BINARY] trigger answers here as well, with the 255 it is sending. The read-out
+     * says what is going to the host, and "the host is being told 255" is as true of a switch as of
+     * a pull — and seeing it pinned there is how the mode shows on the pad at all.
      */
     fun triggerValue(controlIndex: Int): Int? {
         val binding = bindings.values.firstOrNull {
             it.control.index == controlIndex && it.target().id is ControlId.Trigger
         } ?: return null
-        return binding.pullOf(binding.target())
+        return binding.valueOf(binding.target())
     }
 
     /** Builds the state to send to the host from every currently held control. */
@@ -163,7 +174,7 @@ class TouchRouter(private val layout: ResolvedLayout) {
                 is ControlId.Button -> state.withButton(id.button, true)
 
                 is ControlId.Trigger -> {
-                    val value = binding.pullOf(control)
+                    val value = binding.valueOf(control)
                     if (id.side == ControlId.Side.LEFT) {
                         state.copy(leftTrigger = value)
                     } else {
