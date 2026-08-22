@@ -602,7 +602,14 @@ Unordered; pull from here whenever.
 - [x] **CI workflow** — `.github/workflows/build.yml` runs `test`, `lint` and `assemble` on every
       push and pull request to `main`, and uploads the APK as an artifact. A manual run picks Debug
       or Release; anything automatic is Debug
-- [ ] Release signing config, so the workflow's Release APK is installable rather than unsigned
+- [x] **Release signing config** — `assembleRelease` signs when a key is configured and still
+      produces the unsigned APK when none is, because a clean checkout and a fork's CI have no key
+      and must both build. Credentials come from `keystore.properties` at the repo root (gitignored,
+      with `keystore.properties.sample` beside it) or from `BLUGAEMAND_*` environment variables,
+      which is the route CI takes from four repository secrets. **All four values or none**: a
+      partial set fails the build naming what is missing, since an unsigned APK is a failure only
+      noticed at install time. Verified with a throwaway key — `apksigner verify` reports one signer
+      under APK Signature Scheme v2, which is all an API 28+ install needs
 
 ---
 

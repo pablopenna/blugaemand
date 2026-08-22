@@ -46,6 +46,28 @@ in `app/build.gradle.kts` as pure noise.
 Releases only need `versionName` bumped in `app/build.gradle.kts` — **☰ Menu → About** shows it via
 `BuildConfig.VERSION_NAME`.
 
+### Signing a release
+
+Copy `keystore.properties.sample` to `keystore.properties` (gitignored, along with `*.jks`) and fill
+in the four values; `assembleRelease` then produces `app-release.apk` instead of
+`app-release-unsigned.apk`. Create the key first:
+
+```bash
+keytool -genkeypair -v -keystore blugaemand-release.jks -alias blugaemand \
+        -keyalg RSA -keysize 4096 -validity 10000
+```
+
+- **All four values or none.** A partial set fails the build naming what is missing, rather than
+  quietly handing back an unsigned APK — which is the failure that is only noticed at install time.
+- **The environment is the other route**, which is what CI uses: `BLUGAEMAND_STOREFILE`,
+  `BLUGAEMAND_STOREPASSWORD`, `BLUGAEMAND_KEYALIAS`, `BLUGAEMAND_KEYPASSWORD`. The properties file
+  wins where both are set.
+- `storeFile` is resolved against the repo root, so a checkout copied to another machine reads the
+  same; an absolute path passes through unchanged.
+- **Keep the key off the repo and backed up.** A lost key means the app can never be updated in
+  place, only reinstalled under a new identity.
+- Signing is v2 (APK Signature Scheme v2), which is all an API 28+ install needs.
+
 ### CI
 
 `.github/workflows/build.yml` runs the same three commands — `test`, then `lint` and `assemble` for
@@ -54,8 +76,10 @@ uploaded as artifacts, on failure too, so a phone can be fed a build without a t
 
 - Manual runs take a Debug/Release `choice` input; automatic runs fall back to Debug in the
   *Resolve build type* step, which is what makes one workflow serve both.
-- **Release comes out unsigned** until there is a signing config: `app-release-unsigned.apk` is fine
-  for inspection, useless for installing.
+- **Release signs when the four `RELEASE_*` repository secrets are set** — `RELEASE_KEYSTORE_BASE64`
+  (the `.jks`, base64-encoded), `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`,
+  `RELEASE_KEY_PASSWORD`. Without them it comes out unsigned, which is what a fork's pull request
+  gets: secrets are not exposed to those.
 - The runner's SDK arrives with licences accepted, so no `local.properties` is written.
 
 ### Working with a phone

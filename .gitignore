@@ -10,3 +10,8 @@ captures/
 *.apk
 *.aab
 local_only/
+
+# Release signing. The key and its passwords never belong in the repo.
+keystore.properties
+*.jks
+*.keystore
