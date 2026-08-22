@@ -1,5 +1,8 @@
 package com.blugaemand.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -18,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -181,8 +185,12 @@ fun MenuPanel(
     }
 }
 
+/** Where the source lives, and the one row on [AboutCard] that leaves the app. */
+private const val REPO_URL = "https://github.com/pablopenna/blugaemand"
+
 /**
- * The app's own page: its icon, its name and the version this build was cut at.
+ * The app's own page: its icon, its name, the version this build was cut at, and where it came
+ * from.
  *
  * The icon is the launcher's foreground layer rather than `@mipmap/ic_launcher`, because that one
  * is an `adaptive-icon` and [painterResource] cannot load it. The layer carries the art's own blue
@@ -211,6 +219,12 @@ private fun AboutCard(modifier: Modifier = Modifier) {
             fontSize = 11.sp,
             color = OverlayColors.Caption,
         )
+        val context = LocalContext.current
+        PanelEntry(label = "Source on GitHub", trailing = "↗") {
+            // A phone with no browser at all is a strange phone, but it is not one to crash on.
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(REPO_URL))) }
+                .onFailure { if (it !is ActivityNotFoundException) throw it }
+        }
     }
 }
 

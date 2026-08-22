@@ -359,7 +359,7 @@ and rotation on a sensor callback, so whichever arrives has to send the pair.
 - `MenuBar` — picking a layout, making one, editing, *About*, quitting. Page state lives inside the
   composable, which is only composed while open, so the menu reopens on its root page without a
   reset that would visibly flip pages mid-close. *About* reads the launcher icon, `app_name` and
-  `BuildConfig.VERSION_NAME` from what the build already states.
+  `BuildConfig.VERSION_NAME` from what the build already states, plus a row opening the repository.
 - `EditorBar` — the editor's pill and panel, **collapsed by default** (an always-open panel covers
   the top centre and makes controls under it unselectable) and built on `TapPill` (nothing being
   edited is connected to anything, so the hold would be a tax). **Split by what an option acts on**:

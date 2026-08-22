@@ -477,7 +477,9 @@ Unordered; pull from here whenever.
       turned on, since only Compose was; and the icon shown is the adaptive icon's **foreground
       layer over the launcher background colour**, because `painterResource` cannot load an
       `adaptive-icon` XML. It is squared off with a corner radius of our own rather than masked —
-      the mask is the launcher's choice, not ours to guess
+      the mask is the launcher's choice, not ours to guess. A **Source on GitHub** row under the
+      version opens the repository — the one thing on the pad's chrome that leaves the app, so it
+      swallows `ActivityNotFoundException` rather than crashing a phone with no browser
 
 - [x] **Analog triggers** — driven by slide distance, in `TouchRouter` and the renderer alone; the
       descriptor already carried the full range and the encoder already forwarded it. A touch rests
