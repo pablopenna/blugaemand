@@ -470,6 +470,15 @@ mode. If one of those ever becomes acceptable, Stages 1–3 are the plan to pick
 
 Unordered; pull from here whenever.
 
+- [x] **About page** — the launcher icon, the app's name and its version, on **☰ Menu → About**.
+      All three are read from what the build already states — `@mipmap/ic_launcher_foreground`,
+      `app_name` and `BuildConfig.VERSION_NAME` — so bumping `versionName` in `app/build.gradle.kts`
+      is the only edit a release needs. Two things worth keeping: `buildConfig = true` had to be
+      turned on, since only Compose was; and the icon shown is the adaptive icon's **foreground
+      layer over the launcher background colour**, because `painterResource` cannot load an
+      `adaptive-icon` XML. It is squared off with a corner radius of our own rather than masked —
+      the mask is the launcher's choice, not ours to guess
+
 - [x] **Analog triggers** — driven by slide distance, in `TouchRouter` and the renderer alone; the
       descriptor already carried the full range and the encoder already forwarded it. A touch rests
       at the middle of the range and the finger slides both ways, against whichever screen edge it

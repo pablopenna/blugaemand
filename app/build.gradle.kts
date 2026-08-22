@@ -37,6 +37,9 @@ android {
 
     buildFeatures {
         compose = true
+        // For BuildConfig.VERSION_NAME, which the About page shows. Asking PackageManager for it
+        // at runtime would read back the same string this file already sets.
+        buildConfig = true
     }
 
     lint {

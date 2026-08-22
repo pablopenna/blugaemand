@@ -19,7 +19,8 @@ Layouts and the choice of one are saved between launches.
 Verified end-to-end against **Linux** and **Windows**.
 Two pills sit at the top edge, each opening
 its panel on a 600 ms hold: the left one is connection status and pairing, the right one
-(**☰ Menu**) picks or creates a layout, opens the editor, sets motion aiming, and quits.
+(**☰ Menu**) picks or creates a layout, opens the editor, sets motion aiming, shows the app's name
+and version on **About**, and quits.
 
 **[TODO.md](TODO.md) is the live backlog** — what is done, what is next, and a *Known constraints*
 section recording things that are permanently impossible so they do not get rediscovered. Read it
@@ -257,9 +258,13 @@ the panel and the head bar are split by — and it is taken more often than anyt
 which made a row you have to open a menu to reach the wrong shape for it.
 
 - `ConnectionBar` — `ConnectionPill` and `ConnectionPanel`: status, pairing and reconnection.
-- `MenuBar` — `MenuPill` and `MenuPanel`: picking a layout, making one, editing, and quitting. The
-  panel's page state lives inside the composable, which is only composed while open, so the menu
-  reopens on its root page without a reset that would visibly flip pages mid-close.
+- `MenuBar` — `MenuPill` and `MenuPanel`: picking a layout, making one, editing, *About*, and
+  quitting. The panel's page state lives inside the composable, which is only composed while open,
+  so the menu reopens on its root page without a reset that would visibly flip pages mid-close.
+  *About* is a page like the rest — the launcher icon, `app_name` and `BuildConfig.VERSION_NAME`,
+  all read from what the build already states rather than repeated here. It draws
+  `@mipmap/ic_launcher_foreground` on the launcher background colour, because `@mipmap/ic_launcher`
+  is an `adaptive-icon` and `painterResource` cannot load one.
 - `ColorPicker` — a saturation/value square over a hue bar, plus the two rows that pick which of a
   layout's colours it is aimed at. `ColorMath` beside it is the ARGB↔HSV conversion, with no Compose
   and no Android in it so it is tested on the JVM like the rest of the editor's arithmetic.
@@ -1257,6 +1262,7 @@ The three built-ins cannot be changed — make your own instead:
    opens with **‹ Back**.
 
 Motion aiming is not part of a layout — it is a setting about the phone, on **☰ Menu → Motion**.
+The app's own name, icon and version are on **☰ Menu → About**.
 
 To reach the editor again later, select the layout in the menu — *Edit layout* appears on the root
 page for anything you made.

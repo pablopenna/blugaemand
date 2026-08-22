@@ -1,15 +1,30 @@
 package com.blugaemand.ui
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.blugaemand.BuildConfig
 import com.blugaemand.R
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutLibrary
@@ -17,7 +32,7 @@ import com.blugaemand.motion.MotionSettings
 import com.blugaemand.ui.theme.OverlayColors
 
 /** Which page of the menu is showing. */
-private enum class MenuPage { Root, Layouts, New, Motion }
+private enum class MenuPage { Root, Layouts, New, Motion, About }
 
 /**
  * The app menu's pill, sitting to the right of [ConnectionPill]. Same shape and same hold to open,
@@ -85,6 +100,7 @@ fun MenuPanel(
                     label = "Motion",
                     trailing = if (motion.enabled) "on" else "off",
                 ) { page = MenuPage.Motion }
+                PanelEntry(label = "About", trailing = "›") { page = MenuPage.About }
                 PanelEntry(label = "Quit", onClick = onQuit)
             }
 
@@ -156,7 +172,45 @@ fun MenuPanel(
                         "whatever a thumb on it is already sending.",
                 )
             }
+
+            MenuPage.About -> {
+                PanelBack { page = MenuPage.Root }
+                AboutCard()
+            }
         }
+    }
+}
+
+/**
+ * The app's own page: its icon, its name and the version this build was cut at.
+ *
+ * The icon is the launcher's foreground layer rather than `@mipmap/ic_launcher`, because that one
+ * is an `adaptive-icon` and [painterResource] cannot load it. The layer carries the art's own blue
+ * field, and the launcher background sits behind it for the transparent margin the 108dp canvas
+ * leaves, so the two together are what the launcher shows -- squared off rather than masked, since
+ * the mask is the launcher's choice and not ours to guess.
+ */
+@Composable
+private fun AboutCard(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Image(
+            painter = painterResource(R.mipmap.ic_launcher_foreground),
+            contentDescription = null,
+            modifier = Modifier
+                .size(72.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(colorResource(R.color.ic_launcher_background)),
+        )
+        Text(text = stringResource(R.string.app_name), fontSize = 14.sp, color = OverlayColors.Label)
+        Text(
+            text = "Version ${BuildConfig.VERSION_NAME}",
+            fontSize = 11.sp,
+            color = OverlayColors.Caption,
+        )
     }
 }
 
