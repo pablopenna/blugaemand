@@ -1,0 +1,38 @@
+{
+  "baseline_artifact_id": 11436883293,
+  "baseline_commit": "4b192bfe604e05203b40dc04d51798954f7cd660",
+  "sha256": "ebe58945e32de851e60cbc35a55d3ed37edb009be80eb29cbfa63436f6959b1b",
+  "plugin_initializers": [
+    "0x62f4"
+  ],
+  "superclass_pointer": "0x11e20",
+  "fake_NSObject_symbol": "0x11e20",
+  "first_constant_string_isa": "0x11fe8",
+  "fake_string_class_symbol": "0x11fe8",
+  "abi_violations": 78,
+  "original_signature": {
+    "present": true,
+    "valid": true,
+    "directories": [
+      {
+        "hash": "sha256",
+        "pages": 32,
+        "bad_pages": []
+      }
+    ]
+  },
+  "signature_after_simulating_old_alias_rename": {
+    "present": true,
+    "valid": false,
+    "directories": [
+      {
+        "hash": "sha256",
+        "pages": 32,
+        "bad_pages": [
+          0
+        ]
+      }
+    ]
+  },
+  "scope": "Actual CI plugin inspected; alias rename simulated byte-for-byte. Installed guest IPA not provided."
+}

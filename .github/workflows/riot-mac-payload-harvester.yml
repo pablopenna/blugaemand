@@ -1,0 +1,71 @@
+name: Riot Mac Payload Harvester
+
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: Riot region
+        required: true
+        default: EUW
+        type: choice
+        options: [EUW, NA, KR, JP, BR, EUNE, OC1, TR, RU, PBE]
+      inventory_only:
+        description: Parse manifests only; do not download Mach-O candidates
+        required: true
+        default: false
+        type: boolean
+  schedule:
+    - cron: "17 4 * * 3"
+  push:
+    branches:
+      - feat/darwinbridge-macho-loader
+    paths:
+      - "tools/riot-mac-harvester/**"
+      - ".github/workflows/riot-mac-payload-harvester.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  harvest:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      REGION: ${{ inputs.region || 'EUW' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/riot-mac-harvester/requirements.txt
+
+      - name: Install harvester
+        run: pip install -r tools/riot-mac-harvester/requirements.txt
+
+      - name: Harvest current Riot macOS payload metadata
+        shell: bash
+        run: |
+          EXTRA=""
+          if [[ "${{ inputs.inventory_only }}" == "true" ]]; then EXTRA="--inventory-only"; fi
+          python tools/riot-mac-harvester/harvester.py --region "$REGION" $EXTRA
+
+      - name: Print compatibility summary
+        if: ${{ hashFiles('artifacts/riot-mac-harvest/lol-compatibility-manifest.json') != '' }}
+        run: |
+          python - <<'PY'
+          import json
+          p="artifacts/riot-mac-harvest/lol-compatibility-manifest.json"
+          d=json.load(open(p))
+          print(json.dumps(d["source"], indent=2))
+          print(json.dumps(d["summary"], indent=2))
+          PY
+
+      - name: Upload Stage 21X results
+        uses: actions/upload-artifact@v4
+        with:
+          name: riot-mac-harvest-${{ env.REGION }}-${{ github.run_number }}
+          path: artifacts/riot-mac-harvest/*.json
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,8 @@
+# Real class/metaclass objects retain unique Objective-C runtime names.
+# The second column is the desktop Mach-O compatibility export, not a Class cell.
+_OBJC_CLASS_$_DBShimNSColor _OBJC_CLASS_$_NSColor
+_OBJC_METACLASS_$_DBShimNSColor _OBJC_METACLASS_$_NSColor
+_OBJC_CLASS_$_DBShimNSFont _OBJC_CLASS_$_NSFont
+_OBJC_METACLASS_$_DBShimNSFont _OBJC_METACLASS_$_NSFont
+_OBJC_CLASS_$_DBShimNSTask _OBJC_CLASS_$_NSTask
+_OBJC_METACLASS_$_DBShimNSTask _OBJC_METACLASS_$_NSTask

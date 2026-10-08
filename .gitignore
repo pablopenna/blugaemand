@@ -15,3 +15,8 @@ local_only/
 keystore.properties
 *.jks
 *.keystore
+
+# DarwinBridge generated binary audit intermediates
+DarwinBridge/Tools/__pycache__/
+DarwinBridge/Tests/__pycache__/
+artifacts/

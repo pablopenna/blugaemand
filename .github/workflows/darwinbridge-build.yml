@@ -1,0 +1,139 @@
+# Preserve standalone Mach-O test artifact
+name: DarwinBridge iOS prototype
+
+on:
+  push:
+    branches: ["feat/darwinbridge-macho-loader"]
+    paths:
+      - "DarwinBridge/**"
+      - ".github/workflows/darwinbridge-build.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Core loader + dyld + runtime smoke tests
+        working-directory: DarwinBridge
+        run: |
+          swiftc \
+            Core/Models.swift \
+            Core/MachOParser.swift \
+            Core/FrameworkShimRegistry.swift \
+            Core/CompatibilityAnalyzer.swift \
+            Core/ChainedFixupsParser.swift \
+            Core/SymbolBroker.swift \
+            Core/FixupPlanner.swift \
+            Core/GuestAddressSpace.swift \
+            Tests/parser_smoke.swift \
+            -o /tmp/darwinbridge-smoke
+          /tmp/darwinbridge-smoke
+
+      - name: Build controlled macOS ARM64 Mach-O
+        working-directory: DarwinBridge
+        run: |
+          mkdir -p artifacts/test-target
+          SDK="$(xcrun --sdk macosx --show-sdk-path)"
+          CLANG="$(xcrun --sdk macosx --find clang)"
+          "$CLANG" \
+            -target arm64-apple-macos13.0 \
+            -isysroot "$SDK" \
+            -Wl,-headerpad,0x1000 \
+            -Wl,-needed_framework,AppKit -Wl,-needed_framework,Foundation -Wl,-needed_framework,CFNetwork \
+            Tests/real_macho_return42.c \
+            -o artifacts/test-target/darwinbridge-test-arm64
+
+          file artifacts/test-target/darwinbridge-test-arm64
+          lipo -info artifacts/test-target/darwinbridge-test-arm64
+          otool -l artifacts/test-target/darwinbridge-test-arm64 > artifacts/test-target/load-commands.txt
+
+          grep -A 4 "segname __TEXT" artifacts/test-target/load-commands.txt
+          grep -A 4 "LC_MAIN" artifacts/test-target/load-commands.txt
+
+      - name: Validate Stage 11-14 source integration
+        working-directory: DarwinBridge
+        run: |
+          grep -q "Stage11To14Analyzer" Core/Stage11To14Analyzer.swift
+          grep -q "Stage 11 → 14 Integration" App/ContentView.swift
+          grep -q "Metal device runtime" Core/Stage11To14Analyzer.swift
+          grep -q "Bundle root" Core/Stage11To14Analyzer.swift
+
+      - name: Build LiveContainer compatibility plugin
+        working-directory: DarwinBridge
+        run: chmod +x LiveContainerPlugin/build-plugin.sh && LiveContainerPlugin/build-plugin.sh
+
+      - name: Audit runtime binaries and native ObjC identity
+        run: |
+          python3 DarwinBridge/Tools/audit_runtime.py DarwinBridge/build/livecontainer-plugin artifacts/loader-audit/runtime
+          python3 DarwinBridge/Tests/objc_loader_regression.py
+          node DarwinBridge/Tests/jit_protocol_test.js
+
+      - name: Exercise the actual Swift first-run packager
+        run: |
+          swiftc DarwinBridge/Core/Models.swift DarwinBridge/Core/MachOParser.swift \
+            DarwinBridge/Core/LoLLiveContainerPackager.swift DarwinBridge/Tests/packager_cli.swift \
+            -o /tmp/db-packager
+          /tmp/db-packager DarwinBridge/artifacts/test-target/darwinbridge-test-arm64 \
+            DarwinBridge/build/livecontainer-plugin artifacts/loader-audit/fixture.ipa
+          python3 DarwinBridge/Tools/verify_package.py artifacts/loader-audit/fixture.ipa \
+            DarwinBridge/artifacts/test-target/darwinbridge-test-arm64 artifacts/loader-audit/final --sign
+
+      - name: Exercise pinned LiveContainer executable patch and re-sign
+        run: |
+          python3 DarwinBridge/Tools/verify_livecontainer_patch.py \
+            artifacts/loader-audit/final/Payload/LeagueOfLegends.app/LeagueOfLegends \
+            artifacts/loader-audit/livecontainer
+
+      - name: Reproduce installer exit and reject misidentified inputs
+        run: |
+          python3 -m venv /tmp/db-installer-env
+          /tmp/db-installer-env/bin/pip install capstone==5.0.9
+          /tmp/db-installer-env/bin/python DarwinBridge/Tools/installer_startup_audit.py \
+            --packager /tmp/db-packager --runtime DarwinBridge/build/livecontainer-plugin
+
+      - name: Execute full compatibility runtime in iOS simulator
+        run: python3 DarwinBridge/Tools/run_ios_probe.py
+
+      - name: Build unsigned IPA
+        working-directory: DarwinBridge
+        run: ./build.sh
+
+      - name: Verify embedded LiveContainer plugin
+        working-directory: DarwinBridge
+        run: |
+          test -f build/Payload/DarwinBridge.app/DarwinBridgeLCPlugin.dylib
+          unzip -l build/DarwinBridge-unsigned.ipa | grep -q "Payload/DarwinBridge.app/DarwinBridgeLCPlugin.dylib"
+
+      - name: Audit pinned real Riot executable (not a release candidate)
+        run: |
+          python3 -m venv /tmp/db-harvest-env
+          /tmp/db-harvest-env/bin/pip install -r tools/riot-mac-harvester/requirements.txt
+          /tmp/db-harvest-env/bin/python DarwinBridge/Tools/harvest_loader_audit.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DarwinBridge-loader-audit
+          path: artifacts/loader-audit
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DarwinBridge-21G-debugger
+          path: |
+            DarwinBridge/JIT/darwinbridge-universal.js
+            DarwinBridge/JIT/README-21G.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DarwinBridge-unsigned-ipa
+          path: DarwinBridge/build/DarwinBridge-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DarwinBridge-real-macho-test
+          path: |
+            DarwinBridge/artifacts/test-target/darwinbridge-test-arm64
+            DarwinBridge/artifacts/test-target/load-commands.txt
