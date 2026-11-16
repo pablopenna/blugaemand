@@ -466,6 +466,16 @@ mode. If one of those ever becomes acceptable, Stages 1–3 are the plan to pick
   protected broadcast, so only the system can send it, and `NOT_EXPORTED` is a candidate for
   silently dropping it
 
+## Iteration 5 — Physical controller input and Vermont rebrand
+
+- [x] Accept Android gamepad key and joystick events as a second input source, forwarding button,
+      D-pad, stick and trigger state through the existing Bluetooth HID output. Android's standard
+      input-device layer handles Bluetooth and USB/OTG controllers without device-specific pairing
+      code; actual mappings still depend on the Android device's controller driver.
+- [x] Set the app label, Gradle namespace and application ID to Vermont / `com.bennytech.vermont`,
+      replace the launcher artwork with a Material 3 Expressive controller icon, and refresh the
+      project README.
+
 ## Polish backlog
 
 Unordered; pull from here whenever.

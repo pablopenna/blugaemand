@@ -96,7 +96,7 @@ class LayoutStore(context: Context) {
     }
 
     private companion object {
-        const val TAG = "Blugaemand"
+        const val TAG = "Vermont"
         val USER_LAYOUTS = stringPreferencesKey("user_layouts")
         val SELECTED_LAYOUT_ID = stringPreferencesKey("selected_layout_id")
     }

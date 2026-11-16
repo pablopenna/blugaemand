@@ -66,20 +66,20 @@ jobs:
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "BLUGAEMAND_STOREFILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "VERMONT_STOREFILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
           fi
 
       - name: Build ${{ steps.variant.outputs.name }} APK
         env:
-          BLUGAEMAND_STOREPASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          BLUGAEMAND_KEYALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          BLUGAEMAND_KEYPASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          VERMONT_STOREPASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          VERMONT_KEYALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          VERMONT_KEYPASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: ./gradlew assemble${{ steps.variant.outputs.name }} --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: blugaemand-${{ steps.variant.outputs.lower }}-${{ github.sha }}
+          name: vermont-${{ steps.variant.outputs.lower }}-${{ github.sha }}
           path: app/build/outputs/apk/${{ steps.variant.outputs.lower }}/*.apk
           if-no-files-found: error
 

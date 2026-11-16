@@ -19,7 +19,9 @@ val releaseKeystore: Map<String, String>? = run {
             ?.inputStream()?.use { load(it) }
     }
     fun value(key: String) =
-        (properties.getProperty(key) ?: System.getenv("BLUGAEMAND_" + key.uppercase()))
+        (properties.getProperty(key)
+            ?: System.getenv("VERMONT_" + key.uppercase())
+            ?: System.getenv("BLUGAEMAND_" + key.uppercase()))
             ?.takeIf { it.isNotBlank() }
 
     val entries = keys.mapNotNull { key -> value(key)?.let { key to it } }.toMap()
@@ -34,11 +36,11 @@ val releaseKeystore: Map<String, String>? = run {
 }
 
 android {
-    namespace = "com.blugaemand"
+    namespace = "com.bennytech.vermont"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.blugaemand"
+        applicationId = "com.bennytech.vermont"
         // BluetoothHidDevice, the API that lets the phone act as an HID peripheral,
         // was added in API 28. There is no supported way to do this below that.
         minSdk = 28

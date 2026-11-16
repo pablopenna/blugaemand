@@ -5,5 +5,5 @@
         adaptive-icon canvas, so this colour is what fills the rest and bleeds to the edge under
         every launcher mask. Keep the two in sync when the art changes.
     -->
-    <color name="ic_launcher_background">#002EFF</color>
+    <color name="ic_launcher_background">#D0BCFF</color>
 </resources>

@@ -65,7 +65,7 @@ private val LightColors = lightColorScheme(
 )
 
 @Composable
-fun BlugaemandTheme(
+fun VermontTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {

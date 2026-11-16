@@ -28,8 +28,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.blugaemand.BuildConfig
-import com.blugaemand.R
+import com.bennytech.vermont.BuildConfig
+import com.bennytech.vermont.R
 import com.blugaemand.input.GamepadLayout
 import com.blugaemand.input.LayoutLibrary
 import com.blugaemand.motion.MotionSettings
@@ -206,7 +206,7 @@ private fun AboutCard(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Image(
-            painter = painterResource(R.mipmap.ic_launcher_foreground),
+            painter = painterResource(R.drawable.ic_launcher_foreground),
             contentDescription = null,
             modifier = Modifier
                 .size(72.dp)

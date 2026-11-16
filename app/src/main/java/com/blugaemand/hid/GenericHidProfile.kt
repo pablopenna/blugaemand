@@ -26,9 +26,9 @@ package com.blugaemand.hid
 object GenericHidProfile : GamepadProfile {
 
     override val id: String = "generic-hid-gamepad"
-    override val sdpName: String = "Blugaemand Gamepad"
+    override val sdpName: String = "Vermont Gamepad"
     override val sdpDescription: String = "Virtual Bluetooth Gamepad"
-    override val sdpProvider: String = "Blugaemand"
+    override val sdpProvider: String = "Vermont"
 
     /**
      * Gamepad, as the *low byte of a Class of Device* — which is what the HID profile defines SDP

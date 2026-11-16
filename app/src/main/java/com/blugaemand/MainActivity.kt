@@ -9,9 +9,15 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.graphics.Rect
+import android.hardware.input.InputManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -42,7 +48,9 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.blugaemand.data.LayoutStore
 import com.blugaemand.data.SettingsStore
+import com.blugaemand.hid.GamepadButton
 import com.blugaemand.hid.GamepadState
+import com.blugaemand.hid.Hat
 import com.blugaemand.hid.HidGamepadService
 import com.blugaemand.hid.HidStatus
 import com.blugaemand.input.ControlId
@@ -69,7 +77,7 @@ import com.blugaemand.ui.GamepadScreen
 import com.blugaemand.ui.HostOption
 import com.blugaemand.ui.TopBar
 import com.blugaemand.ui.TopPanel
-import com.blugaemand.ui.theme.BlugaemandTheme
+import com.blugaemand.ui.theme.VermontTheme
 import com.blugaemand.ui.theme.OverlayColors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -92,6 +100,24 @@ class MainActivity : ComponentActivity() {
 
     private val layoutStore by lazy { LayoutStore(this) }
     private val settingsStore by lazy { SettingsStore(this) }
+    private val inputManager by lazy { getSystemService(InputManager::class.java) }
+    private val controllerKeys = mutableMapOf<Int, MutableSet<Int>>()
+    private val controllerAxes = mutableMapOf<Int, GamepadState>()
+    private val controllerHatAxes = mutableMapOf<Int, Pair<Float, Float>>()
+
+    private val inputDeviceListener = object : InputManager.InputDeviceListener {
+        override fun onInputDeviceAdded(deviceId: Int) = Unit
+
+        override fun onInputDeviceRemoved(deviceId: Int) {
+            forgetController(deviceId)
+            pushState()
+        }
+
+        override fun onInputDeviceChanged(deviceId: Int) {
+            forgetController(deviceId)
+            pushState()
+        }
+    }
 
     /**
      * The pad's two sources of stick movement, kept apart because they arrive separately: fingers
@@ -174,7 +200,7 @@ class MainActivity : ComponentActivity() {
         goImmersive()
 
         setContent {
-            BlugaemandTheme {
+            VermontTheme {
                 var openPanel by remember { mutableStateOf<TopPanel?>(null) }
                 val status by (service?.status ?: fallbackStatus).collectAsStateWithLifecycle()
 
@@ -499,6 +525,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         motionSensor.start()
+        inputManager.registerInputDeviceListener(inputDeviceListener, Handler(Looper.getMainLooper()))
         // Bind unconditionally so the UI can read the service's status even when permissions are
         // missing; only promote it to the foreground once we are allowed to.
         bindToService()
@@ -508,6 +535,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         motionSensor.stop()
+        inputManager.unregisterInputDeviceListener(inputDeviceListener)
         aim = MotionAim.NONE
         // Only the binding goes away; the foreground service keeps the HID session alive.
         runCatching { unbindService(connection) }
@@ -525,12 +553,64 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
+        handleControllerKey(event, keyCode, pressed = true) || super.onKeyDown(keyCode, event)
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean =
+        handleControllerKey(event, keyCode, pressed = false) || super.onKeyUp(keyCode, event)
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (!isGameController(event.source) && !isGameController(event.device?.sources ?: 0)) {
+            return super.dispatchGenericMotionEvent(event)
+        }
+        if (event.action != MotionEvent.ACTION_MOVE || !padActive) return true
+
+        val device = event.device ?: inputManager.getInputDevice(event.deviceId) ?: return true
+        val source = event.source
+        val previous = controllerAxes[event.deviceId] ?: GamepadState.NEUTRAL
+        fun stick(axis: Int, previousValue: Int): Int =
+            axisUnit(event, device, source, axis)?.let { GamepadState.axisFromUnit(it) } ?: previousValue
+
+        fun trigger(firstAxis: Int, secondAxis: Int, previousValue: Int): Int {
+            val value = triggerUnit(event, device, source, firstAxis)
+                ?: triggerUnit(event, device, source, secondAxis)
+            return value?.let { (it * GamepadState.AXIS_MAX).toInt() } ?: previousValue
+        }
+
+        controllerAxes[event.deviceId] = previous.copy(
+            leftStickX = stick(MotionEvent.AXIS_X, previous.leftStickX),
+            leftStickY = stick(MotionEvent.AXIS_Y, previous.leftStickY),
+            rightStickX = stick(MotionEvent.AXIS_RX, previous.rightStickX),
+            rightStickY = stick(MotionEvent.AXIS_RY, previous.rightStickY),
+            leftTrigger = trigger(
+                MotionEvent.AXIS_LTRIGGER,
+                MotionEvent.AXIS_BRAKE,
+                previous.leftTrigger,
+            ),
+            rightTrigger = trigger(
+                MotionEvent.AXIS_RTRIGGER,
+                MotionEvent.AXIS_GAS,
+                previous.rightTrigger,
+            ),
+        )
+        val oldHat = controllerHatAxes[event.deviceId] ?: (0f to 0f)
+        val hatX = axisUnit(event, device, source, MotionEvent.AXIS_HAT_X) ?: oldHat.first
+        val hatY = axisUnit(event, device, source, MotionEvent.AXIS_HAT_Y) ?: oldHat.second
+        controllerHatAxes[event.deviceId] = hatX to hatY
+        pushState()
+        return true
+    }
+
     // -- Service and permissions --------------------------------------------------------------
 
     /** Hands the service the two sources combined. Safe to call from any thread. */
     private fun pushState() {
         if (!padActive) return
-        service?.updateState(touchState.withAim(motionSettings.target, aim))
+        val state = controllerKeys.keys
+            .union(controllerAxes.keys)
+            .union(controllerHatAxes.keys)
+            .fold(touchState) { current, deviceId -> current.mergeWith(controllerState(deviceId)) }
+        service?.updateState(state.withAim(motionSettings.target, aim))
     }
 
     /**
@@ -543,8 +623,112 @@ class MainActivity : ComponentActivity() {
     private fun releaseControls() {
         touchState = GamepadState.NEUTRAL
         aim = MotionAim.NONE
+        controllerKeys.clear()
+        controllerAxes.clear()
+        controllerHatAxes.clear()
         service?.updateState(GamepadState.NEUTRAL)
     }
+
+    private fun controllerState(deviceId: Int): GamepadState {
+        val keys = controllerKeys[deviceId].orEmpty()
+        var buttons = 0
+        for (keyCode in keys) keyButton(keyCode)?.let { buttons = buttons or it.bit }
+
+        val (hatX, hatY) = controllerHatAxes[deviceId] ?: (0f to 0f)
+        return (controllerAxes[deviceId] ?: GamepadState.NEUTRAL).copy(
+            buttons = buttons,
+            hat = Hat.of(
+                up = KeyEvent.KEYCODE_DPAD_UP in keys || hatY < -0.5f,
+                down = KeyEvent.KEYCODE_DPAD_DOWN in keys || hatY > 0.5f,
+                left = KeyEvent.KEYCODE_DPAD_LEFT in keys || hatX < -0.5f,
+                right = KeyEvent.KEYCODE_DPAD_RIGHT in keys || hatX > 0.5f,
+            ),
+        )
+    }
+
+    private fun handleControllerKey(event: KeyEvent, keyCode: Int, pressed: Boolean): Boolean {
+        if (!isGameController(event.source) && !isGameController(event.device?.sources ?: 0)) {
+            return false
+        }
+        if (padActive && (keyButton(keyCode) != null || keyDirection(keyCode) != null)) {
+            val held = controllerKeys.getOrPut(event.deviceId) { mutableSetOf() }
+            if (pressed) held.add(keyCode) else held.remove(keyCode)
+            pushState()
+        }
+        return true
+    }
+
+    private fun keyButton(keyCode: Int): GamepadButton? = when (keyCode) {
+        KeyEvent.KEYCODE_BUTTON_A -> GamepadButton.SOUTH
+        KeyEvent.KEYCODE_BUTTON_B -> GamepadButton.EAST
+        KeyEvent.KEYCODE_BUTTON_X -> GamepadButton.NORTH
+        KeyEvent.KEYCODE_BUTTON_Y -> GamepadButton.WEST
+        KeyEvent.KEYCODE_BUTTON_L1 -> GamepadButton.L1
+        KeyEvent.KEYCODE_BUTTON_R1 -> GamepadButton.R1
+        KeyEvent.KEYCODE_BUTTON_L2 -> GamepadButton.L2
+        KeyEvent.KEYCODE_BUTTON_R2 -> GamepadButton.R2
+        KeyEvent.KEYCODE_BUTTON_SELECT -> GamepadButton.BACK
+        KeyEvent.KEYCODE_BUTTON_START -> GamepadButton.START
+        KeyEvent.KEYCODE_BUTTON_MODE -> GamepadButton.GUIDE
+        KeyEvent.KEYCODE_BUTTON_THUMBL -> GamepadButton.L3
+        KeyEvent.KEYCODE_BUTTON_THUMBR -> GamepadButton.R3
+        else -> null
+    }
+
+    private fun keyDirection(keyCode: Int): Int? = when (keyCode) {
+        KeyEvent.KEYCODE_DPAD_UP,
+        KeyEvent.KEYCODE_DPAD_DOWN,
+        KeyEvent.KEYCODE_DPAD_LEFT,
+        KeyEvent.KEYCODE_DPAD_RIGHT,
+        -> keyCode
+        else -> null
+    }
+
+    private fun axisUnit(
+        event: MotionEvent,
+        device: InputDevice,
+        source: Int,
+        axis: Int,
+    ): Float? {
+        val range = device.getMotionRange(axis, source) ?: return null
+        val center = (range.min + range.max) / 2f
+        val negativeRange = center - range.min
+        val positiveRange = range.max - center
+        if (negativeRange <= 0f || positiveRange <= 0f) return null
+
+        val value = event.getAxisValue(axis)
+        val unit = if (value < center) {
+            (value - center) / negativeRange
+        } else {
+            (value - center) / positiveRange
+        }.coerceIn(-1f, 1f)
+        val flat = (range.flat / maxOf(negativeRange, positiveRange)).coerceIn(0f, 0.99f)
+        return if (kotlin.math.abs(unit) <= flat) 0f else {
+            kotlin.math.sign(unit) * (kotlin.math.abs(unit) - flat) / (1f - flat)
+        }
+    }
+
+    private fun triggerUnit(
+        event: MotionEvent,
+        device: InputDevice,
+        source: Int,
+        axis: Int,
+    ): Float? {
+        val range = device.getMotionRange(axis, source) ?: return null
+        if (range.max <= range.min) return null
+        return ((event.getAxisValue(axis) - range.min) / (range.max - range.min))
+            .coerceIn(0f, 1f)
+    }
+
+    private fun forgetController(deviceId: Int) {
+        controllerKeys.remove(deviceId)
+        controllerAxes.remove(deviceId)
+        controllerHatAxes.remove(deviceId)
+    }
+
+    private fun isGameController(source: Int): Boolean =
+        source and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD ||
+            source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK
 
     private fun bindToService() {
         val intent = Intent(this, HidGamepadService::class.java)

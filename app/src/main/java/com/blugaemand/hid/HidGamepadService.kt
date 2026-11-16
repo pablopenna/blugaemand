@@ -26,7 +26,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.blugaemand.MainActivity
-import com.blugaemand.R
+import com.bennytech.vermont.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -540,7 +540,7 @@ class HidGamepadService : Service() {
     }
 
     companion object {
-        private const val TAG = "Blugaemand"
+        private const val TAG = "Vermont"
         private const val CHANNEL_ID = "hid_gamepad"
         private const val NOTIFICATION_ID = 1
 

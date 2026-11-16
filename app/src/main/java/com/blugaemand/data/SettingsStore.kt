@@ -61,7 +61,7 @@ class SettingsStore(context: Context) {
     }
 
     private companion object {
-        const val TAG = "Blugaemand"
+        const val TAG = "Vermont"
         val MOTION_ENABLED = booleanPreferencesKey("motion_enabled")
         val MOTION_TARGET = stringPreferencesKey("motion_target")
         val MOTION_SENSITIVITY = floatPreferencesKey("motion_sensitivity")
