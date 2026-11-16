@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Blugaemand"
+rootProject.name = "Vermont"
 include(":app")

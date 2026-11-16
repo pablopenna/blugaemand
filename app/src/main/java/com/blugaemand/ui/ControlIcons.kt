@@ -1,7 +1,7 @@
 package com.blugaemand.ui
 
 import androidx.annotation.DrawableRes
-import com.blugaemand.R
+import com.bennytech.vermont.R
 import com.blugaemand.input.ControlIcon
 
 /**

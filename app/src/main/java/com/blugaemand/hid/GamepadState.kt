@@ -108,6 +108,37 @@ data class GamepadState(
         buttons = if (pressed) buttons or button.bit else buttons and button.bit.inv(),
     )
 
+    /**
+     * Combines independent input sources. An off-centre axis from [other] takes priority; a
+     * centred axis leaves this source's movement intact. Buttons and D-pad directions accumulate.
+     */
+    fun mergeWith(other: GamepadState): GamepadState {
+        fun hasNorth(value: Hat) =
+            value == Hat.NORTH || value == Hat.NORTH_EAST || value == Hat.NORTH_WEST
+        fun hasSouth(value: Hat) =
+            value == Hat.SOUTH || value == Hat.SOUTH_EAST || value == Hat.SOUTH_WEST
+        fun hasWest(value: Hat) =
+            value == Hat.WEST || value == Hat.SOUTH_WEST || value == Hat.NORTH_WEST
+        fun hasEast(value: Hat) =
+            value == Hat.EAST || value == Hat.SOUTH_EAST || value == Hat.NORTH_EAST
+
+        return GamepadState(
+            leftStickX = other.leftStickX.takeUnless { it == AXIS_CENTER } ?: leftStickX,
+            leftStickY = other.leftStickY.takeUnless { it == AXIS_CENTER } ?: leftStickY,
+            rightStickX = other.rightStickX.takeUnless { it == AXIS_CENTER } ?: rightStickX,
+            rightStickY = other.rightStickY.takeUnless { it == AXIS_CENTER } ?: rightStickY,
+            leftTrigger = maxOf(leftTrigger, other.leftTrigger),
+            rightTrigger = maxOf(rightTrigger, other.rightTrigger),
+            hat = Hat.of(
+                up = hasNorth(hat) || hasNorth(other.hat),
+                down = hasSouth(hat) || hasSouth(other.hat),
+                left = hasWest(hat) || hasWest(other.hat),
+                right = hasEast(hat) || hasEast(other.hat),
+            ),
+            buttons = buttons or other.buttons,
+        )
+    }
+
     companion object {
         const val AXIS_MIN = 0
         const val AXIS_CENTER = 128

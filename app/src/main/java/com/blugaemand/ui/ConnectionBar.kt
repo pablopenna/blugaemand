@@ -144,7 +144,7 @@ private fun HidStatus.detail(): String? = when (this) {
     is HidStatus.Unsupported -> reason
     is HidStatus.Error -> message
     HidStatus.PermissionRequired ->
-        "Blugaemand needs the nearby-devices permission to present itself as a gamepad."
+        "Vermont needs the nearby-devices permission to present itself as a gamepad."
     HidStatus.BluetoothOff ->
         "Bluetooth is switched off. Apps cannot turn it on themselves, so Android will ask you " +
             "to confirm."
